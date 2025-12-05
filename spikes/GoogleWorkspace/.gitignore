@@ -1,0 +1,15 @@
+# Development configuration with secrets
+appsettings.Development.json
+
+# Token cache
+.credentials/
+
+# Build results
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
