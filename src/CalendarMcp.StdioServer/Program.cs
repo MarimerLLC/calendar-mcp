@@ -68,8 +68,15 @@ public class Program
                 // Add Calendar MCP core services (providers, tools, account registry)
                 services.AddCalendarMcpCore();
                 
-                // Configure MCP server with stdio transport
+                // Configure MCP server with stdio transport and register tools
                 services.AddMcpServer()
+                    .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
+                    .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
+                    .WithTools<CalendarMcp.Core.Tools.SearchEmailsTool>()
+                    .WithTools<CalendarMcp.Core.Tools.ListCalendarsTool>()
+                    .WithTools<CalendarMcp.Core.Tools.GetCalendarEventsTool>()
+                    .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
+                    .WithTools<CalendarMcp.Core.Tools.CreateEventTool>()
                     .WithStdioServerTransport();
             });
 
