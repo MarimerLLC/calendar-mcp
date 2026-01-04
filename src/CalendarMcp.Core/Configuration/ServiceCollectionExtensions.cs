@@ -15,6 +15,9 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection AddCalendarMcpCore(this IServiceCollection services)
     {
+        // Register authentication services
+        services.AddSingleton<IM365AuthenticationService, M365AuthenticationService>();
+        
         // Register provider services
         services.AddSingleton<IM365ProviderService, M365ProviderService>();
         services.AddSingleton<IGoogleProviderService, GoogleProviderService>();
