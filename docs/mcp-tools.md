@@ -67,6 +67,109 @@ Search emails by sender/subject/criteria for specific account or all accounts.
 
 **Returns**: Same format as `get_emails`
 
+#### `get_contextual_email_summary`
+Get a contextual, topic-grouped summary of emails across all accounts with persona detection and account mismatch analysis. This is a higher-level tool that provides intelligent clustering and cross-account insights.
+
+**Parameters**:
+- `topics` (optional): Topic keywords to focus on (comma-separated). If omitted, analyzes all recent emails.
+- `countPerAccount` (default: 50): Number of emails to analyze per account
+- `unreadOnly` (default: false): Only analyze unread emails
+- `includeBodyPreview` (default: false): Include short body preview in results
+- `maxSamplesPerCluster` (default: 5): Maximum sample emails per topic cluster
+
+**Returns**:
+```json
+{
+  "totalEmails": 127,
+  "accountsSearched": 3,
+  "searchKeywords": ["project", "update"],
+  "topicClusters": [
+    {
+      "topic": "Project Updates",
+      "keywords": ["milestone", "sprint", "deployment"],
+      "emailCount": 23,
+      "unreadCount": 5,
+      "accountIds": ["xebia-work", "marimer-work"],
+      "earliestDate": "2025-12-01T08:00:00Z",
+      "latestDate": "2025-12-04T16:30:00Z",
+      "uniqueSenders": ["pm@xebia.com", "dev@marimer.com"],
+      "sampleEmails": [
+        {
+          "id": "msg-123",
+          "accountId": "xebia-work",
+          "subject": "Sprint 23 Complete",
+          "from": "pm@xebia.com",
+          "fromName": "Project Manager",
+          "receivedDateTime": "2025-12-04T16:30:00Z",
+          "isRead": false,
+          "hasAttachments": true,
+          "bodyPreview": "The sprint has been completed successfully..."
+        }
+      ]
+    },
+    {
+      "topic": "Meeting/Calendar",
+      "keywords": ["meeting", "schedule", "call"],
+      "emailCount": 18,
+      "unreadCount": 3,
+      "accountIds": ["xebia-work", "rocky-gmail"],
+      "earliestDate": "2025-12-02T09:00:00Z",
+      "latestDate": "2025-12-04T14:00:00Z",
+      "uniqueSenders": ["colleague@xebia.com", "friend@gmail.com"],
+      "sampleEmails": []
+    }
+  ],
+  "accountMismatches": [
+    {
+      "email": {
+        "id": "msg-456",
+        "accountId": "rocky-gmail",
+        "subject": "Re: Xebia Project",
+        "from": "client@xebia.com",
+        "receivedDateTime": "2025-12-04T10:00:00Z",
+        "isRead": true
+      },
+      "receivedOnAccount": "rocky-gmail",
+      "expectedAccount": "xebia-work",
+      "reason": "Sender from xebia.com typically communicates via Xebia Work Account",
+      "confidence": 0.8
+    }
+  ],
+  "personaContexts": [
+    {
+      "accountId": "xebia-work",
+      "personaName": "Xebia Work Account",
+      "domains": ["xebia.com"],
+      "emailCount": 65,
+      "unreadCount": 12,
+      "primaryTopics": ["Project Updates", "Meeting/Calendar", "Action Required"],
+      "topSenderDomains": [
+        { "domain": "xebia.com", "emailCount": 45, "isInternalDomain": true },
+        { "domain": "client.com", "emailCount": 12, "isInternalDomain": false }
+      ]
+    },
+    {
+      "accountId": "rocky-gmail",
+      "personaName": "Personal Gmail",
+      "domains": ["gmail.com"],
+      "emailCount": 42,
+      "unreadCount": 8,
+      "primaryTopics": ["Social/Personal", "Newsletters/Marketing"],
+      "topSenderDomains": [
+        { "domain": "gmail.com", "emailCount": 15, "isInternalDomain": true },
+        { "domain": "newsletter.com", "emailCount": 10, "isInternalDomain": false }
+      ]
+    }
+  ]
+}
+```
+
+**Key Features**:
+- **Topic Clustering**: Automatically groups emails by detected topics (Meeting/Calendar, Project Updates, Action Required, Financial, HR/Admin, Support/Issues, Newsletters/Marketing, Social/Personal)
+- **Account Mismatch Detection**: Identifies emails that may have been sent to the "wrong" account based on sender domain and content analysis
+- **Persona Context**: Shows which "hat" you're wearing when people email you, with topic breakdowns per account
+- **Cross-Account Analysis**: Reveals which topics span multiple accounts
+
 #### `get_email_details`
 Get full email content including body and attachments.
 
@@ -312,7 +415,44 @@ Workflow:
    - Personal Gmail: 2 emails (1 newsletter)"
 ```
 
-### Example 2: Find Meeting Time Across All Calendars
+### Example 2: Contextual Email Analysis
+```
+AI Assistant receives: "What's going on across my email accounts? Are there any emails that should have gone elsewhere?"
+
+Workflow:
+1. Call get_contextual_email_summary()
+2. Analyze returned topic clusters:
+   "Your emails are organized into these main topics:
+   - Project Updates (23 emails across Xebia and Marimer, 5 unread)
+   - Meeting Requests (18 emails, 3 unread)
+   - Action Required (8 emails, all unread - needs attention!)
+   
+   ⚠️ Potential misrouted emails:
+   - Email from client@xebia.com received on Personal Gmail
+     → Should probably have gone to your Xebia Work account
+   
+   📊 Persona breakdown:
+   - Xebia Work: Mostly project updates and client communications
+   - Personal Gmail: Social and newsletters"
+```
+
+### Example 3: Topic-Focused Summary
+```
+AI Assistant receives: "What project-related emails do I have across all accounts?"
+
+Workflow:
+1. Call get_contextual_email_summary(topics="project,milestone,sprint,update")
+2. Focus on matching clusters
+3. Present topic-focused view:
+   "Found 31 project-related emails across 2 accounts:
+   - Xebia: 23 emails about current sprint and deployments
+   - Marimer: 8 emails about CSLA project updates
+   
+   Key senders: pm@xebia.com, dev@marimer.com
+   5 unread requiring attention"
+```
+
+### Example 4: Find Meeting Time Across All Calendars
 ```
 AI Assistant receives: "Find a 1-hour slot next week where I'm free across all calendars"
 
@@ -324,7 +464,7 @@ Workflow:
 5. Present options to user
 ```
 
-### Example 3: Smart Email Sending
+### Example 5: Smart Email Sending
 ```
 AI Assistant receives: "Send email to sarah@xebia.com saying I'll be 10 minutes late"
 
