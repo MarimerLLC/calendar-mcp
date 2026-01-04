@@ -65,13 +65,66 @@ See [DESIGN.md](DESIGN.md) for detailed architecture and design specifications.
 
 ### Prerequisites
 
-- .NET 10 SDK
-- Microsoft 365 and/or Google Workspace accounts
+- .NET 9.0 SDK or later
+- Microsoft 365 account with Azure AD App Registration (for M365 accounts)
+- Google Workspace/Gmail account with OAuth client (for Google accounts)
 - AI assistant that supports MCP (Claude Desktop, VS Code with Copilot, etc.)
 
-### Installation
+### Quick Start
 
-*(Coming soon - project is in early development)*
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/rockfordlhotka/calendar-mcp.git
+   cd calendar-mcp
+   ```
+
+2. **Build the projects:**
+   ```bash
+   dotnet build
+   ```
+
+3. **Set up authentication for M365 accounts:**
+   ```bash
+   # See docs/M365-SETUP.md for detailed Azure AD setup instructions
+   dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
+     add-m365-account \
+     --config src/CalendarMcp.StdioServer/appsettings.json
+   ```
+
+4. **Verify account setup:**
+   ```bash
+   dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
+     list-accounts \
+     --config src/CalendarMcp.StdioServer/appsettings.json
+   ```
+
+5. **Start the MCP server:**
+   ```bash
+   dotnet run --project src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj
+   ```
+
+### Authentication Setup
+
+The project includes a CLI tool for easy account management:
+
+**Add Microsoft 365 Account:**
+```bash
+calendar-mcp-cli add-m365-account
+```
+
+**List Configured Accounts:**
+```bash
+calendar-mcp-cli list-accounts
+```
+
+**Test Account Authentication:**
+```bash
+calendar-mcp-cli test-account <account-id>
+```
+
+See [CLI README](src/CalendarMcp.Cli/README.md) for detailed CLI documentation.
+
+See [M365 Setup Guide](docs/M365-SETUP.md) for complete Azure AD app registration and authentication setup.
 
 ### Configuration
 
