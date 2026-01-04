@@ -1,8 +1,6 @@
 using Spectre.Console;
 using Spectre.Console.Cli;
 using CalendarMcp.Core.Services;
-using CalendarMcp.Core.Configuration;
-using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using System.ComponentModel;
 

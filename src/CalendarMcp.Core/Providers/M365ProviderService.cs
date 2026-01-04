@@ -13,6 +13,14 @@ public class M365ProviderService : IM365ProviderService
     private readonly IM365AuthenticationService _authService;
     private readonly IAccountRegistry _accountRegistry;
 
+    // Default scopes for Microsoft Graph API access
+    private static readonly string[] DefaultScopes = new[] 
+    { 
+        "Mail.Read", 
+        "Mail.Send", 
+        "Calendars.ReadWrite" 
+    };
+
     public M365ProviderService(
         ILogger<M365ProviderService> logger,
         IM365AuthenticationService authService,
@@ -42,12 +50,10 @@ public class M365ProviderService : IM365ProviderService
             return null;
         }
 
-        var scopes = new[] { "Mail.Read", "Mail.Send", "Calendars.ReadWrite" };
-
         var token = await _authService.GetTokenSilentlyAsync(
             tenantId,
             clientId,
-            scopes,
+            DefaultScopes,
             accountId,
             cancellationToken);
 
