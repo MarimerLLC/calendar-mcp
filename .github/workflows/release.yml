@@ -1,0 +1,196 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - release
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and Package
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      
+      - name: Restore dependencies
+        run: dotnet restore src/calendar-mcp.slnx
+      
+      - name: Build solution
+        run: dotnet build src/calendar-mcp.slnx --configuration Release --no-restore
+      
+      - name: Publish Windows (win-x64)
+        run: |
+          dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+            --configuration Release \
+            --runtime win-x64 \
+            --self-contained true \
+            --output ./publish/win-x64/cli \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+          
+          dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+            --configuration Release \
+            --runtime win-x64 \
+            --self-contained true \
+            --output ./publish/win-x64/server \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+      
+      - name: Publish Linux (linux-x64)
+        run: |
+          dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained true \
+            --output ./publish/linux-x64/cli \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+          
+          dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+            --configuration Release \
+            --runtime linux-x64 \
+            --self-contained true \
+            --output ./publish/linux-x64/server \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+      
+      - name: Publish macOS (osx-x64)
+        run: |
+          dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+            --configuration Release \
+            --runtime osx-x64 \
+            --self-contained true \
+            --output ./publish/osx-x64/cli \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+          
+          dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+            --configuration Release \
+            --runtime osx-x64 \
+            --self-contained true \
+            --output ./publish/osx-x64/server \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+      
+      - name: Publish macOS (osx-arm64)
+        run: |
+          dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+            --configuration Release \
+            --runtime osx-arm64 \
+            --self-contained true \
+            --output ./publish/osx-arm64/cli \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+          
+          dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+            --configuration Release \
+            --runtime osx-arm64 \
+            --self-contained true \
+            --output ./publish/osx-arm64/server \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true
+      
+      - name: Organize release files (Windows)
+        run: |
+          mkdir -p ./release/calendar-mcp-win-x64
+          cp -r ./publish/win-x64/cli/* ./release/calendar-mcp-win-x64/
+          cp -r ./publish/win-x64/server/* ./release/calendar-mcp-win-x64/
+          cp README.md ./release/calendar-mcp-win-x64/
+          cp LICENSE ./release/calendar-mcp-win-x64/
+      
+      - name: Organize release files (Linux)
+        run: |
+          mkdir -p ./release/calendar-mcp-linux-x64
+          cp -r ./publish/linux-x64/cli/* ./release/calendar-mcp-linux-x64/
+          cp -r ./publish/linux-x64/server/* ./release/calendar-mcp-linux-x64/
+          cp README.md ./release/calendar-mcp-linux-x64/
+          cp LICENSE ./release/calendar-mcp-linux-x64/
+          chmod +x ./release/calendar-mcp-linux-x64/CalendarMcp.Cli
+          chmod +x ./release/calendar-mcp-linux-x64/CalendarMcp.StdioServer
+      
+      - name: Organize release files (macOS x64)
+        run: |
+          mkdir -p ./release/calendar-mcp-osx-x64
+          cp -r ./publish/osx-x64/cli/* ./release/calendar-mcp-osx-x64/
+          cp -r ./publish/osx-x64/server/* ./release/calendar-mcp-osx-x64/
+          cp README.md ./release/calendar-mcp-osx-x64/
+          cp LICENSE ./release/calendar-mcp-osx-x64/
+          chmod +x ./release/calendar-mcp-osx-x64/CalendarMcp.Cli
+          chmod +x ./release/calendar-mcp-osx-x64/CalendarMcp.StdioServer
+      
+      - name: Organize release files (macOS ARM64)
+        run: |
+          mkdir -p ./release/calendar-mcp-osx-arm64
+          cp -r ./publish/osx-arm64/cli/* ./release/calendar-mcp-osx-arm64/
+          cp -r ./publish/osx-arm64/server/* ./release/calendar-mcp-osx-arm64/
+          cp README.md ./release/calendar-mcp-osx-arm64/
+          cp LICENSE ./release/calendar-mcp-osx-arm64/
+          chmod +x ./release/calendar-mcp-osx-arm64/CalendarMcp.Cli
+          chmod +x ./release/calendar-mcp-osx-arm64/CalendarMcp.StdioServer
+      
+      - name: Create zip archives
+        run: |
+          cd ./release
+          zip -r calendar-mcp-win-x64.zip calendar-mcp-win-x64
+          tar -czf calendar-mcp-linux-x64.tar.gz calendar-mcp-linux-x64
+          tar -czf calendar-mcp-osx-x64.tar.gz calendar-mcp-osx-x64
+          tar -czf calendar-mcp-osx-arm64.tar.gz calendar-mcp-osx-arm64
+          cd ..
+      
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-mcp-win-x64
+          path: ./release/calendar-mcp-win-x64.zip
+      
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-mcp-linux-x64
+          path: ./release/calendar-mcp-linux-x64.tar.gz
+      
+      - name: Upload macOS x64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-mcp-osx-x64
+          path: ./release/calendar-mcp-osx-x64.tar.gz
+      
+      - name: Upload macOS ARM64 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: calendar-mcp-osx-arm64
+          path: ./release/calendar-mcp-osx-arm64.tar.gz
+      
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ./release/calendar-mcp-win-x64.zip
+            ./release/calendar-mcp-linux-x64.tar.gz
+            ./release/calendar-mcp-osx-x64.tar.gz
+            ./release/calendar-mcp-osx-arm64.tar.gz
+          draft: false
+          prerelease: false
+          generate_release_notes: true
