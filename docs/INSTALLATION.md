@@ -37,6 +37,45 @@ This guide provides step-by-step instructions for installing and configuring the
 
 This is the easiest method and does not require installing .NET on your system.
 
+#### Windows Installer (Easiest for Windows Users)
+
+**Step 1: Download Installer**
+
+1. Go to the [Releases page](https://github.com/rockfordlhotka/calendar-mcp/releases) on GitHub
+2. Download `calendar-mcp-setup-win-x64.exe`
+
+**Step 2: Run Installer**
+
+1. Double-click the downloaded `.exe` file
+2. If Windows shows a security warning:
+   - Click "More info"
+   - Click "Run anyway"
+3. Follow the installation wizard:
+   - Accept the license agreement
+   - Choose installation directory (default: `C:\Program Files\Calendar MCP`)
+   - Choose whether to add to PATH (recommended)
+4. Click "Install"
+5. Wait for installation to complete
+6. Click "Finish"
+
+**What the installer does:**
+- ✅ Extracts all necessary files
+- ✅ Creates Start Menu shortcuts
+- ✅ Optionally adds to system PATH
+- ✅ No .NET runtime required
+- ✅ Creates an uninstaller
+
+**Verify Installation:**
+```powershell
+# Open a new Command Prompt or PowerShell window
+CalendarMcp.Cli --version
+
+# If not in PATH, use full path:
+"C:\Program Files\Calendar MCP\CalendarMcp.Cli.exe" --version
+```
+
+#### Manual Installation (All Platforms)
+
 #### Step 1: Download
 
 1. Go to the [Releases page](https://github.com/rockfordlhotka/calendar-mcp/releases) on GitHub
@@ -75,6 +114,54 @@ This allows you to run the CLI tool from any directory.
 2. Under "User variables" or "System variables", find "Path"
 3. Click "Edit" → "New"
 4. Add the path to your extracted folder (e.g., `C:\Program Files\CalendarMcp`)
+5. Click "OK" on all dialogs
+6. **Restart your terminal/command prompt** for changes to take effect
+
+**Linux/macOS:**
+Add the following line to your shell configuration file (`~/.bashrc`, `~/.zshrc`, etc.):
+
+#### Manual Installation (All Platforms)
+
+If you prefer manual installation or are on Linux/macOS:
+
+**Step 1: Download**
+
+1. Go to the [Releases page](https://github.com/rockfordlhotka/calendar-mcp/releases) on GitHub
+2. Download the appropriate archive for your platform:
+   - **Windows**: `calendar-mcp-win-x64.zip`
+   - **Linux**: `calendar-mcp-linux-x64.tar.gz`
+   - **macOS (Intel)**: `calendar-mcp-osx-x64.tar.gz`
+   - **macOS (Apple Silicon)**: `calendar-mcp-osx-arm64.tar.gz`
+
+**Step 2: Extract**
+
+**Windows:**
+1. Right-click the downloaded `.zip` file
+2. Select "Extract All..."
+3. Choose a destination folder (e.g., `C:\CalendarMcp`)
+4. Click "Extract"
+
+**Linux/macOS:**
+```bash
+# For Linux
+tar -xzf calendar-mcp-linux-x64.tar.gz -C ~/calendar-mcp
+
+# For macOS (Intel)
+tar -xzf calendar-mcp-osx-x64.tar.gz -C ~/calendar-mcp
+
+# For macOS (Apple Silicon)
+tar -xzf calendar-mcp-osx-arm64.tar.gz -C ~/calendar-mcp
+```
+
+**Step 3: Add to PATH (Optional but Recommended)**
+
+This allows you to run the CLI tool from any directory.
+
+**Windows:**
+1. Open "System Properties" → "Advanced" → "Environment Variables"
+2. Under "User variables" or "System variables", find "Path"
+3. Click "Edit" → "New"
+4. Add the path to your extracted folder (e.g., `C:\CalendarMcp`)
 5. Click "OK" on all dialogs
 6. **Restart your terminal/command prompt** for changes to take effect
 

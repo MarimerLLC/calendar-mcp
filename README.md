@@ -70,14 +70,109 @@ See [DESIGN.md](docs/DESIGN.md) for detailed architecture and design specificati
 
 ## Getting Started
 
+### Installation
+
+For detailed installation instructions, see the [Installation Guide](docs/INSTALLATION.md).
+
+**Quick Links:**
+- 📦 [Download Pre-built Binaries](https://github.com/rockfordlhotka/calendar-mcp/releases) (Recommended)
+- 📝 [Installation Guide](docs/INSTALLATION.md) - Complete installation instructions
+- 🖥️ [Claude Desktop Setup](docs/CLAUDE-DESKTOP-SETUP.md) - Configure Claude Desktop
+- 🔑 [M365 / Outlook.com Setup](docs/M365-SETUP.md) - Microsoft account configuration
+- 🔐 [Google / Gmail Setup](docs/GOOGLE-SETUP.md) - Google account configuration
+
 ### Prerequisites
 
+**For Pre-built Binaries:**
+- No .NET runtime required (self-contained)
+- Windows 10+, Linux (x64), or macOS 10.15+ (x64/ARM64)
+
+**For Building from Source:**
 - .NET 9.0 SDK or later
-- Microsoft 365 account with Azure AD App Registration (for M365 accounts)
-- Google Workspace/Gmail account with OAuth client (for Google accounts)
+- Microsoft 365 or Google Workspace/Gmail account
 - AI assistant that supports MCP (Claude Desktop, VS Code with Copilot, etc.)
 
 ### Quick Start
+
+#### 1. Download and Install
+
+**Option A: Windows Installer (Easiest)**
+```powershell
+# Download from: https://github.com/rockfordlhotka/calendar-mcp/releases
+# Run: calendar-mcp-setup-win-x64.exe
+# The installer will:
+# - Install to C:\Program Files\Calendar MCP
+# - Optionally add to PATH
+# - Create Start Menu shortcuts
+```
+
+**Option B: Manual Installation (All Platforms)**
+```bash
+# 1. Download the appropriate package for your platform:
+#    - Windows: calendar-mcp-win-x64.zip
+#    - Linux: calendar-mcp-linux-x64.tar.gz
+#    - macOS (Intel): calendar-mcp-osx-x64.tar.gz
+#    - macOS (Apple Silicon): calendar-mcp-osx-arm64.tar.gz
+
+# 2. Extract to your preferred location
+# Windows
+Expand-Archive calendar-mcp-win-x64.zip -DestinationPath C:\CalendarMcp
+
+# Linux/macOS
+tar -xzf calendar-mcp-linux-x64.tar.gz -C ~/calendar-mcp
+```
+
+#### 2. Configure Accounts
+
+```bash
+# Add Microsoft 365 or Outlook.com account
+CalendarMcp.Cli add-m365-account
+
+# Add Google Workspace or Gmail account
+CalendarMcp.Cli add-google-account
+
+# List configured accounts
+CalendarMcp.Cli list-accounts
+```
+
+See [M365 Setup Guide](docs/M365-SETUP.md) and [Google Setup Guide](docs/GOOGLE-SETUP.md) for detailed instructions.
+
+#### 3. Configure Your AI Assistant
+
+**Claude Desktop:**
+
+Edit your Claude Desktop configuration file:
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Linux: `~/.config/claude/claude_desktop_config.json`
+
+Add the MCP server:
+```json
+{
+  "mcpServers": {
+    "calendar-mcp": {
+      "command": "C:\\Program Files\\Calendar MCP\\CalendarMcp.StdioServer.exe",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
+
+See [Claude Desktop Setup Guide](docs/CLAUDE-DESKTOP-SETUP.md) for detailed instructions and troubleshooting.
+
+#### 4. Start Using
+
+Restart Claude Desktop and try:
+```
+"Show me my unread emails"
+"What's on my calendar today?"
+"Find free time next week"
+```
+
+### Building from Source
+
+If you prefer to build from source:
 
 1. **Clone the repository:**
 
@@ -89,57 +184,52 @@ See [DESIGN.md](docs/DESIGN.md) for detailed architecture and design specificati
 2. **Build the projects:**
 
    ```bash
-   dotnet build
+   dotnet build src/calendar-mcp.slnx --configuration Release
    ```
 
-3. **Set up authentication for M365 accounts:**
+3. **Run the CLI tool:**
 
    ```bash
-   # See docs/M365-SETUP.md for detailed Azure AD setup instructions
-   dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
-     add-m365-account \
-     --config src/CalendarMcp.StdioServer/appsettings.json
+   dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj
    ```
 
-4. **Verify account setup:**
-
-   ```bash
-   dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
-     list-accounts \
-     --config src/CalendarMcp.StdioServer/appsettings.json
-   ```
-
-5. **Start the MCP server:**
+4. **Run the MCP server:**
 
    ```bash
    dotnet run --project src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj
    ```
 
+See [Installation Guide](docs/INSTALLATION.md) for more details.
+
 ### Authentication Setup
 
-The project includes a CLI tool for easy account management:
+The project includes a CLI tool for easy account management.
 
 **Add Microsoft 365 Account:**
 
 ```bash
-calendar-mcp-cli add-m365-account
+CalendarMcp.Cli add-m365-account
+```
+
+**Add Google Account:**
+
+```bash
+CalendarMcp.Cli add-google-account
 ```
 
 **List Configured Accounts:**
 
 ```bash
-calendar-mcp-cli list-accounts
+CalendarMcp.Cli list-accounts
 ```
 
 **Test Account Authentication:**
 
 ```bash
-calendar-mcp-cli test-account <account-id>
+CalendarMcp.Cli test-account <account-id>
 ```
 
-See [CLI README](src/CalendarMcp.Cli/README.md) for detailed CLI documentation.
-
-See [M365 Setup Guide](docs/M365-SETUP.md) for complete Azure AD app registration and authentication setup.
+See [M365 Setup Guide](docs/M365-SETUP.md) and [Google Setup Guide](docs/GOOGLE-SETUP.md) for complete Azure AD app registration and authentication setup.
 
 ### Configuration
 
