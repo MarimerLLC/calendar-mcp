@@ -52,6 +52,21 @@ app.Configure(config =>
         .WithDescription("Test account authentication")
         .WithExample(new[] { "test-account", "work-account" })
         .WithExample(new[] { "test-account", "work-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<ReauthenticateAccountCommand>("reauth")
+        .WithDescription("Reauthenticate an existing account")
+        .WithExample(new[] { "reauth", "work-account" })
+        .WithExample(new[] { "reauth", "work-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<LogoutAccountCommand>("logout")
+        .WithDescription("Logout an account by clearing cached credentials")
+        .WithExample(new[] { "logout", "work-account" })
+        .WithExample(new[] { "logout", "work-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<RemoveAccountCommand>("remove-account")
+        .WithDescription("Remove an account from the configuration")
+        .WithExample(new[] { "remove-account", "work-account" })
+        .WithExample(new[] { "remove-account", "work-account", "--force" });
 });
 
 try

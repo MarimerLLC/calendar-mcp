@@ -1,6 +1,7 @@
 using Spectre.Console;
 using Spectre.Console.Cli;
 using CalendarMcp.Core.Configuration;
+using CalendarMcp.Core.Services;
 using System.Text.Json;
 using System.ComponentModel;
 
@@ -11,11 +12,20 @@ namespace CalendarMcp.Cli.Commands;
 /// </summary>
 public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
 {
+    private readonly IM365AuthenticationService _m365AuthService;
+    private readonly IGoogleAuthenticationService _googleAuthService;
+
     public class Settings : CommandSettings
     {
         [Description("Path to appsettings.json (default: %LOCALAPPDATA%/CalendarMcp/appsettings.json)")]
         [CommandOption("--config")]
         public string? ConfigPath { get; init; }
+    }
+
+    public ListAccountsCommand(IM365AuthenticationService m365AuthService, IGoogleAuthenticationService googleAuthService)
+    {
+        _m365AuthService = m365AuthService;
+        _googleAuthService = googleAuthService;
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
@@ -56,7 +66,7 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
             }
 
             var accounts = accountsElement.Deserialize<List<Dictionary<string, JsonElement>>>();
-            
+
             if (accounts == null || accounts.Count == 0)
             {
                 AnsiConsole.MarkupLine("[yellow]No accounts configured.[/]");
@@ -70,41 +80,48 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
             table.AddColumn("[bold]Display Name[/]");
             table.AddColumn("[bold]Provider[/]");
             table.AddColumn("[bold]Enabled[/]");
-            table.AddColumn("[bold]Priority[/]");
+            table.AddColumn("[bold]Status[/]");
             table.AddColumn("[bold]Domains[/]");
 
-            foreach (var account in accounts)
-            {
-                // Support both PascalCase and camelCase property names for backwards compatibility
-                var id = GetStringValue(account, "Id", "id");
-                var displayName = GetStringValue(account, "DisplayName", "displayName");
-                var provider = GetStringValue(account, "Provider", "provider");
-                var enabled = GetBoolValue(account, "Enabled", "enabled");
-                var priority = GetIntValue(account, "Priority", "priority");
-                
-                var domains = "";
-                if (TryGetElement(account, out var domainsElem, "Domains", "domains") && 
-                    domainsElem.ValueKind == JsonValueKind.Array)
+            await AnsiConsole.Status()
+                .StartAsync("Checking credentials...", async ctx =>
                 {
-                    var domainList = domainsElem.Deserialize<List<string>>() ?? new List<string>();
-                    domains = string.Join(", ", domainList);
-                }
+                    foreach (var account in accounts)
+                    {
+                        // Support both PascalCase and camelCase property names for backwards compatibility
+                        var id = GetStringValue(account, "Id", "id");
+                        var displayName = GetStringValue(account, "DisplayName", "displayName");
+                        var provider = GetStringValue(account, "Provider", "provider");
+                        var enabled = GetBoolValue(account, "Enabled", "enabled");
 
-                var enabledStr = enabled ? "[green]✓[/]" : "[red]✗[/]";
+                        var domains = "";
+                        if (TryGetElement(account, out var domainsElem, "Domains", "domains") &&
+                            domainsElem.ValueKind == JsonValueKind.Array)
+                        {
+                            var domainList = domainsElem.Deserialize<List<string>>() ?? new List<string>();
+                            domains = string.Join(", ", domainList);
+                        }
 
-                table.AddRow(
-                    id,
-                    displayName,
-                    provider,
-                    enabledStr,
-                    priority.ToString(),
-                    domains
-                );
-            }
+                        var enabledStr = enabled ? "[green]Yes[/]" : "[red]No[/]";
+
+                        // Check credential status
+                        var statusStr = await GetCredentialStatusAsync(account, id, provider);
+
+                        table.AddRow(
+                            id,
+                            displayName,
+                            provider,
+                            enabledStr,
+                            statusStr,
+                            domains
+                        );
+                    }
+                });
 
             AnsiConsole.Write(table);
             AnsiConsole.WriteLine();
             AnsiConsole.MarkupLine($"[dim]Total accounts: {accounts.Count}[/]");
+            AnsiConsole.MarkupLine("[dim]Run 'reauth <account-id>' to reauthenticate an account.[/]");
 
             return 0;
         }
@@ -113,6 +130,93 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
             AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Check if the account has a valid cached credential
+    /// </summary>
+    private async Task<string> GetCredentialStatusAsync(Dictionary<string, JsonElement> account, string accountId, string provider)
+    {
+        try
+        {
+            // Get provider config
+            if (!TryGetElement(account, out var providerConfigElem, "ProviderConfig", "providerConfig"))
+            {
+                return "[yellow]No config[/]";
+            }
+
+            var providerConfig = providerConfigElem.Deserialize<Dictionary<string, string>>()
+                ?? new Dictionary<string, string>();
+
+            if (provider == "google")
+            {
+                return await CheckGoogleCredentialAsync(accountId, providerConfig);
+            }
+            else if (provider == "microsoft365" || provider == "outlook.com")
+            {
+                return await CheckMicrosoftCredentialAsync(accountId, providerConfig);
+            }
+            else
+            {
+                return "[yellow]Unknown[/]";
+            }
+        }
+        catch
+        {
+            return "[yellow]Error[/]";
+        }
+    }
+
+    private async Task<string> CheckMicrosoftCredentialAsync(string accountId, Dictionary<string, string> providerConfig)
+    {
+        // Try both PascalCase and camelCase for config keys
+        if (!providerConfig.TryGetValue("TenantId", out var tenantId))
+            providerConfig.TryGetValue("tenantId", out tenantId);
+        if (!providerConfig.TryGetValue("ClientId", out var clientId))
+            providerConfig.TryGetValue("clientId", out clientId);
+
+        if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId))
+        {
+            return "[yellow]Missing config[/]";
+        }
+
+        var scopes = new[] { "Mail.Read", "Calendars.ReadWrite" };
+
+        var token = await _m365AuthService.GetTokenSilentlyAsync(
+            tenantId,
+            clientId,
+            scopes,
+            accountId);
+
+        return token != null ? "[green]Logged in[/]" : "[red]Not logged in[/]";
+    }
+
+    private async Task<string> CheckGoogleCredentialAsync(string accountId, Dictionary<string, string> providerConfig)
+    {
+        // Try both PascalCase and camelCase for config keys
+        if (!providerConfig.TryGetValue("ClientId", out var clientId))
+            providerConfig.TryGetValue("clientId", out clientId);
+        if (!providerConfig.TryGetValue("ClientSecret", out var clientSecret))
+            providerConfig.TryGetValue("clientSecret", out clientSecret);
+
+        if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
+        {
+            return "[yellow]Missing config[/]";
+        }
+
+        var scopes = new[]
+        {
+            "https://www.googleapis.com/auth/gmail.readonly",
+            "https://www.googleapis.com/auth/calendar.readonly"
+        };
+
+        var hasCredential = await _googleAuthService.HasValidCredentialAsync(
+            clientId,
+            clientSecret,
+            scopes,
+            accountId);
+
+        return hasCredential ? "[green]Logged in[/]" : "[red]Not logged in[/]";
     }
 
     /// <summary>
@@ -150,15 +254,5 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
             if (elem.ValueKind == JsonValueKind.False) return false;
         }
         return false;
-    }
-
-    /// <summary>
-    /// Get an int value, checking multiple property names
-    /// </summary>
-    private static int GetIntValue(Dictionary<string, JsonElement> dict, params string[] names)
-    {
-        if (TryGetElement(dict, out var elem, names) && elem.ValueKind == JsonValueKind.Number)
-            return elem.GetInt32();
-        return 0;
     }
 }
