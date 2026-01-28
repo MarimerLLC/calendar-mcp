@@ -26,6 +26,9 @@ public sealed class CreateEventTool(
         [Description("List of attendee email addresses")] List<string>? attendees = null,
         [Description("Event description/body")] string? body = null)
     {
+        // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
+        body = StripCdataWrapper(body);
+        
         logger.LogInformation("Creating event: subject={Subject}, start={Start}, end={End}, accountId={AccountId}",
             subject, start, end, accountId);
 
@@ -89,5 +92,26 @@ public sealed class CreateEventTool(
                 message = ex.Message
             });
         }
+    }
+
+    /// <summary>
+    /// Strips CDATA wrappers from content if present.
+    /// LLMs sometimes wrap HTML content in XML CDATA sections which are not valid HTML.
+    /// </summary>
+    private static string? StripCdataWrapper(string? content)
+    {
+        if (string.IsNullOrEmpty(content))
+            return content;
+
+        var trimmed = content.Trim();
+        
+        // Check for CDATA wrapper: <![CDATA[...]]>
+        if (trimmed.StartsWith("<![CDATA[", StringComparison.OrdinalIgnoreCase) &&
+            trimmed.EndsWith("]]>", StringComparison.Ordinal))
+        {
+            return trimmed[9..^3]; // Remove "<![CDATA[" (9 chars) and "]]>" (3 chars)
+        }
+
+        return content;
     }
 }
