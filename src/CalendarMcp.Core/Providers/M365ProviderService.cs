@@ -477,6 +477,104 @@ public class M365ProviderService : IM365ProviderService
         }
     }
 
+    public async Task<CalendarEvent?> GetCalendarEventDetailsAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            Event? evt;
+            if (string.IsNullOrEmpty(calendarId) || calendarId == "primary")
+            {
+                evt = await graphClient.Me.Calendar.Events[eventId].GetAsync(config =>
+                {
+                    config.QueryParameters.Select = [
+                        "id", "subject", "start", "end", "location", "body", "organizer", 
+                        "attendees", "isAllDay", "responseStatus", "showAs", "sensitivity",
+                        "isCancelled", "isOnlineMeeting", "onlineMeetingUrl", "onlineMeeting",
+                        "recurrence", "categories", "importance", "createdDateTime", "lastModifiedDateTime"
+                    ];
+                }, cancellationToken);
+            }
+            else
+            {
+                evt = await graphClient.Me.Calendars[calendarId].Events[eventId].GetAsync(config =>
+                {
+                    config.QueryParameters.Select = [
+                        "id", "subject", "start", "end", "location", "body", "organizer", 
+                        "attendees", "isAllDay", "responseStatus", "showAs", "sensitivity",
+                        "isCancelled", "isOnlineMeeting", "onlineMeetingUrl", "onlineMeeting",
+                        "recurrence", "categories", "importance", "createdDateTime", "lastModifiedDateTime"
+                    ];
+                }, cancellationToken);
+            }
+
+            if (evt == null)
+            {
+                return null;
+            }
+
+            var result = new CalendarEvent
+            {
+                Id = evt.Id ?? string.Empty,
+                AccountId = accountId,
+                CalendarId = calendarId ?? "primary",
+                Subject = evt.Subject ?? string.Empty,
+                Start = DateTime.TryParse(evt.Start?.DateTime, out var startDt) ? startDt : DateTime.MinValue,
+                End = DateTime.TryParse(evt.End?.DateTime, out var endDt) ? endDt : DateTime.MinValue,
+                Location = evt.Location?.DisplayName ?? string.Empty,
+                Body = evt.Body?.Content ?? string.Empty,
+                BodyFormat = evt.Body?.ContentType == BodyType.Html ? "html" : "text",
+                Organizer = evt.Organizer?.EmailAddress?.Address ?? string.Empty,
+                OrganizerName = evt.Organizer?.EmailAddress?.Name ?? string.Empty,
+                Attendees = evt.Attendees?.Select(a => a.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                AttendeeDetails = evt.Attendees?.Select(a => new Models.EventAttendee
+                {
+                    Email = a.EmailAddress?.Address ?? string.Empty,
+                    Name = a.EmailAddress?.Name ?? string.Empty,
+                    ResponseStatus = MapAttendeeResponseStatus(a.Status?.Response),
+                    Type = MapAttendeeType(a.Type),
+                    IsOrganizer = (a.EmailAddress?.Address ?? string.Empty).Equals(
+                        evt.Organizer?.EmailAddress?.Address ?? string.Empty, 
+                        StringComparison.OrdinalIgnoreCase)
+                }).ToList() ?? [],
+                IsAllDay = evt.IsAllDay ?? false,
+                ResponseStatus = MapResponseStatus(evt.ResponseStatus?.Response),
+                ShowAs = MapShowAs(evt.ShowAs),
+                Sensitivity = MapSensitivity(evt.Sensitivity),
+                IsCancelled = evt.IsCancelled ?? false,
+                IsOnlineMeeting = evt.IsOnlineMeeting ?? false,
+                OnlineMeetingUrl = evt.OnlineMeetingUrl ?? evt.OnlineMeeting?.JoinUrl,
+                OnlineMeetingProvider = evt.IsOnlineMeeting == true ? "teamsForBusiness" : null,
+                IsRecurring = evt.Recurrence != null,
+                RecurrencePattern = FormatRecurrencePattern(evt.Recurrence),
+                Categories = evt.Categories?.ToList() ?? [],
+                Importance = MapImportance(evt.Importance),
+                CreatedDateTime = evt.CreatedDateTime?.DateTime,
+                LastModifiedDateTime = evt.LastModifiedDateTime?.DateTime
+            };
+
+            _logger.LogInformation("Retrieved event details for {EventId} from M365 account {AccountId}", eventId, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting calendar event details for {EventId} from M365 account {AccountId}", eventId, accountId);
+            return null;
+        }
+    }
+
     private static string MapResponseStatus(ResponseType? response)
     {
         return response switch
@@ -488,6 +586,118 @@ public class M365ProviderService : IM365ProviderService
             ResponseType.Organizer => "accepted",
             _ => "notResponded"
         };
+    }
+
+    private static string MapAttendeeResponseStatus(ResponseType? response)
+    {
+        return response switch
+        {
+            ResponseType.Accepted => "accepted",
+            ResponseType.TentativelyAccepted => "tentative",
+            ResponseType.Declined => "declined",
+            ResponseType.NotResponded => "notResponded",
+            ResponseType.Organizer => "accepted",
+            _ => "notResponded"
+        };
+    }
+
+    private static string MapAttendeeType(AttendeeType? type)
+    {
+        return type switch
+        {
+            AttendeeType.Required => "required",
+            AttendeeType.Optional => "optional",
+            AttendeeType.Resource => "resource",
+            _ => "required"
+        };
+    }
+
+    private static string MapShowAs(FreeBusyStatus? showAs)
+    {
+        return showAs switch
+        {
+            FreeBusyStatus.Free => "free",
+            FreeBusyStatus.Tentative => "tentative",
+            FreeBusyStatus.Busy => "busy",
+            FreeBusyStatus.Oof => "outOfOffice",
+            FreeBusyStatus.WorkingElsewhere => "workingElsewhere",
+            _ => "busy"
+        };
+    }
+
+    private static string MapSensitivity(Sensitivity? sensitivity)
+    {
+        return sensitivity switch
+        {
+            Microsoft.Graph.Models.Sensitivity.Normal => "normal",
+            Microsoft.Graph.Models.Sensitivity.Private => "private",
+            Microsoft.Graph.Models.Sensitivity.Personal => "personal",
+            Microsoft.Graph.Models.Sensitivity.Confidential => "confidential",
+            _ => "normal"
+        };
+    }
+
+    private static string MapImportance(Importance? importance)
+    {
+        return importance switch
+        {
+            Microsoft.Graph.Models.Importance.Low => "low",
+            Microsoft.Graph.Models.Importance.Normal => "normal",
+            Microsoft.Graph.Models.Importance.High => "high",
+            _ => "normal"
+        };
+    }
+
+    private static string? MapOnlineMeetingProvider(OnlineMeetingProviderType? provider)
+    {
+        return provider switch
+        {
+            OnlineMeetingProviderType.TeamsForBusiness => "teamsForBusiness",
+            OnlineMeetingProviderType.SkypeForBusiness => "skypeForBusiness",
+            OnlineMeetingProviderType.SkypeForConsumer => "skypeForConsumer",
+            _ => null
+        };
+    }
+
+    private static string? FormatRecurrencePattern(PatternedRecurrence? recurrence)
+    {
+        if (recurrence?.Pattern == null)
+            return null;
+
+        var pattern = recurrence.Pattern;
+        return pattern.Type switch
+        {
+            RecurrencePatternType.Daily => pattern.Interval == 1 ? "Daily" : $"Every {pattern.Interval} days",
+            RecurrencePatternType.Weekly => FormatWeeklyPattern(pattern),
+            RecurrencePatternType.AbsoluteMonthly => pattern.Interval == 1 
+                ? $"Monthly on day {pattern.DayOfMonth}" 
+                : $"Every {pattern.Interval} months on day {pattern.DayOfMonth}",
+            RecurrencePatternType.RelativeMonthly => $"Monthly on {pattern.Index} {pattern.DaysOfWeek?.FirstOrDefault()}",
+            RecurrencePatternType.AbsoluteYearly => $"Yearly on {pattern.Month}/{pattern.DayOfMonth}",
+            RecurrencePatternType.RelativeYearly => $"Yearly on {pattern.Index} {pattern.DaysOfWeek?.FirstOrDefault()} of month {pattern.Month}",
+            _ => "Recurring"
+        };
+    }
+
+    private static string FormatWeeklyPattern(RecurrencePattern pattern)
+    {
+        if (pattern.DaysOfWeek == null || !pattern.DaysOfWeek.Any())
+            return pattern.Interval == 1 ? "Weekly" : $"Every {pattern.Interval} weeks";
+
+        var days = pattern.DaysOfWeek.Select(d => d.ToString()).ToList();
+        
+        // Check for weekdays pattern
+        if (days.Count == 5 && 
+            days.Contains("Monday") && days.Contains("Tuesday") && 
+            days.Contains("Wednesday") && days.Contains("Thursday") && days.Contains("Friday"))
+        {
+            return "Every weekday";
+        }
+
+        var daysStr = string.Join(", ", days);
+        return pattern.Interval == 1 
+            ? $"Weekly on {daysStr}" 
+            : $"Every {pattern.Interval} weeks on {daysStr}";
     }
 
     public async Task<string> CreateEventAsync(

@@ -439,6 +439,82 @@ public class GoogleProviderService : IGoogleProviderService
         }
     }
 
+    public async Task<CalendarEvent?> GetCalendarEventDetailsAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+            var targetCalendarId = string.IsNullOrEmpty(calendarId) ? "primary" : calendarId;
+
+            var evt = await service.Events.Get(targetCalendarId, eventId).ExecuteAsync(cancellationToken);
+
+            if (evt == null)
+            {
+                return null;
+            }
+
+            // Get my response status
+            var myStatus = evt.Attendees?.FirstOrDefault(a => a.Self == true)?.ResponseStatus;
+
+            var result = new CalendarEvent
+            {
+                Id = evt.Id,
+                AccountId = accountId,
+                CalendarId = targetCalendarId,
+                Subject = evt.Summary ?? string.Empty,
+                Start = GetEventDateTime(evt.Start),
+                End = GetEventDateTime(evt.End),
+                Location = evt.Location ?? string.Empty,
+                Body = evt.Description ?? string.Empty,
+                BodyFormat = "text",
+                Organizer = evt.Organizer?.Email ?? string.Empty,
+                OrganizerName = evt.Organizer?.DisplayName ?? string.Empty,
+                Attendees = evt.Attendees?.Select(a => a.Email ?? string.Empty).ToList() ?? [],
+                AttendeeDetails = evt.Attendees?.Select(a => new CalendarMcp.Core.Models.EventAttendee
+                {
+                    Email = a.Email ?? string.Empty,
+                    Name = a.DisplayName ?? string.Empty,
+                    ResponseStatus = MapGoogleResponseStatus(a.ResponseStatus),
+                    Type = a.Optional == true ? "optional" : (a.Resource == true ? "resource" : "required"),
+                    IsOrganizer = a.Organizer == true
+                }).ToList() ?? [],
+                IsAllDay = !string.IsNullOrEmpty(evt.Start?.Date),
+                ResponseStatus = MapGoogleResponseStatus(myStatus),
+                ShowAs = MapGoogleTransparency(evt.Transparency),
+                Sensitivity = MapGoogleVisibility(evt.Visibility),
+                IsCancelled = evt.Status == "cancelled",
+                IsOnlineMeeting = evt.ConferenceData != null,
+                OnlineMeetingUrl = evt.ConferenceData?.EntryPoints?.FirstOrDefault(e => e.EntryPointType == "video")?.Uri 
+                    ?? evt.HangoutLink,
+                OnlineMeetingProvider = MapGoogleConferenceProvider(evt.ConferenceData?.ConferenceSolution?.Name),
+                IsRecurring = !string.IsNullOrEmpty(evt.RecurringEventId),
+                RecurrencePattern = FormatGoogleRecurrence(evt.Recurrence),
+                Categories = [], // Google doesn't have categories in the same way
+                Importance = "normal", // Google doesn't have importance
+                CreatedDateTime = evt.CreatedDateTimeOffset?.DateTime,
+                LastModifiedDateTime = evt.UpdatedDateTimeOffset?.DateTime
+            };
+
+            _logger.LogInformation("Retrieved event details for {EventId} from Google account {AccountId}", eventId, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting calendar event details for {EventId} from Google account {AccountId}", eventId, accountId);
+            return null;
+        }
+    }
+
     public async Task<string> CreateEventAsync(
         string accountId, 
         string? calendarId, 
@@ -480,7 +556,7 @@ public class GoogleProviderService : IGoogleProviderService
 
             if (attendees != null && attendees.Count > 0)
             {
-                newEvent.Attendees = attendees.Select(email => new EventAttendee
+                newEvent.Attendees = attendees.Select(email => new Google.Apis.Calendar.v3.Data.EventAttendee
                 {
                     Email = email.Trim()
                 }).ToList();
@@ -550,7 +626,7 @@ public class GoogleProviderService : IGoogleProviderService
             }
             if (attendees != null)
             {
-                existingEvent.Attendees = attendees.Select(email => new EventAttendee
+                existingEvent.Attendees = attendees.Select(email => new Google.Apis.Calendar.v3.Data.EventAttendee
                 {
                     Email = email.Trim()
                 }).ToList();
@@ -754,6 +830,102 @@ public class GoogleProviderService : IGoogleProviderService
             "needsAction" => "notResponded",
             _ => "notResponded"
         };
+    }
+
+    private static string MapGoogleTransparency(string? transparency)
+    {
+        // Google transparency: "opaque" (busy) or "transparent" (free)
+        return transparency switch
+        {
+            "transparent" => "free",
+            "opaque" => "busy",
+            _ => "busy"
+        };
+    }
+
+    private static string MapGoogleVisibility(string? visibility)
+    {
+        return visibility switch
+        {
+            "public" => "normal",
+            "private" => "private",
+            "confidential" => "confidential",
+            "default" => "normal",
+            _ => "normal"
+        };
+    }
+
+    private static string? MapGoogleConferenceProvider(string? providerName)
+    {
+        if (string.IsNullOrEmpty(providerName))
+            return null;
+            
+        if (providerName.Contains("Meet", StringComparison.OrdinalIgnoreCase))
+            return "googleMeet";
+        if (providerName.Contains("Zoom", StringComparison.OrdinalIgnoreCase))
+            return "zoom";
+            
+        return providerName.ToLowerInvariant().Replace(" ", "");
+    }
+
+    private static string? FormatGoogleRecurrence(IList<string>? recurrence)
+    {
+        if (recurrence == null || recurrence.Count == 0)
+            return null;
+
+        // Parse RRULE format (simplified)
+        var rrule = recurrence.FirstOrDefault(r => r.StartsWith("RRULE:", StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrEmpty(rrule))
+            return "Recurring";
+
+        rrule = rrule.Substring(6); // Remove "RRULE:"
+        var parts = rrule.Split(';').ToDictionary(
+            p => p.Split('=')[0],
+            p => p.Contains('=') ? p.Split('=')[1] : string.Empty,
+            StringComparer.OrdinalIgnoreCase);
+
+        if (!parts.TryGetValue("FREQ", out var freq))
+            return "Recurring";
+
+        var interval = parts.TryGetValue("INTERVAL", out var i) ? int.Parse(i) : 1;
+
+        return freq.ToUpperInvariant() switch
+        {
+            "DAILY" => interval == 1 ? "Daily" : $"Every {interval} days",
+            "WEEKLY" => FormatGoogleWeeklyRecurrence(parts, interval),
+            "MONTHLY" => interval == 1 ? "Monthly" : $"Every {interval} months",
+            "YEARLY" => interval == 1 ? "Yearly" : $"Every {interval} years",
+            _ => "Recurring"
+        };
+    }
+
+    private static string FormatGoogleWeeklyRecurrence(Dictionary<string, string> parts, int interval)
+    {
+        if (!parts.TryGetValue("BYDAY", out var byDay) || string.IsNullOrEmpty(byDay))
+            return interval == 1 ? "Weekly" : $"Every {interval} weeks";
+
+        var days = byDay.Split(',');
+        var dayNames = days.Select(d => d switch
+        {
+            "MO" => "Monday",
+            "TU" => "Tuesday",
+            "WE" => "Wednesday",
+            "TH" => "Thursday",
+            "FR" => "Friday",
+            "SA" => "Saturday",
+            "SU" => "Sunday",
+            _ => d
+        }).ToList();
+
+        if (dayNames.Count == 5 && 
+            dayNames.Contains("Monday") && dayNames.Contains("Tuesday") && 
+            dayNames.Contains("Wednesday") && dayNames.Contains("Thursday") && dayNames.Contains("Friday"))
+        {
+            return "Every weekday";
+        }
+
+        var daysStr = string.Join(", ", dayNames);
+        return interval == 1 ? $"Weekly on {daysStr}" : $"Every {interval} weeks on {daysStr}";
     }
 
     #endregion

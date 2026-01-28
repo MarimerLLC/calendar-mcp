@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SearchEmailsTool>();
         services.AddSingleton<ListCalendarsTool>();
         services.AddSingleton<GetCalendarEventsTool>();
+        services.AddSingleton<GetCalendarEventDetailsTool>();
         services.AddSingleton<SendEmailTool>();
         services.AddSingleton<CreateEventTool>();
         

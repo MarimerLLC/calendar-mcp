@@ -121,6 +121,7 @@ public class Program
                     .WithTools<CalendarMcp.Core.Tools.GetContextualEmailSummaryTool>()
                     .WithTools<CalendarMcp.Core.Tools.ListCalendarsTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetCalendarEventsTool>()
+                    .WithTools<CalendarMcp.Core.Tools.GetCalendarEventDetailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
                     .WithTools<CalendarMcp.Core.Tools.CreateEventTool>()
                     .WithStdioServerTransport();

@@ -49,6 +49,12 @@ public interface IProviderService
         int count = 50,
         CancellationToken cancellationToken = default);
     
+    Task<CalendarEvent?> GetCalendarEventDetailsAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        CancellationToken cancellationToken = default);
+    
     Task<string> CreateEventAsync(
         string accountId,
         string? calendarId,
