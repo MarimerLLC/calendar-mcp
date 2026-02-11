@@ -44,14 +44,11 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
     #region JSON Data Loading & Caching
 
-    private async Task<List<JsonCalendarEntry>?> GetJsonDataAsync(string accountId, CancellationToken cancellationToken)
+    private async Task<List<JsonCalendarEntry>> GetJsonDataAsync(string accountId, CancellationToken cancellationToken)
     {
         var account = await _accountRegistry.GetAccountAsync(accountId);
         if (account == null)
-        {
-            _logger.LogError("Account {AccountId} not found in registry", accountId);
-            return null;
-        }
+            throw new InvalidOperationException($"Account '{accountId}' not found in registry.");
 
         var cacheTtl = GetCacheTtl(account);
 
@@ -67,15 +64,9 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         try
         {
             var jsonContent = await LoadJsonContentAsync(account, cancellationToken);
-            if (jsonContent == null)
-                return null;
 
-            var entries = JsonSerializer.Deserialize<List<JsonCalendarEntry>>(jsonContent, JsonOptions);
-            if (entries == null)
-            {
-                _logger.LogError("Failed to deserialize JSON calendar data for {AccountId}", accountId);
-                return null;
-            }
+            var entries = JsonSerializer.Deserialize<List<JsonCalendarEntry>>(jsonContent, JsonOptions)
+                ?? throw new InvalidOperationException($"JSON calendar file for '{accountId}' deserialized to null. Check that the file contains a JSON array.");
 
             var newCached = new CachedJsonData(entries, DateTime.UtcNow);
             _cache[accountId] = newCached;
@@ -87,21 +78,21 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to load JSON data for {AccountId}, falling back to stale cache", accountId);
-
             // Fall back to stale cache if available
             if (_cache.TryGetValue(accountId, out var stale))
             {
-                _logger.LogInformation("Using stale cached JSON data for {AccountId} (fetched at {FetchedAt})",
+                _logger.LogWarning(ex, "Failed to load JSON data for {AccountId}, using stale cache from {FetchedAt}",
                     accountId, stale.FetchedAt);
                 return stale.Entries;
             }
 
-            return null;
+            // No cache - let the exception propagate with full context
+            _logger.LogError(ex, "Failed to load JSON data for {AccountId} and no cached data available", accountId);
+            throw;
         }
     }
 
-    private async Task<string?> LoadJsonContentAsync(AccountInfo account, CancellationToken cancellationToken)
+    private async Task<string> LoadJsonContentAsync(AccountInfo account, CancellationToken cancellationToken)
     {
         var source = account.ProviderConfig.GetValueOrDefault("source", "local").ToLowerInvariant();
 
@@ -109,51 +100,55 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         {
             "local" => await LoadFromLocalFileAsync(account),
             "onedrive" => await LoadFromOneDriveAsync(account, cancellationToken),
-            _ => throw new InvalidOperationException($"Unknown JSON calendar source: {source}")
+            _ => throw new InvalidOperationException($"Unknown JSON calendar source '{source}' for account '{account.Id}'. Expected 'local' or 'onedrive'.")
         };
     }
 
-    private async Task<string?> LoadFromLocalFileAsync(AccountInfo account)
+    private async Task<string> LoadFromLocalFileAsync(AccountInfo account)
     {
         if (!account.ProviderConfig.TryGetValue("filePath", out var filePath) &&
             !account.ProviderConfig.TryGetValue("FilePath", out filePath))
         {
-            _logger.LogError("Account {AccountId} missing filePath in ProviderConfig", account.Id);
-            return null;
+            throw new InvalidOperationException(
+                $"Account '{account.Id}' is missing 'filePath' in providerConfig. Add the full path to the JSON calendar file.");
         }
 
         if (!File.Exists(filePath))
         {
-            _logger.LogError("JSON calendar file not found at {FilePath} for account {AccountId}", filePath, account.Id);
-            return null;
+            throw new FileNotFoundException(
+                $"JSON calendar file not found at '{filePath}' for account '{account.Id}'. " +
+                "Ensure the file exists and the path is correct. If using cloud sync (OneDrive, Dropbox), ensure the file has synced.");
         }
 
         return await File.ReadAllTextAsync(filePath);
     }
 
-    private async Task<string?> LoadFromOneDriveAsync(AccountInfo account, CancellationToken cancellationToken)
+    private async Task<string> LoadFromOneDriveAsync(AccountInfo account, CancellationToken cancellationToken)
     {
         if (!account.ProviderConfig.TryGetValue("oneDrivePath", out var oneDrivePath) &&
             !account.ProviderConfig.TryGetValue("OneDrivePath", out oneDrivePath))
         {
-            _logger.LogError("Account {AccountId} missing oneDrivePath in ProviderConfig", account.Id);
-            return null;
+            throw new InvalidOperationException(
+                $"Account '{account.Id}' is missing 'oneDrivePath' in providerConfig.");
         }
 
         // Resolve credentials - either from referenced account or own config
         string? clientId = null;
         string? tenantId = null;
         var authAccountId = account.Id;
+        var isReusedCredentials = false;
 
         if (account.ProviderConfig.TryGetValue("authAccountId", out var refAccountId) ||
             account.ProviderConfig.TryGetValue("AuthAccountId", out refAccountId))
         {
             // Reuse credentials from another account
+            isReusedCredentials = true;
             var refAccount = await _accountRegistry.GetAccountAsync(refAccountId);
             if (refAccount == null)
             {
-                _logger.LogError("Referenced auth account {RefAccountId} not found for {AccountId}", refAccountId, account.Id);
-                return null;
+                throw new InvalidOperationException(
+                    $"Account '{account.Id}' references auth account '{refAccountId}' which was not found. " +
+                    "Check the 'authAccountId' in providerConfig.");
             }
 
             refAccount.ProviderConfig.TryGetValue("clientId", out clientId);
@@ -168,8 +163,11 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
         if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(tenantId))
         {
-            _logger.LogError("Missing clientId or tenantId for OneDrive access on account {AccountId}", account.Id);
-            return null;
+            throw new InvalidOperationException(
+                $"Missing clientId or tenantId for OneDrive access on account '{account.Id}'. " +
+                (isReusedCredentials
+                    ? $"The referenced auth account '{refAccountId}' does not have clientId/tenantId configured."
+                    : "Add clientId and tenantId to providerConfig, or set authAccountId to reuse another account's credentials."));
         }
 
         var token = await _authService.GetTokenSilentlyAsync(
@@ -177,8 +175,14 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
         if (token == null)
         {
-            _logger.LogWarning("No cached token available for OneDrive access on account {AccountId}. Run CLI to authenticate.", account.Id);
-            return null;
+            var hint = isReusedCredentials
+                ? $"The reused account '{refAccountId}' may not have the 'Files.Read' permission consented. " +
+                  $"Run 'calendar-mcp-cli reauth {refAccountId}' to re-authenticate with Files.Read scope, " +
+                  "or ensure the app registration includes Files.Read in its API permissions."
+                : $"Run 'calendar-mcp-cli reauth {authAccountId}' to authenticate.";
+
+            throw new InvalidOperationException(
+                $"Failed to get OneDrive access token for account '{account.Id}'. {hint}");
         }
 
         // Use Graph REST API directly: GET /me/drive/root:{path}:/content
@@ -191,9 +195,15 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Failed to fetch OneDrive file at {Path} for account {AccountId}. Status: {Status}",
-                oneDrivePath, account.Id, response.StatusCode);
-            return null;
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException(
+                $"Failed to fetch OneDrive file at '{oneDrivePath}' for account '{account.Id}'. " +
+                $"HTTP {(int)response.StatusCode} {response.StatusCode}. " +
+                (response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                    ? "The access token may lack 'Files.Read' permission. Re-authenticate with the correct scope."
+                    : response.StatusCode == System.Net.HttpStatusCode.NotFound
+                        ? "File not found. Check that the oneDrivePath is correct."
+                        : $"Response: {errorBody}"));
         }
 
         return await response.Content.ReadAsStringAsync(cancellationToken);
@@ -243,8 +253,6 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         CancellationToken cancellationToken = default)
     {
         var entries = await GetJsonDataAsync(accountId, cancellationToken);
-        if (entries == null)
-            return Enumerable.Empty<CalendarEvent>();
 
         var start = startDate ?? DateTime.UtcNow.Date;
         var end = endDate ?? start.AddDays(7);
@@ -279,8 +287,6 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         CancellationToken cancellationToken = default)
     {
         var entries = await GetJsonDataAsync(accountId, cancellationToken);
-        if (entries == null)
-            return null;
 
         var entry = entries.FirstOrDefault(e => e.Id == eventId);
         if (entry == null)

@@ -45,6 +45,7 @@ public sealed class GetCalendarEventsTool(
             }
 
             // Query all accounts in parallel
+            var warnings = new List<object>();
             var tasks = validAccounts.Select(async account =>
             {
                 try
@@ -57,6 +58,10 @@ public sealed class GetCalendarEventsTool(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Error getting calendar events from account {AccountId}", account!.Id);
+                    lock (warnings)
+                    {
+                        warnings.Add(new { accountId = account.Id, error = ex.Message });
+                    }
                     return Enumerable.Empty<CalendarEvent>();
                 }
             });
@@ -80,7 +85,8 @@ public sealed class GetCalendarEventsTool(
                     attendees = e.Attendees,
                     isAllDay = e.IsAllDay,
                     organizer = e.Organizer
-                })
+                }),
+                warnings = warnings.Count > 0 ? warnings : null
             };
 
             logger.LogInformation("Retrieved {Count} events from {AccountCount} accounts between {Start} and {End}",
