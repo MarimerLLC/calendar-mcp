@@ -22,3 +22,10 @@ public interface IGoogleProviderService : IProviderService
 public interface IOutlookComProviderService : IProviderService
 {
 }
+
+/// <summary>
+/// ICS feed provider service for read-only calendar access via HTTP ICS URLs
+/// </summary>
+public interface IIcsProviderService : IProviderService
+{
+}

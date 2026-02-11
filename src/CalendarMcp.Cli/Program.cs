@@ -43,6 +43,11 @@ app.Configure(config =>
         .WithExample(new[] { "add-google-account" })
         .WithExample(new[] { "add-google-account", "--config", "/path/to/appsettings.json" });
 
+    config.AddCommand<AddIcsAccountCommand>("add-ics-account")
+        .WithDescription("Add a new ICS calendar feed (read-only calendar via HTTP URL)")
+        .WithExample(new[] { "add-ics-account" })
+        .WithExample(new[] { "add-ics-account", "--config", "/path/to/appsettings.json" });
+
     config.AddCommand<ListAccountsCommand>("list-accounts")
         .WithDescription("List all configured accounts")
         .WithExample(new[] { "list-accounts" })
