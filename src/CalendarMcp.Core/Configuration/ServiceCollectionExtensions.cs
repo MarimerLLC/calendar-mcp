@@ -23,7 +23,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IM365ProviderService, M365ProviderService>();
         services.AddSingleton<IGoogleProviderService, GoogleProviderService>();
         services.AddSingleton<IOutlookComProviderService, OutlookComProviderService>();
+        services.AddSingleton<IIcsProviderService, IcsProviderService>();
         services.AddSingleton<IProviderServiceFactory, ProviderServiceFactory>();
+
+        // Register HttpClient for ICS provider
+        services.AddHttpClient("IcsProvider");
         
         // Register account registry
         services.AddSingleton<IAccountRegistry, AccountRegistry>();
