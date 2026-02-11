@@ -149,7 +149,9 @@ public class AddJsonAccountCommand : AsyncCommand<AddJsonAccountCommand.Settings
 
                     foreach (var acct in accountsArray.EnumerateArray())
                     {
-                        var id = acct.GetProperty("id").GetString() ?? acct.GetProperty("Id").GetString() ?? "";
+                        var id = "";
+                        if (acct.TryGetProperty("id", out var idProp)) id = idProp.GetString() ?? "";
+                        else if (acct.TryGetProperty("Id", out idProp)) id = idProp.GetString() ?? "";
                         var display = "";
                         if (acct.TryGetProperty("displayName", out var dn)) display = dn.GetString() ?? "";
                         else if (acct.TryGetProperty("DisplayName", out dn)) display = dn.GetString() ?? "";
