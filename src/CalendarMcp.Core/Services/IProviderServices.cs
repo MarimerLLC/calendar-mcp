@@ -29,3 +29,10 @@ public interface IOutlookComProviderService : IProviderService
 public interface IIcsProviderService : IProviderService
 {
 }
+
+/// <summary>
+/// JSON calendar file provider service for read-only calendar access via exported JSON files
+/// </summary>
+public interface IJsonCalendarProviderService : IProviderService
+{
+}

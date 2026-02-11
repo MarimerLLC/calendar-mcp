@@ -48,6 +48,11 @@ app.Configure(config =>
         .WithExample(new[] { "add-ics-account" })
         .WithExample(new[] { "add-ics-account", "--config", "/path/to/appsettings.json" });
 
+    config.AddCommand<AddJsonAccountCommand>("add-json-account")
+        .WithDescription("Add a JSON calendar file (Power Automate export, local or OneDrive)")
+        .WithExample(new[] { "add-json-account" })
+        .WithExample(new[] { "add-json-account", "--config", "/path/to/appsettings.json" });
+
     config.AddCommand<ListAccountsCommand>("list-accounts")
         .WithDescription("List all configured accounts")
         .WithExample(new[] { "list-accounts" })

@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IGoogleProviderService, GoogleProviderService>();
         services.AddSingleton<IOutlookComProviderService, OutlookComProviderService>();
         services.AddSingleton<IIcsProviderService, IcsProviderService>();
+        services.AddSingleton<IJsonCalendarProviderService, JsonCalendarProviderService>();
         services.AddSingleton<IProviderServiceFactory, ProviderServiceFactory>();
 
         // Register HttpClient for ICS provider

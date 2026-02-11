@@ -100,15 +100,6 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
             if (account.TryGetValue("DisplayName", out var nameElem) || account.TryGetValue("displayName", out nameElem))
                 displayName = nameElem.GetString();
 
-            // Support M365, Outlook.com, and Google accounts
-            if (string.IsNullOrEmpty(provider) ||
-                (provider != "microsoft365" && provider != "outlook.com" && provider != "google"))
-            {
-                AnsiConsole.MarkupLine($"[red]Error: Unsupported provider '{provider}'.[/]");
-                AnsiConsole.MarkupLine($"[dim]Supported providers: microsoft365, outlook.com, google[/]");
-                return 1;
-            }
-
             // Get provider config - try both PascalCase and camelCase
             if (!account.TryGetValue("ProviderConfig", out var providerConfigElem) &&
                 !account.TryGetValue("providerConfig", out providerConfigElem))
@@ -120,6 +111,69 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
             var providerConfig = providerConfigElem.Deserialize<Dictionary<string, string>>()
                 ?? new Dictionary<string, string>();
 
+            // For JSON accounts with authAccountId, redirect to reauth the referenced account
+            if (provider is "json" or "json-calendar")
+            {
+                if (providerConfig.TryGetValue("authAccountId", out var authAcctId) ||
+                    providerConfig.TryGetValue("AuthAccountId", out authAcctId))
+                {
+                    AnsiConsole.MarkupLine($"[yellow]JSON account '{settings.AccountId}' uses credentials from account '{authAcctId}'.[/]");
+                    AnsiConsole.MarkupLine($"[yellow]Reauthenticating '{authAcctId}' instead (with Files.Read scope)...[/]");
+                    AnsiConsole.WriteLine();
+
+                    // Find the referenced account
+                    var refAccount = accounts?.FirstOrDefault(a =>
+                        (a.TryGetValue("Id", out var idElem) || a.TryGetValue("id", out idElem)) &&
+                        idElem.GetString() == authAcctId);
+
+                    if (refAccount == null)
+                    {
+                        AnsiConsole.MarkupLine($"[red]Error: Referenced account '{authAcctId}' not found.[/]");
+                        return 1;
+                    }
+
+                    if (!refAccount.TryGetValue("ProviderConfig", out var refPcElem) &&
+                        !refAccount.TryGetValue("providerConfig", out refPcElem))
+                    {
+                        AnsiConsole.MarkupLine($"[red]Error: Referenced account '{authAcctId}' missing ProviderConfig.[/]");
+                        return 1;
+                    }
+
+                    var refProviderConfig = refPcElem.Deserialize<Dictionary<string, string>>() ?? new();
+                    string? refProvider = null;
+                    if (refAccount.TryGetValue("Provider", out var refProvElem) || refAccount.TryGetValue("provider", out refProvElem))
+                        refProvider = refProvElem.GetString();
+
+                    return await ReauthenticateMicrosoftAccountAsync(authAcctId, refProviderConfig, refProvider ?? "outlook.com", accounts);
+                }
+                else if (providerConfig.TryGetValue("clientId", out _))
+                {
+                    // JSON account with its own credentials - reauth with Files.Read scope
+                    providerConfig.TryGetValue("source", out var source);
+                    if (source?.ToLowerInvariant() != "onedrive")
+                    {
+                        AnsiConsole.MarkupLine($"[yellow]JSON account '{settings.AccountId}' uses a local file source and does not need authentication.[/]");
+                        return 0;
+                    }
+
+                    return await ReauthenticateJsonOneDriveAccountAsync(settings.AccountId, providerConfig);
+                }
+                else
+                {
+                    AnsiConsole.MarkupLine($"[red]Error: JSON account '{settings.AccountId}' has no credentials to reauthenticate.[/]");
+                    return 1;
+                }
+            }
+
+            // Support M365, Outlook.com, and Google accounts
+            if (string.IsNullOrEmpty(provider) ||
+                (provider != "microsoft365" && provider != "outlook.com" && provider != "google"))
+            {
+                AnsiConsole.MarkupLine($"[red]Error: Unsupported provider '{provider}'.[/]");
+                AnsiConsole.MarkupLine($"[dim]Supported providers: microsoft365, outlook.com, google, json[/]");
+                return 1;
+            }
+
             AnsiConsole.MarkupLine($"[dim]Account: {displayName ?? settings.AccountId}[/]");
             AnsiConsole.MarkupLine($"[dim]Provider: {provider}[/]");
             AnsiConsole.WriteLine();
@@ -130,7 +184,7 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
             }
             else
             {
-                return await ReauthenticateMicrosoftAccountAsync(settings.AccountId, providerConfig, provider);
+                return await ReauthenticateMicrosoftAccountAsync(settings.AccountId, providerConfig, provider, accounts);
             }
         }
         catch (Exception ex)
@@ -140,7 +194,8 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
         }
     }
 
-    private async Task<int> ReauthenticateMicrosoftAccountAsync(string accountId, Dictionary<string, string> providerConfig, string provider)
+    private async Task<int> ReauthenticateMicrosoftAccountAsync(string accountId, Dictionary<string, string> providerConfig, string provider,
+        List<Dictionary<string, JsonElement>>? allAccounts = null)
     {
         // Try both PascalCase and camelCase for config keys
         if (!providerConfig.TryGetValue("TenantId", out var tenantId))
@@ -155,12 +210,42 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
         }
 
         // Default scopes
-        var scopes = new[]
+        var scopeList = new List<string>
         {
             "Mail.Read",
             "Mail.Send",
             "Calendars.ReadWrite"
         };
+
+        // Check if any JSON calendar accounts reference this account for OneDrive access
+        if (allAccounts != null)
+        {
+            var needsFilesRead = allAccounts.Any(a =>
+            {
+                var p = "";
+                if (a.TryGetValue("provider", out var pElem) || a.TryGetValue("Provider", out pElem))
+                    p = pElem.GetString() ?? "";
+                if (p is not ("json" or "json-calendar"))
+                    return false;
+
+                if (!a.TryGetValue("providerConfig", out var pcElem) && !a.TryGetValue("ProviderConfig", out pcElem))
+                    return false;
+
+                var pc = pcElem.Deserialize<Dictionary<string, string>>() ?? new();
+                if (!pc.TryGetValue("authAccountId", out var authId) && !pc.TryGetValue("AuthAccountId", out authId))
+                    return false;
+
+                return authId == accountId;
+            });
+
+            if (needsFilesRead)
+            {
+                scopeList.Add("Files.Read");
+                AnsiConsole.MarkupLine("[yellow]Including Files.Read scope (needed by JSON calendar accounts using this account's credentials).[/]");
+            }
+        }
+
+        var scopes = scopeList.ToArray();
 
         if (provider == "outlook.com")
         {
@@ -211,6 +296,54 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
         table.AddRow("Provider", provider);
         table.AddRow("Status", "[green]Authenticated[/]");
         table.AddRow("Token Cached", "✓ Yes");
+
+        AnsiConsole.Write(table);
+        AnsiConsole.WriteLine();
+
+        AnsiConsole.MarkupLine("[dim]Token cache has been refreshed. The account is ready to use.[/]");
+
+        return 0;
+    }
+
+    private async Task<int> ReauthenticateJsonOneDriveAccountAsync(string accountId, Dictionary<string, string> providerConfig)
+    {
+        if (!providerConfig.TryGetValue("TenantId", out var tenantId))
+            providerConfig.TryGetValue("tenantId", out tenantId);
+        if (!providerConfig.TryGetValue("ClientId", out var clientId))
+            providerConfig.TryGetValue("clientId", out clientId);
+
+        if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId))
+        {
+            AnsiConsole.MarkupLine($"[red]Error: Account missing tenantId or clientId.[/]");
+            return 1;
+        }
+
+        var scopes = new[] { "Files.Read" };
+
+        AnsiConsole.MarkupLine("[yellow]Starting Device Code authentication for OneDrive access...[/]");
+        AnsiConsole.WriteLine();
+
+        await _m365AuthService.AuthenticateWithDeviceCodeAsync(
+            tenantId,
+            clientId,
+            scopes,
+            accountId,
+            async (message) =>
+            {
+                AnsiConsole.MarkupLine($"[yellow]{message}[/]");
+                await Task.CompletedTask;
+            });
+
+        AnsiConsole.MarkupLine("[green]Reauthentication successful![/]");
+        AnsiConsole.WriteLine();
+
+        var table = new Table();
+        table.AddColumn("Property");
+        table.AddColumn("Value");
+        table.AddRow("Account ID", accountId);
+        table.AddRow("Provider", "json (OneDrive)");
+        table.AddRow("Scopes", "Files.Read");
+        table.AddRow("Status", "[green]Authenticated[/]");
 
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
