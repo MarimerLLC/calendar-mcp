@@ -90,7 +90,7 @@ public static class AdminEndpoints
         {
             return Results.BadRequest(new { error = ex.Message });
         }
-        catch (TimeoutException ex)
+        catch (TimeoutException)
         {
             return Results.StatusCode(504);
         }

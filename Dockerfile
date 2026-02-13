@@ -6,8 +6,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 
-# Copy solution and project files for layer caching
-COPY src/calendar-mcp.slnx .
+# Copy project files for layer caching
 COPY src/CalendarMcp.Core/CalendarMcp.Core.csproj CalendarMcp.Core/
 COPY src/CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj CalendarMcp.HttpServer/
 
