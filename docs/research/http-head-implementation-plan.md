@@ -292,22 +292,11 @@ OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318  # Optional telemetry
    - Only acceptable for single-user private environments
    - Set file permissions to 0600 (owner read/write only)
 
-2. **Custom Encryption Key** (Recommended)
-   - Provide encryption key via Kubernetes secret
-   - Encrypt tokens using key before writing to disk
-   - Decrypt when reading from disk
-   - Key stored in k8s secret, mounted as environment variable
-   ```bash
-   CALENDAR_MCP_ENCRYPTION_KEY=<base64-encoded-key>
-   ```
-
-3. **External Secret Management**
+2. **External Secret Management**
    - HashiCorp Vault
    - Azure Key Vault (if using Azure)
    - AWS Secrets Manager (if using AWS)
    - Overkill for single-user private deployment
-
-**Recommendation**: Custom encryption key approach (Option 2) - good balance of security and simplicity.
 
 ### 4. HTTP API Design
 
@@ -458,13 +447,7 @@ fetch('http://localhost:8080/mcp/message', {
    - Environment variable: `CALENDAR_MCP_AUTH_MODE=device-code|interactive`
    - Default to `interactive` for backward compatibility
 
-5. Token storage refactoring
-   - Abstract token storage interface
-   - Support custom encryption key
-   - Environment variable: `CALENDAR_MCP_ENCRYPTION_KEY`
-   - Fall back to plaintext if no key provided (with warning)
-
-6. Testing
+5. Testing
    - Test device code flow end-to-end
    - Verify token persistence
    - Test token refresh after container restart
@@ -533,7 +516,7 @@ fetch('http://localhost:8080/mcp/message', {
    - Service YAML
    - PersistentVolumeClaim YAML
    - ConfigMap for appsettings.json
-   - Secret for admin token and encryption key
+   - Secret for admin token
 
 3. Helm chart (optional but nice)
    - Chart.yaml
@@ -753,12 +736,7 @@ External (User's Phone/Laptop):
    - Configured via Kubernetes secret
    - Sufficient for single-user scenario
 
-3. **Token Encryption**
-   - Custom encryption key for token storage
-   - Key stored as Kubernetes secret
-   - Tokens never logged or exposed via API
-
-4. **TLS/HTTPS**
+3. **TLS/HTTPS**
    - Not required if accessed via port-forward
    - Required if accessing over network
    - Can use self-signed cert for private deployment
@@ -773,7 +751,6 @@ External (User's Phone/Laptop):
    - Use Kubernetes secrets for sensitive config
    - Example secrets:
      - `CALENDAR_MCP_ADMIN_TOKEN`
-     - `CALENDAR_MCP_ENCRYPTION_KEY`
      - OAuth client secrets (if needed)
 
 ### Threat Model

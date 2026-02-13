@@ -36,11 +36,6 @@ spec:
                 secretKeyRef:
                   name: calendar-mcp-secrets
                   key: admin-token
-            - name: CALENDAR_MCP_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: calendar-mcp-secrets
-                  key: encryption-key
           volumeMounts:
             - name: data
               mountPath: /app/data

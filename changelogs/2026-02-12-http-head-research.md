@@ -147,10 +147,7 @@ Created four comprehensive research documents in `/docs/research/`:
 
 **Evaluated:**
 - ⚠️ Plaintext - Only acceptable for development
-- ✅ **Custom AES-256 with K8s secret** - Good balance of security/simplicity
 - ❌ External Secret Management (Vault) - Overkill for single-user
-
-**Rationale**: Linux containers don't have DPAPI/Keychain, so custom encryption is necessary. Using Kubernetes secrets for the encryption key is simple and secure for single-user private deployments.
 
 ### Decision 3: Blazor Server for Admin UI
 
@@ -232,7 +229,6 @@ CALENDAR_MCP_CONFIG=/app/data/appsettings.json
 CALENDAR_MCP_DATA_DIR=/app/data
 CALENDAR_MCP_AUTH_MODE=device-code
 CALENDAR_MCP_ADMIN_TOKEN=<secret>
-CALENDAR_MCP_ENCRYPTION_KEY=<base64-key>
 ASPNETCORE_URLS=http://+:8080
 ```
 
