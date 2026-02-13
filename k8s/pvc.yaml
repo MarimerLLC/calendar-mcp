@@ -1,0 +1,13 @@
+# Persistent Volume Claim for Calendar MCP data (config, tokens, logs)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: calendar-mcp-data
+  labels:
+    app: calendar-mcp
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,16 @@
+**/.git
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/node_modules
+**/.idea
+**/docs
+**/changelogs
+**/spikes
+**/installer
+**/*.md
+**/LICENSE
+**/.gitignore
+**/.dockerignore
+**/docker-compose*.yml

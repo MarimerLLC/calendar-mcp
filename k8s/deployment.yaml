@@ -1,0 +1,85 @@
+# Calendar MCP HTTP Server - Kubernetes Deployment
+# Prerequisites:
+#   1. Create the secret: kubectl apply -f secret.yaml
+#   2. Create the PVC: kubectl apply -f pvc.yaml
+#   3. Deploy: kubectl apply -f deployment.yaml
+#   4. Access via port-forward: kubectl port-forward svc/calendar-mcp 8080:8080
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: calendar-mcp
+  labels:
+    app: calendar-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: calendar-mcp
+  template:
+    metadata:
+      labels:
+        app: calendar-mcp
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: calendar-mcp
+          image: calendar-mcp-http:latest
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: CALENDAR_MCP_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: calendar-mcp-secrets
+                  key: admin-token
+            - name: CALENDAR_MCP_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: calendar-mcp-secrets
+                  key: encryption-key
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: calendar-mcp-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: calendar-mcp
+  labels:
+    app: calendar-mcp
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app: calendar-mcp
