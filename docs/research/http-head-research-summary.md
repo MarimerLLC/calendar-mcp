@@ -34,12 +34,7 @@ Use ModelContextProtocol's HTTP/SSE transport (needs verification) or implement 
 5. Tokens cached in persistent storage
 ```
 
-### 3. **Custom Token Encryption**
-Since containers lack OS-level encryption (DPAPI/Keychain), use:
-- AES-256 encryption with key from Kubernetes secret
-- Environment variable: `CALENDAR_MCP_ENCRYPTION_KEY`
-
-### 4. **Admin Web UI** (Blazor Server)
+### 3. **Admin Web UI** (Blazor Server)
 User-friendly interface for:
 - Account management
 - Initiating device code authentication
@@ -129,7 +124,7 @@ AI Client → HTTP/SSE → Kubernetes Pod
 
 ### Recommendations
 - Access via `kubectl port-forward` or VPN only
-- Store admin token and encryption key in K8s secrets
+- Store admin token in K8s secrets
 - Enable audit logging
 - Use TLS if accessing over network
 

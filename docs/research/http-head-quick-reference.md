@@ -74,15 +74,6 @@ Container                     User's Phone
 
 ## 🔐 Security
 
-### Token Encryption
-**Problem**: Linux containers don't have DPAPI/Keychain
-
-**Solution**: Custom AES-256 encryption
-```bash
-# Kubernetes secret provides encryption key
-CALENDAR_MCP_ENCRYPTION_KEY=<base64-key>
-```
-
 ### Admin Access
 **Simple bearer token authentication**
 ```bash
@@ -139,7 +130,6 @@ curl -H "X-Admin-Token: secret-token" \
 docker run -p 8080:8080 \
   -v /path/to/data:/app/data \
   -e CALENDAR_MCP_ADMIN_TOKEN=secret123 \
-  -e CALENDAR_MCP_ENCRYPTION_KEY=base64key \
   -e CALENDAR_MCP_AUTH_MODE=device-code \
   calendar-mcp:latest
 ```
@@ -165,11 +155,6 @@ spec:
             secretKeyRef:
               name: calendar-mcp-secrets
               key: admin-token
-        - name: CALENDAR_MCP_ENCRYPTION_KEY
-          valueFrom:
-            secretKeyRef:
-              name: calendar-mcp-secrets
-              key: encryption-key
         - name: CALENDAR_MCP_AUTH_MODE
           value: "device-code"
         volumeMounts:

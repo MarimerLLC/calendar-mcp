@@ -8,6 +8,7 @@ WORKDIR /src
 
 # Copy project files for layer caching
 COPY src/CalendarMcp.Core/CalendarMcp.Core.csproj CalendarMcp.Core/
+COPY src/CalendarMcp.Auth/CalendarMcp.Auth.csproj CalendarMcp.Auth/
 COPY src/CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj CalendarMcp.HttpServer/
 
 # Restore dependencies
@@ -15,6 +16,7 @@ RUN dotnet restore CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj
 
 # Copy all source files
 COPY src/CalendarMcp.Core/ CalendarMcp.Core/
+COPY src/CalendarMcp.Auth/ CalendarMcp.Auth/
 COPY src/CalendarMcp.HttpServer/ CalendarMcp.HttpServer/
 
 # Build and publish
