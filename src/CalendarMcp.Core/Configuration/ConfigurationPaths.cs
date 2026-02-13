@@ -72,9 +72,10 @@ public static class ConfigurationPaths
     public static string GetGoogleCredentialsDirectory(string accountId)
     {
         return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".credentials",
-            $"calendar-mcp-{accountId}");
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "CalendarMcp",
+            "google",
+            accountId);
     }
 
     /// <summary>

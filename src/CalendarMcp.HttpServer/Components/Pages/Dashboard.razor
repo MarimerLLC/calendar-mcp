@@ -1,0 +1,154 @@
+@page "/admin/ui"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using CalendarMcp.Core.Configuration
+@using CalendarMcp.Core.Models
+@using CalendarMcp.Core.Services
+@using CalendarMcp.HttpServer.Admin
+@implements IDisposable
+@inject IAccountRegistry AccountRegistry
+@inject DeviceCodeAuthManager AuthManager
+
+<h1 class="mb-4">
+    <i class="bi bi-speedometer2 me-2"></i>Dashboard
+</h1>
+
+@if (_loading)
+{
+    <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+        <span>Loading accounts...</span>
+    </div>
+}
+else if (_error is not null)
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-1"></i> @_error
+    </div>
+}
+else if (_accounts.Count == 0)
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-1"></i>
+        No accounts configured. Add accounts to <code>appsettings.json</code> to get started.
+    </div>
+}
+else
+{
+    <div class="row mb-3">
+        <div class="col">
+            <div class="d-flex align-items-center text-muted small">
+                <i class="bi bi-arrow-repeat me-1"></i>
+                Auto-refreshing every 10 seconds
+                @if (_lastRefresh.HasValue)
+                {
+                    <span class="ms-2">| Last: @_lastRefresh.Value.ToString("HH:mm:ss")</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        @foreach (var item in _accounts)
+        {
+            <div class="col-lg-6 col-xl-4">
+                <AccountCard Account="item.Account"
+                             IsAuthenticated="item.IsAuthenticated"
+                             FlowStatus="@item.FlowStatus" />
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<AccountViewModel> _accounts = [];
+    private bool _loading = true;
+    private string? _error;
+    private DateTimeOffset? _lastRefresh;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccountsAsync();
+        _cts = new CancellationTokenSource();
+        _ = PollAsync(_cts.Token);
+    }
+
+    private async Task LoadAccountsAsync()
+    {
+        try
+        {
+            var accounts = (await AccountRegistry.GetAllAccountsAsync()).ToList();
+            var viewModels = new List<AccountViewModel>();
+
+            foreach (var account in accounts)
+            {
+                var isAuth = HasCachedTokens(account);
+                var flowStatus = AuthManager.GetFlowStatus(account.Id);
+                viewModels.Add(new AccountViewModel
+                {
+                    Account = account,
+                    IsAuthenticated = isAuth,
+                    FlowStatus = flowStatus.Status != "not_found" ? flowStatus.Status : null
+                });
+            }
+
+            _accounts = viewModels;
+            _lastRefresh = DateTimeOffset.Now;
+            _error = null;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load accounts: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task PollAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+        while (await timer.WaitForNextTickAsync(ct))
+        {
+            await LoadAccountsAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+
+    private static bool HasCachedTokens(AccountInfo account)
+    {
+        var provider = account.Provider.ToLowerInvariant();
+        return provider switch
+        {
+            "microsoft365" or "m365" or "outlook" or "outlook.com" or "hotmail"
+                => File.Exists(ConfigurationPaths.GetMsalCachePath(account.Id)),
+            "google" or "gmail" or "google workspace"
+                => File.Exists(GetGoogleTokenFilePath(account.Id)),
+            _ => false
+        };
+    }
+
+    private static string GetGoogleTokenFilePath(string accountId)
+    {
+        // Must match GoogleAuthenticationService.GetCredentialPath + FileDataStore key
+        var credPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "CalendarMcp", "google", accountId);
+        return Path.Combine(credPath, "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user");
+    }
+
+    private sealed class AccountViewModel
+    {
+        public required AccountInfo Account { get; init; }
+        public bool IsAuthenticated { get; init; }
+        public string? FlowStatus { get; init; }
+    }
+}

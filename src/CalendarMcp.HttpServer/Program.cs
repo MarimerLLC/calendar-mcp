@@ -1,7 +1,11 @@
 using CalendarMcp.Core.Configuration;
 using CalendarMcp.HttpServer.Admin;
+using CalendarMcp.HttpServer.BlazorAdmin;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Components.Authorization;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
+using Scalar.AspNetCore;
 using Serilog;
 using Serilog.Events;
 
@@ -98,6 +102,24 @@ public class Program
         // Register admin services
         builder.Services.AddSingleton<DeviceCodeAuthManager>();
 
+        // OpenAPI
+        builder.Services.AddOpenApi();
+
+        // Blazor Server + Auth
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddRazorComponents()
+            .AddInteractiveServerComponents();
+        builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+            .AddCookie(options =>
+            {
+                options.Cookie.Name = ".CalendarMcp.AdminAuth";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite = SameSiteMode.Strict;
+                options.LoginPath = "/admin/ui/login";
+            });
+        builder.Services.AddCascadingAuthenticationState();
+        builder.Services.AddScoped<AuthenticationStateProvider, AdminAuthenticationStateProvider>();
+
         // Configure MCP server with HTTP/SSE transport and register tools
         builder.Services
             .AddMcpServer()
@@ -115,7 +137,12 @@ public class Program
 
         var app = builder.Build();
 
-        // Admin token authentication middleware for /admin endpoints
+        app.UseStaticFiles();
+        app.UseAuthentication();
+        app.UseAuthorization();
+
+        // Admin token authentication middleware for /admin endpoints (excluding Blazor UI login)
+        // Must run AFTER UseAuthentication so cookie identity is populated
         app.UseWhen(
             context => context.Request.Path.StartsWithSegments("/admin"),
             adminApp =>
@@ -123,17 +150,40 @@ public class Program
                 adminApp.UseMiddleware<AdminAuthMiddleware>();
             });
 
+        app.UseAntiforgery();
+
+        // OpenAPI + Scalar
+        app.MapOpenApi();
+        app.MapScalarApiReference();
+
         // Map MCP protocol endpoints (HTTP/SSE)
         app.MapMcp();
 
         // Map admin API endpoints
         app.MapAdminEndpoints();
 
+        // Map admin Blazor auth endpoints (login/logout)
+        app.MapAdminAuthEndpoints();
+
         // Health check endpoints
         app.MapHealthEndpoints();
 
-        Log.Information("Calendar MCP HTTP Server started. MCP endpoint: /mcp, Admin API: /admin");
+        // Blazor Server components
+        app.MapRazorComponents<CalendarMcp.HttpServer.Components.App>()
+            .AddInteractiveServerRenderMode();
 
-        app.Run();
+        app.Start();
+
+        foreach (var url in app.Urls)
+        {
+            Log.Information("Calendar MCP HTTP Server listening on {Url}", url);
+        }
+        Log.Information("  MCP endpoint:  /mcp");
+        Log.Information("  Admin API:     /admin");
+        Log.Information("  Admin UI:      /admin/ui");
+        Log.Information("  API Docs:      /scalar/v1");
+        Log.Information("  Health:        /health");
+
+        app.WaitForShutdown();
     }
 }

@@ -30,9 +30,6 @@ public static class ServiceCollectionExtensions
         // Register HttpClient for ICS provider
         services.AddHttpClient("IcsProvider");
         
-        // Register token storage (encrypted file storage for containerized environments)
-        services.AddSingleton<ITokenStorage, EncryptedFileTokenStorage>();
-
         // Register account registry
         services.AddSingleton<IAccountRegistry, AccountRegistry>();
         
