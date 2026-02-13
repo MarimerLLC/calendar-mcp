@@ -1,0 +1,38 @@
+# Calendar MCP HTTP Server - Docker Compose Example
+# Usage: docker compose up -d
+#
+# First-time setup:
+#   1. Copy your appsettings.json to ./data/appsettings.json
+#   2. Generate an encryption key: openssl rand -base64 32
+#   3. Set the CALENDAR_MCP_ENCRYPTION_KEY and CALENDAR_MCP_ADMIN_TOKEN below
+#   4. Run: docker compose up -d
+#   5. Authenticate accounts via: POST http://localhost:8080/admin/auth/{accountId}/start
+
+services:
+  calendar-mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - calendar-mcp-data:/app/data
+    environment:
+      # Required: Admin API authentication token
+      - CALENDAR_MCP_ADMIN_TOKEN=${CALENDAR_MCP_ADMIN_TOKEN:-changeme}
+      # Recommended: AES-256 encryption key for token storage (base64-encoded 32 bytes)
+      # Generate with: openssl rand -base64 32
+      - CALENDAR_MCP_ENCRYPTION_KEY=${CALENDAR_MCP_ENCRYPTION_KEY:-}
+      # Optional: OpenTelemetry endpoint for observability
+      # - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  calendar-mcp-data:
+    driver: local
