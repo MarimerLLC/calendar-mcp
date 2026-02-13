@@ -1,152 +1,83 @@
 # Calendar & Email MCP Server
 
-A unified Model Context Protocol (MCP) server that enables AI assistants to access multiple email and calendar accounts simultaneously across Microsoft 365 (multiple tenants), Outlook.com, and Google Workspace.
+A Model Context Protocol (MCP) server that gives AI assistants access to email and calendar data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, ICS feeds, and JSON calendar files.
 
 ## Overview
 
-This MCP server provides AI assistants like Claude Desktop, ChatGPT, and GitHub Copilot with the ability to:
+Calendar-MCP aggregates email and calendar information from multiple providers into a unified set of MCP tools. AI assistants like Claude Desktop, VS Code with Copilot, and other MCP-compatible clients can query across all your accounts at once, search emails, check calendars, find free time, send messages, and create events.
 
-- **Summarize emails** across all your accounts
-- **View consolidated calendars** from multiple sources
-- **Find available meeting times** that don't conflict with any calendar
-- **Search emails** across all inboxes simultaneously
-- **Coordinate scheduling** by finding times and emailing participants (future phase)
+### Supported Providers
 
-> ⚠️ Right now only Claude Desktop is supported, because it is the only desktop AI assistant that can interact with MCP servers. Any AI assistant or tool that supports MCP servers should work with this MCP server.
+| Provider | Email | Calendar | Auth |
+|----------|:-----:|:--------:|------|
+| Microsoft 365 | Yes | Yes | OAuth 2.0 (MSAL) |
+| Outlook.com | Yes | Yes | OAuth 2.0 (MSAL) |
+| Google Workspace / Gmail | Yes | Yes | OAuth 2.0 |
+| ICS Calendar Feeds | -- | Read-only | None (public URLs) |
+| JSON Calendar Files | -- | Read-only | None (local files) |
 
-## Problem Statement
+### MCP Tools
 
-Professionals working with multiple organizations often juggle:
+The server exposes these tools to AI assistants:
 
-- Multiple Microsoft 365 tenants (different work accounts)
-- Personal Outlook.com accounts
-- Google Workspace accounts
+- **list_accounts** — List all configured accounts
+- **get_emails** / **search_emails** — Read and search email across accounts
+- **get_email_details** — Get full email content
+- **get_contextual_email_summary** — AI-powered topic clustering and persona analysis
+- **send_email** — Send email with smart domain-based routing
+- **list_calendars** / **get_calendar_events** — View calendars and events
+- **get_calendar_event_details** — Get full event details
+- **find_available_times** — Find free time across all calendars
+- **create_event** — Create calendar events
 
-Currently, no AI assistant can access all these services simultaneously in a multi-tenant scenario. This MCP server solves that problem.
-
-## Key Features
-
-### Phase 1 - Core Functionality (Current)
-
-- Multi-account authentication and management
-- Read-only email queries (unread, search, details)
-- Read-only calendar queries (events, availability)
-- Unified view aggregation across all accounts
-- OpenTelemetry instrumentation for observability
-
-### Phase 2 - Write Operations (Planned)
-
-- Send email from appropriate account (with smart routing)
-- Create calendar events in appropriate calendar (with smart routing)
-- Email threading and conversation tracking
-- Advanced search with filters and date ranges
-
-### Phase 3 - AI-Assisted Scheduling (Future)
-
-- Intelligent meeting time suggestions across calendars
-- Automated meeting coordination via email
-- Conflict detection and resolution
-- Meeting preparation summaries
-
-## Architecture
-
-This MCP server acts as an orchestration layer that:
-
-1. Exposes unified MCP tools to AI assistants
-2. Routes requests to appropriate accounts using intelligent routing
-3. Aggregates and deduplicates results from multiple sources
-4. Consumes existing Microsoft and Google MCP servers
-
-See [DESIGN.md](docs/DESIGN.md) for detailed architecture and design specifications.
-
-## Technical Stack
-
-- **Language**: C# / .NET 10
-- **MCP Server Framework**: ModelContextProtocol NuGet package
-- **MCP Client Integration**: Consumes existing Microsoft and Google MCP servers
-- **AI Routing**: Configurable (Ollama, OpenAI, Anthropic, Azure, Custom)
-- **Authentication**: OAuth 2.0 (Microsoft MSAL, Google OAuth)
-- **Observability**: OpenTelemetry for logging, tracing, and metrics
+See [docs/mcp-tools.md](docs/mcp-tools.md) for full tool specifications.
 
 ## Getting Started
 
-### Installation
-
-For detailed installation instructions, see the [Installation Guide](docs/INSTALLATION.md).
-
-**Quick Links:**
-- 📦 [Download Pre-built Binaries](https://github.com/rockfordlhotka/calendar-mcp/releases) (Recommended)
-- 📝 [Installation Guide](docs/INSTALLATION.md) - Complete installation instructions
-- 🖥️ [Claude Desktop Setup](docs/CLAUDE-DESKTOP-SETUP.md) - Configure Claude Desktop
-- 🔑 [M365 / Outlook.com Setup](docs/M365-SETUP.md) - Microsoft account configuration
-- 🔐 [Google / Gmail Setup](docs/GOOGLE-SETUP.md) - Google account configuration
-
 ### Prerequisites
 
-**For Pre-built Binaries:**
-- No .NET runtime required (self-contained)
-- Windows 10+, Linux (x64), or macOS 10.15+ (x64/ARM64)
+**Pre-built binaries** are self-contained — no .NET runtime needed.
 
-**For Building from Source:**
-- .NET 9.0 SDK or later
-- Microsoft 365 or Google Workspace/Gmail account
-- AI assistant that supports MCP (Claude Desktop, VS Code with Copilot, etc.)
+**Building from source** requires the .NET 10 SDK.
 
-### Quick Start
+### Install
 
-#### 1. Download and Install
+Download a pre-built package from [Releases](https://github.com/rockfordlhotka/calendar-mcp/releases):
 
-**Option A: Windows Installer (Easiest)**
-```powershell
-# Download from: https://github.com/rockfordlhotka/calendar-mcp/releases
-# Run: calendar-mcp-setup-win-x64.exe
-# The installer will:
-# - Install to C:\Program Files\Calendar MCP
-# - Optionally add to PATH
-# - Create Start Menu shortcuts
-```
+| Platform | Package |
+|----------|---------|
+| Windows (installer) | `calendar-mcp-setup-win-x64.exe` |
+| Windows (zip) | `calendar-mcp-win-x64.zip` |
+| Linux x64 | `calendar-mcp-linux-x64.tar.gz` |
+| macOS Intel | `calendar-mcp-osx-x64.tar.gz` |
+| macOS Apple Silicon | `calendar-mcp-osx-arm64.tar.gz` |
 
-**Option B: Manual Installation (All Platforms)**
-```bash
-# 1. Download the appropriate package for your platform:
-#    - Windows: calendar-mcp-win-x64.zip
-#    - Linux: calendar-mcp-linux-x64.tar.gz
-#    - macOS (Intel): calendar-mcp-osx-x64.tar.gz
-#    - macOS (Apple Silicon): calendar-mcp-osx-arm64.tar.gz
+See the [Installation Guide](docs/INSTALLATION.md) for detailed steps.
 
-# 2. Extract to your preferred location
-# Windows
-Expand-Archive calendar-mcp-win-x64.zip -DestinationPath C:\CalendarMcp
+### Configure Accounts
 
-# Linux/macOS
-tar -xzf calendar-mcp-linux-x64.tar.gz -C ~/calendar-mcp
-```
-
-#### 2. Configure Accounts
+Use the CLI to add accounts:
 
 ```bash
-# Add Microsoft 365 or Outlook.com account
+# Microsoft 365 or Outlook.com
 CalendarMcp.Cli add-m365-account
 
-# Add Google Workspace or Gmail account
+# Google Workspace or Gmail
 CalendarMcp.Cli add-google-account
 
-# List configured accounts
+# Verify
 CalendarMcp.Cli list-accounts
+CalendarMcp.Cli test-account <account-id>
 ```
 
-See [M365 Setup Guide](docs/M365-SETUP.md) and [Google Setup Guide](docs/GOOGLE-SETUP.md) for detailed instructions.
+Account setup guides:
+- [Microsoft 365 / Outlook.com Setup](docs/M365-SETUP.md)
+- [Google / Gmail Setup](docs/GOOGLE-SETUP.md)
 
-#### 3. Configure Your AI Assistant
+### Connect Your AI Assistant
 
-**Claude Desktop:**
+**Claude Desktop** — add to your config (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
 
-Edit your Claude Desktop configuration file:
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Linux: `~/.config/claude/claude_desktop_config.json`
-
-Add the MCP server:
 ```json
 {
   "mcpServers": {
@@ -159,145 +90,117 @@ Add the MCP server:
 }
 ```
 
-See [Claude Desktop Setup Guide](docs/CLAUDE-DESKTOP-SETUP.md) for detailed instructions and troubleshooting.
+See the [Claude Desktop Setup Guide](docs/CLAUDE-DESKTOP-SETUP.md) for all platforms and troubleshooting.
 
-#### 4. Start Using
+## Deployment Options
 
-Restart Claude Desktop and try:
-```
-"Show me my unread emails"
-"What's on my calendar today?"
-"Find free time next week"
-```
+### Stdio Server (Local)
 
-### Building from Source
-
-If you prefer to build from source:
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/rockfordlhotka/calendar-mcp.git
-   cd calendar-mcp
-   ```
-
-2. **Build the projects:**
-
-   ```bash
-   dotnet build src/calendar-mcp.slnx --configuration Release
-   ```
-
-3. **Run the CLI tool:**
-
-   ```bash
-   dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj
-   ```
-
-4. **Run the MCP server:**
-
-   ```bash
-   dotnet run --project src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj
-   ```
-
-See [Installation Guide](docs/INSTALLATION.md) for more details.
-
-### Authentication Setup
-
-The project includes a CLI tool for easy account management.
-
-**Add Microsoft 365 Account:**
+The default mode. The AI assistant launches the server as a subprocess communicating over stdin/stdout.
 
 ```bash
-CalendarMcp.Cli add-m365-account
+CalendarMcp.StdioServer
 ```
 
-**Add Google Account:**
+### HTTP Server (Containerized)
+
+For remote or shared deployments. Includes a Blazor admin UI and health check endpoint.
 
 ```bash
-CalendarMcp.Cli add-google-account
+# Run directly
+dotnet run --project src/CalendarMcp.HttpServer
+
+# Or via Docker
+docker build -t calendar-mcp-http .
+docker run -p 8080:8080 -v calendar-mcp-data:/app/data calendar-mcp-http
 ```
 
-**List Configured Accounts:**
+See the HTTP transport documentation for Kubernetes and other container orchestration setups.
+
+## Building from Source
 
 ```bash
-CalendarMcp.Cli list-accounts
+git clone https://github.com/rockfordlhotka/calendar-mcp.git
+cd calendar-mcp
+dotnet build src/calendar-mcp.slnx --configuration Release
 ```
 
-**Test Account Authentication:**
+### Project Structure
+
+```
+src/
+├── CalendarMcp.Core           Core library — models, providers, MCP tools, services
+├── CalendarMcp.Auth           Authentication helpers (MSAL, Google OAuth)
+├── CalendarMcp.Cli            CLI for account management
+├── CalendarMcp.StdioServer    MCP server (stdio transport)
+└── CalendarMcp.HttpServer     MCP server (HTTP transport) with admin UI
+```
+
+### Run from Source
 
 ```bash
-CalendarMcp.Cli test-account <account-id>
+# Stdio server
+dotnet run --project src/CalendarMcp.StdioServer
+
+# HTTP server
+dotnet run --project src/CalendarMcp.HttpServer
+
+# CLI
+dotnet run --project src/CalendarMcp.Cli -- list-accounts
 ```
 
-See [M365 Setup Guide](docs/M365-SETUP.md) and [Google Setup Guide](docs/GOOGLE-SETUP.md) for complete Azure AD app registration and authentication setup.
+## Configuration
 
-### Configuration
+Account and server configuration is stored in JSON files:
 
-The server uses JSON-based configuration for:
+| Platform | Location |
+|----------|----------|
+| Windows | `%LOCALAPPDATA%\CalendarMcp\` |
+| Linux / macOS | `~/.local/share/CalendarMcp/` |
+| Override | Set `CALENDAR_MCP_CONFIG` environment variable |
 
-- Multiple account definitions (M365 tenants, Outlook.com, Google)
-- Smart router AI backend selection (local Ollama or cloud APIs)
-- OpenTelemetry exporters and settings
+See [docs/configuration.md](docs/configuration.md) for the full configuration reference.
 
-See [DESIGN.md](docs/DESIGN.md) for configuration examples.
+## Documentation
 
-## Use Cases
-
-### Email Management
-
-```text
-"Summarize all my unread emails from the last 24 hours"
-"What emails do I have about the Acme project?"
-"Search for emails from john@example.com across all my accounts"
-```
-
-### Calendar Management
-
-```text
-"Show me my calendar for tomorrow across all accounts"
-"Find 1-hour slots next week where I'm free"
-"Do I have any conflicts on Friday?"
-```
-
-### Future: Meeting Coordination
-
-```text
-"Schedule a 1-hour meeting with John and Sarah next week"
-→ AI finds your availability, emails participants, proposes times
-```
-
-## Project Status
-
-🚧 **Phase 1 Testing** - Phase 1 of the project is largely complete and is in testing.
+| Topic | Link |
+|-------|------|
+| Installation | [docs/INSTALLATION.md](docs/INSTALLATION.md) |
+| Architecture | [docs/architecture.md](docs/architecture.md) |
+| MCP Tools | [docs/mcp-tools.md](docs/mcp-tools.md) |
+| Providers | [docs/providers.md](docs/providers.md) |
+| Authentication | [docs/authentication.md](docs/authentication.md) |
+| Configuration | [docs/configuration.md](docs/configuration.md) |
+| Security | [docs/security.md](docs/security.md) |
+| Telemetry | [docs/telemetry.md](docs/telemetry.md) |
+| Smart Routing | [docs/routing.md](docs/routing.md) |
+| Design | [docs/DESIGN.md](docs/DESIGN.md) |
 
 ## Contributing
 
-Contributions are welcome! This is an open-source project aimed at solving a real problem for professionals managing multiple work contexts.
+Contributions are welcome. Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before participating.
 
-### Target Audience
+Here's how to get started:
 
-- Consultants managing multiple client accounts
-- Contractors with multiple work engagements
-- Professionals with separate work/personal accounts
-- Anyone in multi-tenant scenarios
+1. Fork the repository and create a feature branch.
+2. Build and verify your changes compile: `dotnet build src/calendar-mcp.slnx`
+3. Follow the existing code style and patterns — the project uses standard C#/.NET conventions.
+4. Open a pull request against `main`. The CI workflow will build automatically.
+
+### CI
+
+A GitHub Actions workflow runs on all PRs and pushes to `main`, building the solution on .NET 10.
+
+### Areas of Interest
+
+- Additional calendar/email providers
+- Improved test coverage
+- Documentation improvements
+- Performance optimizations
+- Accessibility improvements in the admin UI
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+[MIT](LICENSE) — Copyright (c) 2025 Rockford Lhotka
 
-## Related Projects
-
-This server leverages these excellent MCP implementations:
-
-- [microsoft-mcp](https://github.com/elyxlz/microsoft-mcp) by elyxlz
-- [google_workspace_mcp](https://github.com/taylorwilsdon/google_workspace_mcp) by taylorwilsdon
-
-## Support
-
-- Open an issue for bugs or feature requests
-- See [DESIGN.md](DESIGN.md) for architecture details
-- Check discussions for questions and ideas
-
----
-
-**Note**: This project is not affiliated with Microsoft, Google, or Anthropic.
+This project is not affiliated with Microsoft, Google, or Anthropic.
