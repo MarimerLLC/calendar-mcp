@@ -1,0 +1,310 @@
+@page "/admin/ui/accounts/{AccountId}/edit"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using CalendarMcp.Auth
+@using CalendarMcp.Core.Models
+@using CalendarMcp.HttpServer.BlazorAdmin
+@inject IAccountConfigurationService ConfigService
+@inject NavigationManager Navigation
+
+<h1 class="mb-4">
+    <i class="bi bi-pencil me-2"></i>Edit Account
+</h1>
+
+@if (_loading)
+{
+    <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+        <span>Loading account...</span>
+    </div>
+}
+else if (_loadError is not null)
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-1"></i> @_loadError
+    </div>
+}
+else if (_model is not null)
+{
+    <div class="mb-3">
+        <span class="text-muted me-2">Account:</span>
+        <strong>@_model.Id</strong>
+        <span class="badge bg-info text-dark ms-2">@_model.Provider</span>
+    </div>
+
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-1"></i> @_error
+        </div>
+    }
+
+    @if (_success)
+    {
+        <div class="alert alert-success">
+            <i class="bi bi-check-circle me-1"></i> Account updated successfully!
+        </div>
+    }
+
+    <EditForm Model="_model" OnValidSubmit="HandleSubmit" FormName="editAccount">
+        <DataAnnotationsValidator />
+
+        <div class="mb-3">
+            <label class="form-label">Display Name</label>
+            <InputText class="form-control" @bind-Value="_model.DisplayName" />
+            <ValidationMessage For="() => _model.DisplayName" />
+        </div>
+
+        @* Provider-specific fields *@
+        @switch (_model.Provider.ToLowerInvariant())
+        {
+            case "microsoft365":
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Tenant ID</label>
+                        <InputText class="form-control" @bind-Value="_model.TenantId" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Client ID</label>
+                        <InputText class="form-control" @bind-Value="_model.ClientId" />
+                    </div>
+                </div>
+                break;
+
+            case "outlook.com":
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Tenant Type</label>
+                        <InputSelect class="form-select" @bind-Value="_model.TenantId">
+                            <option value="consumers">consumers (personal accounts only)</option>
+                            <option value="common">common (personal + organizational)</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Client ID</label>
+                        <InputText class="form-control" @bind-Value="_model.ClientId" />
+                    </div>
+                </div>
+                break;
+
+            case "google":
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Client ID</label>
+                        <InputText class="form-control" @bind-Value="_model.ClientId" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Client Secret</label>
+                        <InputText class="form-control" type="password" @bind-Value="_model.ClientSecret" />
+                    </div>
+                </div>
+                break;
+
+            case "ics":
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label class="form-label">ICS URL</label>
+                        <InputText class="form-control" @bind-Value="_model.IcsUrl" />
+                        <ValidationMessage For="() => _model.IcsUrl" />
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Cache TTL (minutes)</label>
+                        <InputNumber class="form-control" @bind-Value="_model.CacheTtlMinutes" />
+                    </div>
+                </div>
+                break;
+
+            case "json":
+                <div class="mb-3">
+                    <label class="form-label">Source</label>
+                    <InputSelect class="form-select" @bind-Value="_model.JsonSource">
+                        <option value="local">Local file path</option>
+                        <option value="onedrive">OneDrive via Microsoft Graph</option>
+                    </InputSelect>
+                </div>
+
+                @if (_model.JsonSource == "local")
+                {
+                    <div class="mb-3">
+                        <label class="form-label">File Path</label>
+                        <InputText class="form-control" @bind-Value="_model.FilePath" />
+                    </div>
+                }
+                else
+                {
+                    <div class="mb-3">
+                        <label class="form-label">OneDrive Path</label>
+                        <InputText class="form-control" @bind-Value="_model.OneDrivePath" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Auth Account ID</label>
+                        <InputSelect class="form-select" @bind-Value="_model.AuthAccountId">
+                            <option value="">-- New credentials --</option>
+                            @foreach (var acct in _microsoftAccounts)
+                            {
+                                <option value="@acct.Id">@acct.DisplayName (@acct.Provider)</option>
+                            }
+                        </InputSelect>
+                    </div>
+                    @if (string.IsNullOrWhiteSpace(_model.AuthAccountId))
+                    {
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Client ID</label>
+                                <InputText class="form-control" @bind-Value="_model.ClientId" />
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Tenant Type</label>
+                                <InputSelect class="form-select" @bind-Value="_model.TenantId">
+                                    <option value="consumers">consumers</option>
+                                    <option value="common">common</option>
+                                </InputSelect>
+                            </div>
+                        </div>
+                    }
+                }
+                <div class="mb-3">
+                    <label class="form-label">Cache TTL (minutes)</label>
+                    <InputNumber class="form-control" @bind-Value="_model.JsonCacheTtlMinutes" />
+                </div>
+                break;
+        }
+
+        <div class="row">
+            @if (HasEmailSupport(_model.Provider))
+            {
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">Email Domains (comma-separated)</label>
+                    <InputText class="form-control" @bind-Value="_model.Domains" />
+                </div>
+            }
+            <div class="col-md-3 mb-3">
+                <label class="form-label">Priority</label>
+                <InputNumber class="form-control" @bind-Value="_model.Priority" />
+            </div>
+            <div class="col-md-3 mb-3 d-flex align-items-end">
+                <div class="form-check">
+                    <InputCheckbox class="form-check-input" @bind-Value="_model.Enabled" />
+                    <label class="form-check-label">Enabled</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2">
+            <button type="submit" class="btn btn-primary" disabled="@_submitting">
+                @if (_submitting)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <span>Saving...</span>
+                }
+                else
+                {
+                    <i class="bi bi-check-circle me-1"></i>
+                    <span>Save Changes</span>
+                }
+            </button>
+            <a href="/admin/ui" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </EditForm>
+}
+
+<div class="mt-4">
+    <a href="/admin/ui" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+    </a>
+</div>
+
+@code {
+    [Parameter]
+    public string? AccountId { get; set; }
+
+    private EditAccountFormModel? _model;
+    private bool _loading = true;
+    private string? _loadError;
+    private string? _error;
+    private bool _success;
+    private bool _submitting;
+    private List<AccountInfo> _microsoftAccounts = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(AccountId))
+        {
+            _loadError = "No account ID specified.";
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            var account = await ConfigService.GetAccountFromConfigAsync(AccountId);
+            if (account is null)
+            {
+                _loadError = $"Account '{AccountId}' not found.";
+            }
+            else
+            {
+                _model = EditAccountFormModel.FromAccountInfo(account);
+                await LoadMicrosoftAccountsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Failed to load account: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadMicrosoftAccountsAsync()
+    {
+        try
+        {
+            var all = await ConfigService.GetAllAccountsFromConfigAsync();
+            _microsoftAccounts = all
+                .Where(a => a.Provider is "microsoft365" or "outlook.com")
+                .ToList();
+        }
+        catch
+        {
+            // Non-critical
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        if (_model is null) return;
+
+        _error = null;
+        _success = false;
+        _submitting = true;
+
+        try
+        {
+            var accountInfo = _model.ToAccountInfo();
+
+            var (cfgValid, cfgError) = AccountValidation.ValidateProviderConfig(accountInfo.Provider, accountInfo.ProviderConfig);
+            if (!cfgValid) { _error = cfgError; return; }
+
+            await ConfigService.UpdateAccountAsync(accountInfo);
+            _success = true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _error = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _error = $"Unexpected error: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private static bool HasEmailSupport(string provider) =>
+        provider is "microsoft365" or "outlook.com" or "google";
+}

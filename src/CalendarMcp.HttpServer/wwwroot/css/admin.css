@@ -40,3 +40,26 @@
 .account-card:hover {
     box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
 }
+
+/* Provider picker cards */
+.provider-card {
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.1s;
+}
+
+.provider-card:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 0.25rem 0.5rem rgba(13, 110, 253, 0.15);
+    transform: translateY(-2px);
+}
+
+.provider-card.selected {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+}
+
+/* Account card action buttons */
+.account-card .btn-group .btn {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.8rem;
+}

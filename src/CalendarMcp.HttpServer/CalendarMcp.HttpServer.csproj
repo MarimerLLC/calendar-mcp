@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\CalendarMcp.Core\CalendarMcp.Core.csproj" />
+    <ProjectReference Include="..\CalendarMcp.Auth\CalendarMcp.Auth.csproj" />
   </ItemGroup>
 
 </Project>

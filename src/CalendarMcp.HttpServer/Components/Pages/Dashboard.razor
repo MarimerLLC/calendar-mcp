@@ -1,17 +1,23 @@
 @page "/admin/ui"
 @rendermode InteractiveServer
 @attribute [Authorize]
+@using CalendarMcp.Auth
 @using CalendarMcp.Core.Configuration
 @using CalendarMcp.Core.Models
 @using CalendarMcp.Core.Services
 @using CalendarMcp.HttpServer.Admin
 @implements IDisposable
-@inject IAccountRegistry AccountRegistry
+@inject IAccountConfigurationService ConfigService
 @inject DeviceCodeAuthManager AuthManager
 
-<h1 class="mb-4">
-    <i class="bi bi-speedometer2 me-2"></i>Dashboard
-</h1>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1 class="mb-0">
+        <i class="bi bi-speedometer2 me-2"></i>Dashboard
+    </h1>
+    <a href="/admin/ui/accounts/add" class="btn btn-primary">
+        <i class="bi bi-plus-circle me-1"></i>Add Account
+    </a>
+</div>
 
 @if (_loading)
 {
@@ -30,7 +36,8 @@ else if (_accounts.Count == 0)
 {
     <div class="alert alert-info">
         <i class="bi bi-info-circle me-1"></i>
-        No accounts configured. Add accounts to <code>appsettings.json</code> to get started.
+        No accounts configured.
+        <a href="/admin/ui/accounts/add" class="alert-link">Add an account</a> to get started.
     </div>
 }
 else
@@ -54,7 +61,10 @@ else
             <div class="col-lg-6 col-xl-4">
                 <AccountCard Account="item.Account"
                              IsAuthenticated="item.IsAuthenticated"
-                             FlowStatus="@item.FlowStatus" />
+                             AuthRequired="item.AuthRequired"
+                             AuthDelegateAccountId="@item.AuthDelegateAccountId"
+                             FlowStatus="@item.FlowStatus"
+                             OnLogout="HandleLogout" />
             </div>
         }
     </div>
@@ -78,17 +88,20 @@ else
     {
         try
         {
-            var accounts = (await AccountRegistry.GetAllAccountsAsync()).ToList();
+            var accounts = (await ConfigService.GetAllAccountsFromConfigAsync()).ToList();
             var viewModels = new List<AccountViewModel>();
 
             foreach (var account in accounts)
             {
-                var isAuth = HasCachedTokens(account);
+                var authRequired = AccountValidation.RequiresAuthentication(account);
+                var isAuth = authRequired && HasCachedTokens(account);
                 var flowStatus = AuthManager.GetFlowStatus(account.Id);
                 viewModels.Add(new AccountViewModel
                 {
                     Account = account,
                     IsAuthenticated = isAuth,
+                    AuthRequired = authRequired,
+                    AuthDelegateAccountId = AccountValidation.GetAuthDelegateAccountId(account),
                     FlowStatus = flowStatus.Status != "not_found" ? flowStatus.Status : null
                 });
             }
@@ -104,6 +117,23 @@ else
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task HandleLogout(string accountId)
+    {
+        try
+        {
+            var account = _accounts.FirstOrDefault(a => a.Account.Id == accountId);
+            if (account is not null)
+            {
+                await ConfigService.ClearCredentialsAsync(accountId, account.Account.Provider);
+                await LoadAccountsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to logout: {ex.Message}";
         }
     }
 
@@ -138,7 +168,6 @@ else
 
     private static string GetGoogleTokenFilePath(string accountId)
     {
-        // Must match GoogleAuthenticationService.GetCredentialPath + FileDataStore key
         var credPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "CalendarMcp", "google", accountId);
@@ -149,6 +178,8 @@ else
     {
         public required AccountInfo Account { get; init; }
         public bool IsAuthenticated { get; init; }
+        public bool AuthRequired { get; init; } = true;
+        public string? AuthDelegateAccountId { get; init; }
         public string? FlowStatus { get; init; }
     }
 }

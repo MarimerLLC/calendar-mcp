@@ -1,3 +1,5 @@
+using CalendarMcp.Auth;
+using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 
 namespace CalendarMcp.HttpServer.Admin;
@@ -11,9 +13,15 @@ public static class AdminEndpoints
     {
         var admin = app.MapGroup("/admin");
 
-        // Account management
+        // Account management (read)
         admin.MapGet("/accounts", ListAccounts);
         admin.MapGet("/accounts/{accountId}/status", GetAccountStatus);
+
+        // Account CRUD
+        admin.MapPost("/accounts", CreateAccount);
+        admin.MapPut("/accounts/{accountId}", UpdateAccount);
+        admin.MapDelete("/accounts/{accountId}", DeleteAccount);
+        admin.MapPost("/accounts/{accountId}/logout", LogoutAccount);
 
         // Device code authentication
         admin.MapPost("/auth/{accountId}/start", StartDeviceCodeAuth);
@@ -66,6 +74,140 @@ public static class AdminEndpoints
             enabled = account.Enabled,
             authFlow = flowStatus.Status != "not_found" ? flowStatus : null
         });
+    }
+
+    /// <summary>
+    /// Create a new account in the config file.
+    /// </summary>
+    private static async Task<IResult> CreateAccount(
+        CreateAccountRequest request,
+        IAccountConfigurationService configService)
+    {
+        // Validate ID
+        var (idValid, idError) = AccountValidation.ValidateAccountId(request.Id);
+        if (!idValid)
+            return Results.BadRequest(new { error = idError });
+
+        // Validate provider
+        var (provValid, provError) = AccountValidation.ValidateProvider(request.Provider);
+        if (!provValid)
+            return Results.BadRequest(new { error = provError });
+
+        // Validate provider config
+        var (cfgValid, cfgError) = AccountValidation.ValidateProviderConfig(request.Provider, request.ProviderConfig);
+        if (!cfgValid)
+            return Results.BadRequest(new { error = cfgError });
+
+        var account = new AccountInfo
+        {
+            Id = request.Id,
+            DisplayName = request.DisplayName,
+            Provider = request.Provider,
+            Domains = request.Domains,
+            Enabled = request.Enabled,
+            Priority = request.Priority,
+            ProviderConfig = request.ProviderConfig
+        };
+
+        try
+        {
+            await configService.AddAccountAsync(account);
+            return Results.Created($"/admin/accounts/{account.Id}/status", new
+            {
+                id = account.Id,
+                displayName = account.DisplayName,
+                provider = account.Provider,
+                domains = account.Domains,
+                enabled = account.Enabled,
+                priority = account.Priority
+            });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
+        {
+            return Results.Conflict(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Update an existing account in the config file.
+    /// </summary>
+    private static async Task<IResult> UpdateAccount(
+        string accountId,
+        UpdateAccountRequest request,
+        IAccountConfigurationService configService)
+    {
+        // Look up existing account to get its provider (provider is immutable)
+        var existing = await configService.GetAccountFromConfigAsync(accountId);
+        if (existing is null)
+            return Results.NotFound(new { error = $"Account '{accountId}' not found." });
+
+        // Validate provider config against the existing provider
+        var (cfgValid, cfgError) = AccountValidation.ValidateProviderConfig(existing.Provider, request.ProviderConfig);
+        if (!cfgValid)
+            return Results.BadRequest(new { error = cfgError });
+
+        var updated = new AccountInfo
+        {
+            Id = accountId,
+            DisplayName = request.DisplayName,
+            Provider = existing.Provider, // immutable
+            Domains = request.Domains,
+            Enabled = request.Enabled,
+            Priority = request.Priority,
+            ProviderConfig = request.ProviderConfig
+        };
+
+        try
+        {
+            await configService.UpdateAccountAsync(updated);
+            return Results.Ok(new
+            {
+                id = updated.Id,
+                displayName = updated.DisplayName,
+                provider = updated.Provider,
+                domains = updated.Domains,
+                enabled = updated.Enabled,
+                priority = updated.Priority
+            });
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
+        {
+            return Results.NotFound(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Remove an account from the config file. Optionally clear credentials.
+    /// </summary>
+    private static async Task<IResult> DeleteAccount(
+        string accountId,
+        IAccountConfigurationService configService,
+        bool logout = false)
+    {
+        try
+        {
+            await configService.RemoveAccountAsync(accountId, clearCredentials: logout);
+            return Results.NoContent();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))
+        {
+            return Results.NotFound(new { error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Clear cached credentials for an account without removing it from config.
+    /// </summary>
+    private static async Task<IResult> LogoutAccount(
+        string accountId,
+        IAccountConfigurationService configService)
+    {
+        var account = await configService.GetAccountFromConfigAsync(accountId);
+        if (account is null)
+            return Results.NotFound(new { error = $"Account '{accountId}' not found." });
+
+        await configService.ClearCredentialsAsync(accountId, account.Provider);
+        return Results.Ok(new { message = $"Credentials cleared for account '{accountId}'." });
     }
 
     /// <summary>

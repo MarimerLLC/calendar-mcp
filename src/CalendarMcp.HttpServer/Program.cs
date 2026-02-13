@@ -1,3 +1,4 @@
+using CalendarMcp.Auth;
 using CalendarMcp.Core.Configuration;
 using CalendarMcp.HttpServer.Admin;
 using CalendarMcp.HttpServer.BlazorAdmin;
@@ -100,6 +101,7 @@ public class Program
         builder.Services.AddCalendarMcpCore();
 
         // Register admin services
+        builder.Services.AddSingleton<IAccountConfigurationService, AccountConfigurationService>();
         builder.Services.AddSingleton<DeviceCodeAuthManager>();
 
         // OpenAPI

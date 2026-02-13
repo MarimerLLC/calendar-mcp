@@ -22,6 +22,21 @@
                 {
                     <span class="badge bg-secondary status-badge">Disabled</span>
                 }
+                else if (!AuthRequired)
+                {
+                    @if (!string.IsNullOrEmpty(AuthDelegateAccountId))
+                    {
+                        <span class="badge bg-secondary status-badge" title="Authentication delegated to another account">
+                            <i class="bi bi-link-45deg me-1"></i>Auth via @AuthDelegateAccountId
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary status-badge">
+                            <i class="bi bi-dash-circle me-1"></i>No Auth Required
+                        </span>
+                    }
+                }
                 else if (FlowStatus == "awaiting_user" || FlowStatus == "pending")
                 {
                     <span class="badge bg-warning text-dark status-badge pulse-animation">
@@ -42,14 +57,35 @@
                 }
             </div>
         </div>
-        <div class="mt-3">
-            <span class="badge bg-info text-dark me-2">@Account.Provider</span>
-            @if (Account.Enabled)
-            {
-                <a href="/admin/ui/auth/@Account.Id" class="btn btn-sm btn-outline-primary">
-                    <i class="bi bi-key me-1"></i>Authenticate
+        <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
+            <span class="badge bg-info text-dark">@Account.Provider</span>
+            <div class="btn-group btn-group-sm">
+                @if (Account.Enabled && AuthRequired)
+                {
+                    <a href="/admin/ui/auth/@Account.Id" class="btn btn-outline-primary" title="Authenticate">
+                        <i class="bi bi-key"></i>
+                    </a>
+                }
+                <a href="/admin/ui/accounts/@Account.Id/edit" class="btn btn-outline-secondary" title="Edit">
+                    <i class="bi bi-pencil"></i>
                 </a>
-            }
+                @if (IsAuthenticated && AuthRequired)
+                {
+                    <button class="btn btn-outline-warning" title="Logout" @onclick="HandleLogout" disabled="@_loggingOut">
+                        @if (_loggingOut)
+                        {
+                            <span class="spinner-border spinner-border-sm" role="status"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-box-arrow-right"></i>
+                        }
+                    </button>
+                }
+                <a href="/admin/ui/accounts/@Account.Id/delete" class="btn btn-outline-danger" title="Delete">
+                    <i class="bi bi-trash"></i>
+                </a>
+            </div>
         </div>
     </div>
 </div>
@@ -62,12 +98,32 @@
     public bool IsAuthenticated { get; set; }
 
     [Parameter]
+    public bool AuthRequired { get; set; } = true;
+
+    [Parameter]
+    public string? AuthDelegateAccountId { get; set; }
+
+    [Parameter]
     public string? FlowStatus { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnLogout { get; set; }
+
+    private bool _loggingOut;
+
+    private async Task HandleLogout()
+    {
+        _loggingOut = true;
+        await OnLogout.InvokeAsync(Account.Id);
+        _loggingOut = false;
+    }
 
     private static string GetProviderIcon(string provider) => provider.ToLowerInvariant() switch
     {
         "microsoft365" or "m365" or "outlook" or "outlook.com" or "hotmail" => "bi-microsoft",
         "google" or "gmail" or "google workspace" => "bi-google",
+        "ics" => "bi-calendar-event",
+        "json" => "bi-filetype-json",
         _ => "bi-envelope"
     };
 }
