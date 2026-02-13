@@ -20,10 +20,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore src/calendar-mcp.slnx
+        run: dotnet restore calendar-mcp.slnx
 
       - name: Build solution
-        run: dotnet build src/calendar-mcp.slnx --configuration Release --no-restore
+        run: dotnet build calendar-mcp.slnx --configuration Release --no-restore

@@ -1,0 +1,141 @@
+@page "/admin/ui/accounts/{AccountId}/delete"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using CalendarMcp.Auth
+@using CalendarMcp.Core.Models
+@inject IAccountConfigurationService ConfigService
+@inject NavigationManager Navigation
+
+<h1 class="mb-4">
+    <i class="bi bi-trash me-2"></i>Delete Account
+</h1>
+
+@if (_loading)
+{
+    <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+        <span>Loading account...</span>
+    </div>
+}
+else if (_error is not null && _account is null)
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-1"></i> @_error
+    </div>
+}
+else if (_account is not null)
+{
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-1"></i> @_error
+        </div>
+    }
+
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        You are about to permanently remove this account from the configuration.
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5 class="card-title">@_account.DisplayName</h5>
+            <p class="text-muted mb-1">ID: <code>@_account.Id</code></p>
+            <p class="text-muted mb-1">Provider: <span class="badge bg-info text-dark">@_account.Provider</span></p>
+            @if (_account.Domains.Count > 0)
+            {
+                <p class="text-muted mb-0">Domains: @string.Join(", ", _account.Domains)</p>
+            }
+        </div>
+    </div>
+
+    <div class="form-check mb-4">
+        <input class="form-check-input" type="checkbox" id="clearCreds" @bind="_clearCredentials" />
+        <label class="form-check-label" for="clearCreds">
+            Also clear cached credentials (logout)
+        </label>
+        <div class="form-text">Removes stored tokens so re-authentication will be required if the account is re-added.</div>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button class="btn btn-danger" @onclick="HandleDelete" disabled="@_deleting">
+            @if (_deleting)
+            {
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                <span>Deleting...</span>
+            }
+            else
+            {
+                <i class="bi bi-trash me-1"></i>
+                <span>Delete Account</span>
+            }
+        </button>
+        <a href="/admin/ui" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+}
+
+<div class="mt-4">
+    <a href="/admin/ui" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+    </a>
+</div>
+
+@code {
+    [Parameter]
+    public string? AccountId { get; set; }
+
+    private AccountInfo? _account;
+    private bool _loading = true;
+    private string? _error;
+    private bool _clearCredentials;
+    private bool _deleting;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(AccountId))
+        {
+            _error = "No account ID specified.";
+            _loading = false;
+            return;
+        }
+
+        try
+        {
+            _account = await ConfigService.GetAccountFromConfigAsync(AccountId);
+            if (_account is null)
+            {
+                _error = $"Account '{AccountId}' not found.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to load account: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleDelete()
+    {
+        if (AccountId is null) return;
+
+        _error = null;
+        _deleting = true;
+
+        try
+        {
+            await ConfigService.RemoveAccountAsync(AccountId, clearCredentials: _clearCredentials);
+            Navigation.NavigateTo("/admin/ui");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Failed to delete account: {ex.Message}";
+        }
+        finally
+        {
+            _deleting = false;
+        }
+    }
+}

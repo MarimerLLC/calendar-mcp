@@ -1,0 +1,292 @@
+@page "/admin/ui/auth/{AccountId}"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using CalendarMcp.Auth
+@using CalendarMcp.Core.Configuration
+@using CalendarMcp.Core.Models
+@using CalendarMcp.Core.Services
+@using CalendarMcp.HttpServer.Admin
+@implements IDisposable
+@inject IAccountRegistry AccountRegistry
+@inject DeviceCodeAuthManager AuthManager
+@inject NavigationManager Navigation
+
+<h1 class="mb-4">
+    <i class="bi bi-key me-2"></i>Authenticate Account
+</h1>
+
+@if (_account is null)
+{
+    @if (_error is not null)
+    {
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-triangle me-1"></i> @_error
+        </div>
+    }
+    else
+    {
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            <span>Loading account...</span>
+        </div>
+    }
+}
+else
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <h5>@_account.DisplayName</h5>
+            <p class="text-muted mb-1">ID: @_account.Id</p>
+            <p class="text-muted mb-0">Provider: <span class="badge bg-info text-dark">@_account.Provider</span></p>
+        </div>
+    </div>
+
+    @if (!_authRequired)
+    {
+        <div class="alert alert-secondary mb-3">
+            <i class="bi bi-dash-circle me-1"></i>
+            This account does not require authentication.
+            @if (_authDelegateAccountId is not null)
+            {
+                <span>It uses credentials from account <strong>@_authDelegateAccountId</strong>.</span>
+            }
+            else
+            {
+                <span>The <strong>@_account.Provider</strong> provider accesses data without stored credentials.</span>
+            }
+        </div>
+    }
+    else if (_flowStatus is null || _flowStatus == "not_found" || _flowStatus == "completed" || _flowStatus == "failed" || _flowStatus == "cancelled")
+    {
+        @if (_isAuthenticated)
+        {
+            <div class="alert alert-success mb-3">
+                <i class="bi bi-check-circle me-1"></i>
+                This account is currently authenticated.
+            </div>
+        }
+
+        @if (_flowStatus == "completed")
+        {
+            <div class="alert alert-success mb-3">
+                <i class="bi bi-check-circle me-1"></i>
+                Authentication completed successfully!
+            </div>
+        }
+        else if (_flowStatus == "failed")
+        {
+            <div class="alert alert-danger mb-3">
+                <i class="bi bi-x-circle me-1"></i>
+                Authentication failed: @_flowMessage
+            </div>
+        }
+        else if (_flowStatus == "cancelled")
+        {
+            <div class="alert alert-warning mb-3">
+                <i class="bi bi-dash-circle me-1"></i>
+                Authentication was cancelled.
+            </div>
+        }
+
+        <button class="btn btn-primary" @onclick="StartAuthAsync" disabled="@_starting">
+            @if (_starting)
+            {
+                <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                <span>Starting...</span>
+            }
+            else
+            {
+                <i class="bi bi-play-circle me-1"></i>
+                <span>Start Authentication</span>
+            }
+        </button>
+    }
+    else if (_flowStatus == "pending")
+    {
+        <div class="alert alert-info">
+            <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+            Waiting for device code from identity provider...
+        </div>
+    }
+    else if (_flowStatus == "awaiting_user")
+    {
+        @if (_userCode is not null && _verificationUrl is not null)
+        {
+            <DeviceCodeDisplay UserCode="@_userCode" VerificationUrl="@_verificationUrl" />
+        }
+        else
+        {
+            <div class="alert alert-info">
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                    <span>@_flowMessage</span>
+                </div>
+            </div>
+        }
+
+        <div class="text-center mt-3">
+            <button class="btn btn-outline-danger" @onclick="CancelAuth">
+                <i class="bi bi-x-circle me-1"></i> Cancel
+            </button>
+        </div>
+    }
+
+    <div class="mt-4">
+        <a href="/admin/ui" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
+        </a>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? AccountId { get; set; }
+
+    private AccountInfo? _account;
+    private bool _isAuthenticated;
+    private bool _authRequired = true;
+    private string? _authDelegateAccountId;
+    private string? _flowStatus;
+    private string? _flowMessage;
+    private string? _userCode;
+    private string? _verificationUrl;
+    private string? _error;
+    private bool _starting;
+    private CancellationTokenSource? _pollCts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(AccountId))
+        {
+            _error = "No account ID specified.";
+            return;
+        }
+
+        _account = await AccountRegistry.GetAccountAsync(AccountId);
+        if (_account is null)
+        {
+            _error = $"Account '{AccountId}' not found.";
+            return;
+        }
+
+        _authRequired = AccountValidation.RequiresAuthentication(_account);
+        _authDelegateAccountId = AccountValidation.GetAuthDelegateAccountId(_account);
+        _isAuthenticated = _authRequired && HasCachedTokens(_account);
+        RefreshFlowStatus();
+
+        // If there's an active flow, start polling
+        if (_flowStatus == "pending" || _flowStatus == "awaiting_user")
+        {
+            StartPolling();
+        }
+    }
+
+    private async Task StartAuthAsync()
+    {
+        if (AccountId is null) return;
+
+        _starting = true;
+        _error = null;
+        StateHasChanged();
+
+        try
+        {
+            var response = await AuthManager.StartDeviceCodeFlowAsync(AccountId, CancellationToken.None);
+            _userCode = response.UserCode;
+            _verificationUrl = response.VerificationUrl;
+            _flowStatus = "awaiting_user";
+            _flowMessage = response.Message;
+            StartPolling();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _flowStatus = "failed";
+            _flowMessage = ex.Message;
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private void CancelAuth()
+    {
+        if (AccountId is null) return;
+        AuthManager.CancelFlow(AccountId);
+        StopPolling();
+        _flowStatus = "cancelled";
+        _flowMessage = "Authentication was cancelled.";
+    }
+
+    private void RefreshFlowStatus()
+    {
+        if (AccountId is null) return;
+        var status = AuthManager.GetFlowStatus(AccountId);
+        _flowStatus = status.Status;
+        _flowMessage = status.Message;
+        _userCode = status.UserCode ?? _userCode;
+        _verificationUrl = status.VerificationUrl ?? _verificationUrl;
+    }
+
+    private void StartPolling()
+    {
+        StopPolling();
+        _pollCts = new CancellationTokenSource();
+        _ = PollAsync(_pollCts.Token);
+    }
+
+    private void StopPolling()
+    {
+        _pollCts?.Cancel();
+        _pollCts?.Dispose();
+        _pollCts = null;
+    }
+
+    private async Task PollAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        while (await timer.WaitForNextTickAsync(ct))
+        {
+            RefreshFlowStatus();
+            await InvokeAsync(StateHasChanged);
+
+            // Stop polling when flow is terminal
+            if (_flowStatus is "completed" or "failed" or "cancelled" or "not_found")
+            {
+                if (_flowStatus == "completed")
+                {
+                    _isAuthenticated = true;
+                }
+                StopPolling();
+                break;
+            }
+        }
+    }
+
+    private static bool HasCachedTokens(AccountInfo account)
+    {
+        var provider = account.Provider.ToLowerInvariant();
+        return provider switch
+        {
+            "microsoft365" or "m365" or "outlook" or "outlook.com" or "hotmail"
+                => File.Exists(ConfigurationPaths.GetMsalCachePath(account.Id)),
+            "google" or "gmail" or "google workspace"
+                => File.Exists(GetGoogleTokenFilePath(account.Id)),
+            _ => false
+        };
+    }
+
+    private static string GetGoogleTokenFilePath(string accountId)
+    {
+        var credPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "CalendarMcp", "google", accountId);
+        return Path.Combine(credPath, "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user");
+    }
+
+    public void Dispose()
+    {
+        StopPolling();
+    }
+}

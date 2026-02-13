@@ -1,0 +1,40 @@
+<div class="row g-3">
+    @foreach (var provider in Providers)
+    {
+        <div class="col-sm-6 col-md-4">
+            <div class="card provider-card h-100 @(SelectedProvider == provider.Id ? "border-primary selected" : "")"
+                 @onclick="() => SelectProvider(provider.Id)"
+                 role="button">
+                <div class="card-body text-center">
+                    <i class="bi @provider.Icon fs-1 mb-2 d-block"></i>
+                    <h6 class="card-title mb-1">@provider.Name</h6>
+                    <p class="card-text text-muted small mb-0">@provider.Description</p>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public EventCallback<string> OnProviderSelected { get; set; }
+
+    [Parameter]
+    public string? SelectedProvider { get; set; }
+
+    private async Task SelectProvider(string providerId)
+    {
+        await OnProviderSelected.InvokeAsync(providerId);
+    }
+
+    private static readonly ProviderOption[] Providers =
+    [
+        new("microsoft365", "Microsoft 365", "bi-microsoft", "Work/school accounts with Exchange Online"),
+        new("outlook.com", "Outlook.com", "bi-microsoft", "Personal Microsoft accounts (Hotmail, Live)"),
+        new("google", "Google", "bi-google", "Gmail and Google Workspace accounts"),
+        new("ics", "ICS Feed", "bi-calendar-event", "Subscribe to any ICS/iCal calendar feed URL"),
+        new("json", "JSON File", "bi-filetype-json", "Local or OneDrive JSON calendar export")
+    ];
+
+    private record ProviderOption(string Id, string Name, string Icon, string Description);
+}

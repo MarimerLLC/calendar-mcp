@@ -1,0 +1,105 @@
+@page "/admin/ui/login"
+@attribute [AllowAnonymous]
+@layout LoginLayout
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@inject IConfiguration Configuration
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
+
+<div class="d-flex justify-content-center align-items-center vh-100 bg-light">
+    <div class="card shadow-sm" style="width: 400px;">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <i class="bi bi-calendar3 display-4 text-primary"></i>
+                <h3 class="mt-2">Calendar MCP</h3>
+                <p class="text-muted">Admin Console</p>
+            </div>
+
+            @if (_errorMessage is not null)
+            {
+                <div class="alert alert-danger py-2">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    @_errorMessage
+                </div>
+            }
+
+            <EditForm Model="Input" method="post" OnValidSubmit="HandleLoginAsync" FormName="login">
+                <div class="mb-3">
+                    <label for="token" class="form-label">Admin Token</label>
+                    <InputText @bind-Value="Input!.Token" type="password" class="form-control" id="token"
+                               placeholder="Enter admin token" required autofocus="true" />
+                </div>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
+                </button>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _errorMessage;
+
+    [SupplyParameterFromForm]
+    private LoginInput? Input { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        Input ??= new();
+    }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (Error == "invalid")
+        {
+            _errorMessage = "Invalid admin token. Please try again.";
+        }
+    }
+
+    private async Task HandleLoginAsync()
+    {
+        var httpContext = HttpContextAccessor.HttpContext;
+        if (httpContext is null) return;
+
+        var expectedToken = Environment.GetEnvironmentVariable("CALENDAR_MCP_ADMIN_TOKEN")
+            ?? Configuration.GetValue<string>("CalendarMcp:AdminToken");
+
+        // In dev mode (no token configured), allow any login
+        if (!string.IsNullOrEmpty(expectedToken) &&
+            !string.Equals(Input!.Token, expectedToken, StringComparison.Ordinal))
+        {
+            _errorMessage = "Invalid admin token. Please try again.";
+            return;
+        }
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, "admin"),
+            new(ClaimTypes.Role, "Administrator")
+        };
+
+        var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        var principal = new ClaimsPrincipal(identity);
+
+        await httpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            principal,
+            new AuthenticationProperties
+            {
+                IsPersistent = true,
+                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
+            });
+
+        Navigation.NavigateTo("/admin/ui", forceLoad: true);
+    }
+
+    private sealed class LoginInput
+    {
+        public string Token { get; set; } = "";
+    }
+}

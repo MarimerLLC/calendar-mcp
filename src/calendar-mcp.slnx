@@ -1,5 +1,0 @@
-<Solution>
-  <Project Path="CalendarMcp.Cli/CalendarMcp.Cli.csproj" />
-  <Project Path="CalendarMcp.Core/CalendarMcp.Core.csproj" />
-  <Project Path="CalendarMcp.StdioServer\CalendarMcp.StdioServer.csproj" />
-</Solution>

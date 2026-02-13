@@ -1,6 +1,8 @@
 using Spectre.Console;
 using Spectre.Console.Cli;
+using CalendarMcp.Auth;
 using CalendarMcp.Core.Configuration;
+using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using System.Text.Json;
 using System.ComponentModel;
@@ -147,6 +149,23 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
 
             var providerConfig = providerConfigElem.Deserialize<Dictionary<string, string>>()
                 ?? new Dictionary<string, string>();
+
+            // Build a temporary AccountInfo to use the shared auth-requirement logic
+            var accountInfo = new AccountInfo
+            {
+                Id = accountId,
+                DisplayName = "",
+                Provider = provider,
+                ProviderConfig = providerConfig
+            };
+
+            if (!AccountValidation.RequiresAuthentication(accountInfo))
+            {
+                var delegateId = AccountValidation.GetAuthDelegateAccountId(accountInfo);
+                if (delegateId is not null)
+                    return $"[dim]Auth via {delegateId}[/]";
+                return "[dim]No auth required[/]";
+            }
 
             if (provider == "google")
             {
