@@ -168,9 +168,7 @@ else
 
     private static string GetGoogleTokenFilePath(string accountId)
     {
-        var credPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CalendarMcp", "google", accountId);
+        var credPath = ConfigurationPaths.GetGoogleCredentialsDirectory(accountId);
         return Path.Combine(credPath, "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user");
     }
 

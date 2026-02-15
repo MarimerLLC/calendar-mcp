@@ -1,5 +1,7 @@
 using CalendarMcp.Core.Services;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
 
@@ -39,13 +41,17 @@ public class GoogleAuthenticationService : IGoogleAuthenticationService
             var credPath = GetCredentialPath(accountId);
             _logger.LogDebug("Token cache path: {CredPath}", credPath);
 
-            // Use "user" as the user identifier since we're isolating by accountId directory
+            // Use fixed port so it works with "Web application" OAuth client type
+            // (redirect URI must be registered in Google Cloud Console as http://localhost:8642/authorize/)
+            var codeReceiver = new LocalServerCodeReceiver("http://localhost:8642/authorize/");
+
             var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
                 secrets,
                 scopes,
                 "user",
                 cancellationToken,
-                new FileDataStore(credPath, true)
+                new FileDataStore(credPath, true),
+                codeReceiver
             );
 
             _logger.LogInformation("✓ Interactive Google authentication successful for account {AccountId}", accountId);

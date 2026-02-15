@@ -103,6 +103,7 @@ public class Program
         // Register admin services
         builder.Services.AddSingleton<IAccountConfigurationService, AccountConfigurationService>();
         builder.Services.AddSingleton<DeviceCodeAuthManager>();
+        builder.Services.AddSingleton<GoogleOAuthManager>();
 
         // OpenAPI
         builder.Services.AddOpenApi();
@@ -116,7 +117,7 @@ public class Program
             {
                 options.Cookie.Name = ".CalendarMcp.AdminAuth";
                 options.Cookie.HttpOnly = true;
-                options.Cookie.SameSite = SameSiteMode.Strict;
+                options.Cookie.SameSite = SameSiteMode.Lax;
                 options.LoginPath = "/admin/ui/login";
             });
         builder.Services.AddCascadingAuthenticationState();

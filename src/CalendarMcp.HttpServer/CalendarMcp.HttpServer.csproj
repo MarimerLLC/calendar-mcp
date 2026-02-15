@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="*" />
     <PackageReference Include="Scalar.AspNetCore" Version="*" />
     <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.69.0" />
   </ItemGroup>
 
   <ItemGroup>

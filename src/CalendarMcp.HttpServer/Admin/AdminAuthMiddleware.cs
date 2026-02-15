@@ -15,7 +15,8 @@ public class AdminAuthMiddleware
     private static readonly string[] ExemptPaths =
     [
         "/admin/ui/login",
-        "/admin/auth/logout"
+        "/admin/auth/logout",
+        "/admin/auth/google/callback"
     ];
 
     public AdminAuthMiddleware(RequestDelegate next, IConfiguration configuration, ILogger<AdminAuthMiddleware> logger)
@@ -43,6 +44,21 @@ public class AdminAuthMiddleware
             _logger.LogWarning("No admin token configured. Admin API is unprotected. " +
                 "Set CALENDAR_MCP_ADMIN_TOKEN environment variable for production use.");
             await _next(context);
+            return;
+        }
+
+        // Google OAuth start endpoint is initiated by browser redirect from Blazor UI,
+        // so it uses cookie auth like the UI pages (not API token auth)
+        if (path.StartsWith("/admin/auth/", StringComparison.OrdinalIgnoreCase)
+            && path.EndsWith("/google/start", StringComparison.OrdinalIgnoreCase))
+        {
+            if (context.User.Identity?.IsAuthenticated == true)
+            {
+                await _next(context);
+                return;
+            }
+
+            context.Response.Redirect("/admin/ui/login");
             return;
         }
 

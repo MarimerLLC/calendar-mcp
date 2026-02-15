@@ -1,6 +1,7 @@
 using CalendarMcp.Auth;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
+using Microsoft.AspNetCore.Http.Extensions;
 
 namespace CalendarMcp.HttpServer.Admin;
 
@@ -27,6 +28,10 @@ public static class AdminEndpoints
         admin.MapPost("/auth/{accountId}/start", StartDeviceCodeAuth);
         admin.MapGet("/auth/{accountId}/status", GetAuthStatus);
         admin.MapPost("/auth/{accountId}/cancel", CancelAuth);
+
+        // Google OAuth redirect flow
+        admin.MapGet("/auth/{accountId}/google/start", StartGoogleOAuth);
+        admin.MapGet("/auth/google/callback", GoogleOAuthCallback);
 
         return app;
     }
@@ -265,5 +270,71 @@ public static class AdminEndpoints
             return Results.Ok(new { message = $"Authentication flow for '{accountId}' has been cancelled." });
         }
         return Results.NotFound(new { error = $"No pending authentication flow found for '{accountId}'." });
+    }
+
+    /// <summary>
+    /// Start a Google OAuth redirect flow. Redirects the user to Google's consent screen.
+    /// </summary>
+    private static async Task<IResult> StartGoogleOAuth(
+        string accountId,
+        HttpContext httpContext,
+        IAccountRegistry accountRegistry,
+        GoogleOAuthManager oauthManager)
+    {
+        var account = await accountRegistry.GetAccountAsync(accountId);
+        if (account == null)
+        {
+            return Results.NotFound(new { error = $"Account '{accountId}' not found." });
+        }
+
+        if (!account.ProviderConfig.TryGetValue("clientId", out var clientId) ||
+            !account.ProviderConfig.TryGetValue("clientSecret", out var clientSecret))
+        {
+            return Results.BadRequest(new { error = "Account is missing clientId or clientSecret in configuration." });
+        }
+
+        // Build the callback redirect URI from the current request
+        var request = httpContext.Request;
+        var redirectUri = UriHelper.BuildAbsolute(request.Scheme, request.Host, "/admin/auth/google/callback");
+
+        var authUrl = oauthManager.GetAuthorizationUrl(accountId, clientId, clientSecret, redirectUri);
+        return Results.Redirect(authUrl);
+    }
+
+    /// <summary>
+    /// Handle Google OAuth callback. Exchanges the authorization code for tokens and redirects to the auth UI page.
+    /// </summary>
+    private static async Task<IResult> GoogleOAuthCallback(
+        HttpContext httpContext,
+        GoogleOAuthManager oauthManager,
+        CancellationToken cancellationToken)
+    {
+        var query = httpContext.Request.Query;
+        var code = query["code"].FirstOrDefault();
+        var state = query["state"].FirstOrDefault();
+        var error = query["error"].FirstOrDefault();
+
+        if (!string.IsNullOrEmpty(error))
+        {
+            return Results.Redirect($"/admin/ui?googleAuth=failed&error={Uri.EscapeDataString(error)}");
+        }
+
+        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
+        {
+            return Results.Redirect("/admin/ui?googleAuth=failed&error=Missing+code+or+state+parameter");
+        }
+
+        try
+        {
+            var request = httpContext.Request;
+            var redirectUri = UriHelper.BuildAbsolute(request.Scheme, request.Host, "/admin/auth/google/callback");
+
+            var accountId = await oauthManager.ExchangeCodeAsync(state, code, redirectUri, cancellationToken);
+            return Results.Redirect($"/admin/ui/auth/{accountId}?googleAuth=success");
+        }
+        catch (Exception ex)
+        {
+            return Results.Redirect($"/admin/ui?googleAuth=failed&error={Uri.EscapeDataString(ex.Message)}");
+        }
     }
 }
