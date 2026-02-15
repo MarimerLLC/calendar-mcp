@@ -26,7 +26,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: calendar-mcp
-          image: calendar-mcp-http:latest
+          image: docker.io/rockylhotka/calendar-mcp-http:latest
           ports:
             - containerPort: 8080
               name: http
