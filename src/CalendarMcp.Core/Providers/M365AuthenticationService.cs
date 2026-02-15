@@ -143,10 +143,7 @@ public class M365AuthenticationService : IM365AuthenticationService
 
         // Create cache file name unique to this account
         var cacheFileName = $"msal_cache_{accountId}.bin";
-        var cacheDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CalendarMcp"
-        );
+        var cacheDirectory = Configuration.ConfigurationPaths.GetDataDirectory();
 
         // Ensure directory exists
         Directory.CreateDirectory(cacheDirectory);

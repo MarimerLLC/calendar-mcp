@@ -127,11 +127,6 @@ public class GoogleAuthenticationService : IGoogleAuthenticationService
     /// </summary>
     private static string GetCredentialPath(string accountId)
     {
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CalendarMcp",
-            "google",
-            accountId
-        );
+        return Configuration.ConfigurationPaths.GetGoogleCredentialsDirectory(accountId);
     }
 }

@@ -108,12 +108,7 @@ public class GoogleProviderService : IGoogleProviderService
     /// </summary>
     private static string GetCredentialPath(string accountId)
     {
-        return Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "CalendarMcp",
-            "google",
-            accountId
-        );
+        return Configuration.ConfigurationPaths.GetGoogleCredentialsDirectory(accountId);
     }
 
     private GmailService CreateGmailService(UserCredential credential)
