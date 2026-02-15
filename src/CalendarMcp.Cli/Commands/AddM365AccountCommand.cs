@@ -88,11 +88,13 @@ public class AddM365AccountCommand : AsyncCommand<AddM365AccountCommand.Settings
                 .DefaultValue(0));
 
         // Default scopes for M365
+        // Include Files.Read for OneDrive access (needed by JSON calendar accounts)
         var scopes = new[]
         {
             "Mail.Read",
             "Mail.Send",
-            "Calendars.ReadWrite"
+            "Calendars.ReadWrite",
+            "Files.Read"
         };
 
         AnsiConsole.WriteLine();

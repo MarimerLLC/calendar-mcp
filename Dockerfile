@@ -19,11 +19,16 @@ COPY src/CalendarMcp.Core/ CalendarMcp.Core/
 COPY src/CalendarMcp.Auth/ CalendarMcp.Auth/
 COPY src/CalendarMcp.HttpServer/ CalendarMcp.HttpServer/
 
-# Build and publish
+# Build
+RUN dotnet build CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj \
+    -c Release \
+    -o /app/build
+
+# Publish
 RUN dotnet publish CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj \
     -c Release \
     -o /app/publish \
-    --no-restore
+    /p:UseAppHost=false
 
 # Stage 2: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

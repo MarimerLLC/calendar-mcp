@@ -103,11 +103,40 @@ public class DeviceCodeAuthManager
 
     private async Task<DeviceCodeResponse> StartM365DeviceCodeFlowAsync(AccountInfo account, CancellationToken cancellationToken)
     {
-        var tenantId = account.ProviderConfig.GetValueOrDefault("TenantId", "common");
+        var tenantId = account.ProviderConfig.GetValueOrDefault("TenantId")
+            ?? account.ProviderConfig.GetValueOrDefault("tenantId", "common");
         var clientId = account.ProviderConfig.GetValueOrDefault("ClientId")
+            ?? account.ProviderConfig.GetValueOrDefault("clientId")
             ?? throw new InvalidOperationException($"Account '{account.Id}' is missing ClientId in ProviderConfig.");
 
-        var scopes = new[] { "https://graph.microsoft.com/.default", "offline_access" };
+        // Build explicit scopes - .default doesn't work for personal/consumer accounts
+        var scopeList = new List<string>
+        {
+            "Mail.Read",
+            "Mail.Send",
+            "Calendars.ReadWrite",
+            "offline_access"
+        };
+
+        // Check if any JSON calendar accounts reference this account for OneDrive access
+        var allAccounts = await _accountRegistry.GetAllAccountsAsync();
+        var needsFilesRead = allAccounts.Any(a =>
+        {
+            if (a.Provider is not ("json" or "json-calendar"))
+                return false;
+            if (!a.ProviderConfig.TryGetValue("authAccountId", out var authId) &&
+                !a.ProviderConfig.TryGetValue("AuthAccountId", out authId))
+                return false;
+            return authId == account.Id;
+        });
+
+        if (needsFilesRead)
+        {
+            scopeList.Add("Files.Read");
+            _logger.LogInformation("Including Files.Read scope for account {AccountId} (needed by JSON calendar accounts)", account.Id);
+        }
+
+        var scopes = scopeList.ToArray();
 
         var flowCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var flowState = new AuthFlowState

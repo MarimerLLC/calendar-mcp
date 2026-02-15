@@ -139,7 +139,7 @@ public class Program
 
         var app = builder.Build();
 
-        app.UseStaticFiles();
+        app.MapStaticAssets();
         app.UseAuthentication();
         app.UseAuthorization();
 
