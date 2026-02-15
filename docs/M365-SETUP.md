@@ -79,6 +79,7 @@ After creation, note these values (you'll need them for the CLI):
    - `Mail.Read` - Read user mail
    - `Mail.Send` - Send mail as user
    - `Calendars.ReadWrite` - Full access to user calendars
+   - `Files.Read` *(optional)* - Read files from OneDrive/SharePoint (only needed if using JSON calendar accounts that reference M365-hosted files)
 6. Click **Add permissions**
 7. If your organization requires it, click **Grant admin consent** (requires admin privileges)
 
@@ -383,12 +384,13 @@ Users will need the **Client ID** to configure their installation.
 | Permission | Justification |
 |------------|---------------|
 | `Mail.Read` | Read user's emails for AI summarization and search |
-| `Mail.Send` | Send emails on behalf of user (future feature) |
+| `Mail.Send` | Send emails on behalf of user |
 | `Calendars.ReadWrite` | Read user's calendar and manage events |
 
 **Optional Permissions** (based on requirements):
 | Permission | Use Case |
 |------------|----------|
+| `Files.Read` | Read files from OneDrive/SharePoint (needed for JSON calendar accounts that reference M365-hosted files) |
 | `Contacts.Read` | Access user's contacts for email suggestions |
 | `User.Read` | Read basic user profile information |
 

@@ -127,8 +127,9 @@ You need to enable both Gmail and Google Calendar APIs.
 2. Add the following scopes (you can filter or search):
    - `https://www.googleapis.com/auth/gmail.readonly` - Read email
    - `https://www.googleapis.com/auth/gmail.send` - Send email
-   - `https://www.googleapis.com/auth/calendar` - Full calendar access
-   - `https://www.googleapis.com/auth/calendar.events` - Calendar events (alternative)
+   - `https://www.googleapis.com/auth/gmail.compose` - Compose email
+   - `https://www.googleapis.com/auth/calendar.readonly` - Read calendar
+   - `https://www.googleapis.com/auth/calendar.events` - Manage calendar events
 
 3. Click **"Update"**
 4. Click **"Save and Continue"**
@@ -144,15 +145,31 @@ If you selected "External" user type:
 
 **Note:** Until you publish the app (which requires Google verification), only these test users can authenticate.
 
+#### Publish the App (Recommended)
+
+If your OAuth consent screen is in **"Testing"** publishing status, Google will **expire refresh tokens after 7 days**, requiring users to re-authenticate frequently. To avoid this:
+
+1. In the OAuth consent screen settings, find the **"Audience"** page (in the left sidebar)
+2. Click **"Publish App"** to move from Testing to Production
+3. For **Internal** (Workspace) apps, this takes effect immediately with no review
+4. For **External** apps, Google may require a verification process
+
+**Important:** Without publishing, token refresh will stop working after 7 days and users will need to re-authenticate manually.
+
 ### Step 4: Create OAuth Client Credentials
 
 1. Go to **"APIs & Services"** → **"Credentials"**
 2. Click **"Create Credentials"** → **"OAuth client ID"**
 3. Select application type:
-   - **Application type**: `Desktop app`
+   - **Application type**: `Web application`
 4. Enter name:
-   - **Name**: `Calendar-MCP Desktop Client`
-5. Click **"Create"**
+   - **Name**: `Calendar-MCP`
+5. Under **Authorized redirect URIs**, click **"Add URI"** and add the following:
+   - `http://localhost:8642/authorize/` — required for CLI authentication
+   - If using the HTTP server admin UI, also add your server's callback URL, e.g.:
+     - `http://localhost:8080/admin/auth/google/callback` (local development)
+     - `https://your-server.example.com:8080/admin/auth/google/callback` (production)
+6. Click **"Create"**
 
 #### Download Credentials
 
@@ -325,12 +342,17 @@ Tokens are stored in platform-specific locations:
 
 **Windows:**
 ```
-%LOCALAPPDATA%\CalendarMcp\google_token_{accountId}.json
+%LOCALAPPDATA%\CalendarMcp\google\{accountId}\Google.Apis.Auth.OAuth2.Responses.TokenResponse-user
 ```
 
 **macOS/Linux:**
 ```
-~/.local/share/CalendarMcp/google_token_{accountId}.json
+~/.local/share/CalendarMcp/google/{accountId}/Google.Apis.Auth.OAuth2.Responses.TokenResponse-user
+```
+
+**Container (Docker/K8s):**
+```
+/app/data/google/{accountId}/Google.Apis.Auth.OAuth2.Responses.TokenResponse-user
 ```
 
 ### Token Security
@@ -345,6 +367,8 @@ Tokens are stored in platform-specific locations:
 - **Access Token**: Valid for ~1 hour, automatically refreshed
 - **Refresh Token**: Valid until revoked, stored in token file
 - **Silent Refresh**: Happens automatically when access token expires
+
+**Important:** If your Google Cloud project is in **"Testing"** publishing status, refresh tokens expire after **7 days**. See [Publish the App](#publish-the-app-recommended) to avoid this.
 
 ### Re-authentication
 
