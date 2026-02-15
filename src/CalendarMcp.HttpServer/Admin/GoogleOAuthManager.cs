@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using CalendarMcp.Core.Configuration;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Flows;
+using Google.Apis.Auth.OAuth2.Requests;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Util.Store;
 
@@ -50,9 +51,13 @@ public class GoogleOAuthManager
         // Clean up expired states (older than 10 minutes)
         CleanupExpiredStates();
 
-        var authUrl = flow.CreateAuthorizationCodeRequest(redirectUri);
+        var authUrl = (GoogleAuthorizationCodeRequestUrl)flow.CreateAuthorizationCodeRequest(redirectUri);
         authUrl.State = state;
         authUrl.Scope = string.Join(" ", Scopes);
+        // Request offline access so Google returns a refresh token
+        authUrl.AccessType = "offline";
+        // Force consent to ensure Google always returns a refresh token
+        authUrl.Prompt = "consent";
 
         return authUrl.Build().AbsoluteUri;
     }
