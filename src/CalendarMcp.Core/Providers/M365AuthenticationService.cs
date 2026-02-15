@@ -158,10 +158,18 @@ public class M365AuthenticationService : IM365AuthenticationService
             .Build();
 
         // Set up token cache persistence
-        var storageProperties = new StorageCreationPropertiesBuilder(
+        var storagePropertiesBuilder = new StorageCreationPropertiesBuilder(
             cacheFileName,
-            cacheDirectory)
-            .Build();
+            cacheDirectory);
+
+        // On Linux (containers), use plaintext file storage since there's
+        // no desktop keyring available in headless environments
+        if (OperatingSystem.IsLinux())
+        {
+            storagePropertiesBuilder.WithLinuxUnprotectedFile();
+        }
+
+        var storageProperties = storagePropertiesBuilder.Build();
 
         var cacheHelper = await MsalCacheHelper.CreateAsync(storageProperties);
         cacheHelper.RegisterCache(app.UserTokenCache);
