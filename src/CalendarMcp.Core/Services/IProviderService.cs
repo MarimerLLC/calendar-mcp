@@ -47,6 +47,12 @@ public interface IProviderService
         bool isRead,
         CancellationToken cancellationToken = default);
     
+    Task MoveEmailAsync(
+        string accountId,
+        string emailId,
+        string destinationFolder,
+        CancellationToken cancellationToken = default);
+    
     // Calendar operations
     Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
         string accountId,

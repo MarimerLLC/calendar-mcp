@@ -51,6 +51,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SendEmailTool>();
         services.AddSingleton<DeleteEmailTool>();
         services.AddSingleton<MarkEmailAsReadTool>();
+        services.AddSingleton<MoveEmailTool>();
         services.AddSingleton<ListCalendarsTool>();
         services.AddSingleton<GetCalendarEventsTool>();
         services.AddSingleton<GetCalendarEventDetailsTool>();

@@ -25,7 +25,7 @@ public class GoogleProviderService : IGoogleProviderService
     {
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/gmail.send",
-        "https://www.googleapis.com/auth/gmail.compose",
+        "https://www.googleapis.com/auth/gmail.modify",  // Required for moving/archiving emails
         "https://www.googleapis.com/auth/calendar.readonly",
         "https://www.googleapis.com/auth/calendar.events"
     };
@@ -391,6 +391,73 @@ public class GoogleProviderService : IGoogleProviderService
         {
             _logger.LogError(ex, "Error marking email {EmailId} as {ReadStatus} for Google account {AccountId}", 
                 emailId, isRead ? "read" : "unread", accountId);
+            throw;
+        }
+    }
+
+    public async Task MoveEmailAsync(
+        string accountId,
+        string emailId,
+        string destinationFolder,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            throw new InvalidOperationException($"Cannot move email: No authentication credential for account {accountId}");
+        }
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            var modifyRequest = new ModifyMessageRequest();
+
+            // Gmail uses labels instead of folders
+            // Common labels: "INBOX", "TRASH", "SPAM", "STARRED", "IMPORTANT"
+            // Archive is done by removing INBOX label
+            // Map common folder names to label operations
+            if (destinationFolder.Equals("archive", StringComparison.OrdinalIgnoreCase))
+            {
+                // Archive means remove from INBOX
+                modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+            }
+            else if (destinationFolder.Equals("trash", StringComparison.OrdinalIgnoreCase) ||
+                     destinationFolder.Equals("deleteditems", StringComparison.OrdinalIgnoreCase))
+            {
+                // Move to trash
+                modifyRequest.AddLabelIds = new List<string> { "TRASH" };
+                modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+            }
+            else if (destinationFolder.Equals("spam", StringComparison.OrdinalIgnoreCase) ||
+                     destinationFolder.Equals("junkemail", StringComparison.OrdinalIgnoreCase))
+            {
+                // Move to spam
+                modifyRequest.AddLabelIds = new List<string> { "SPAM" };
+                modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+            }
+            else if (destinationFolder.Equals("inbox", StringComparison.OrdinalIgnoreCase))
+            {
+                // Move to inbox (in case it was archived)
+                modifyRequest.AddLabelIds = new List<string> { "INBOX" };
+            }
+            else
+            {
+                // Treat as a label ID directly (could be a custom label)
+                modifyRequest.AddLabelIds = new List<string> { destinationFolder };
+                // Optionally remove INBOX if adding a new label
+                // modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+            }
+
+            var request = service.Users.Messages.Modify(modifyRequest, "me", emailId);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Moved email {EmailId} to folder/label '{Folder}' for Google account {AccountId}", 
+                emailId, destinationFolder, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error moving email {EmailId} to folder/label '{Folder}' for Google account {AccountId}", 
+                emailId, destinationFolder, accountId);
             throw;
         }
     }
