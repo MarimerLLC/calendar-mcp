@@ -136,7 +136,9 @@ public class Program
             .WithTools<CalendarMcp.Core.Tools.GetCalendarEventsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetCalendarEventDetailsTool>()
             .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
-            .WithTools<CalendarMcp.Core.Tools.CreateEventTool>();
+            .WithTools<CalendarMcp.Core.Tools.CreateEventTool>()
+            .WithTools<CalendarMcp.Core.Tools.DeleteEventTool>()
+            .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>();
 
         var app = builder.Build();
 
