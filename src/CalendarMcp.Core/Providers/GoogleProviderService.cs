@@ -710,8 +710,7 @@ public class GoogleProviderService : IGoogleProviderService
                 _ => throw new ArgumentException($"Invalid response type: {response}. Valid values are: accept, tentative, decline")
             };
 
-            // Add comment if provided (Google Calendar doesn't support comments in the same way as Microsoft Graph)
-            // We can add it to the event description or as a note, but for simplicity, we'll just log it
+            // Note: Google Calendar doesn't support comments like Microsoft Graph, so we just log it
             if (!string.IsNullOrEmpty(comment))
             {
                 _logger.LogInformation("Response comment (not sent to organizer): {Comment}", comment);
