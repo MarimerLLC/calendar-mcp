@@ -43,6 +43,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GetCalendarEventDetailsTool>();
         services.AddSingleton<SendEmailTool>();
         services.AddSingleton<CreateEventTool>();
+        services.AddSingleton<DeleteEventTool>();
+        services.AddSingleton<RespondToEventTool>();
         
         return services;
     }
