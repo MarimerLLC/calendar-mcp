@@ -1,6 +1,7 @@
 using CalendarMcp.Core.Providers;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
+using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CalendarMcp.Core.Configuration;
@@ -29,6 +30,15 @@ public static class ServiceCollectionExtensions
 
         // Register HttpClient for ICS provider
         services.AddHttpClient("IcsProvider");
+
+        // Register HttpClient for unsubscribe requests
+        services.AddHttpClient("Unsubscribe", client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
+
+        // Register unsubscribe executor
+        services.AddSingleton<UnsubscribeExecutor>();
         
         // Register account registry
         services.AddSingleton<IAccountRegistry, AccountRegistry>();
@@ -46,6 +56,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CreateEventTool>();
         services.AddSingleton<DeleteEventTool>();
         services.AddSingleton<RespondToEventTool>();
+        services.AddSingleton<GetUnsubscribeInfoTool>();
+        services.AddSingleton<UnsubscribeFromEmailTool>();
         
         return services;
     }

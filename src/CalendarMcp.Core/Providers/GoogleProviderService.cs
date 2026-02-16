@@ -783,6 +783,10 @@ public class GoogleProviderService : IGoogleProviderService
         var body = includeBody ? GetMessageBody(message) : (message.Snippet ?? string.Empty);
         var bodyFormat = includeBody && message.Payload?.MimeType?.Contains("html") == true ? "html" : "text";
 
+        // Extract unsubscribe headers
+        var listUnsubscribe = GetHeader(headers, "List-Unsubscribe");
+        var listUnsubscribePost = GetHeader(headers, "List-Unsubscribe-Post");
+
         return new EmailMessage
         {
             Id = message.Id,
@@ -796,7 +800,10 @@ public class GoogleProviderService : IGoogleProviderService
             BodyFormat = bodyFormat,
             ReceivedDateTime = receivedDate,
             IsRead = !message.LabelIds?.Contains("UNREAD") ?? true,
-            HasAttachments = message.Payload?.Parts?.Any(p => !string.IsNullOrEmpty(p.Filename)) ?? false
+            HasAttachments = message.Payload?.Parts?.Any(p => !string.IsNullOrEmpty(p.Filename)) ?? false,
+            UnsubscribeInfo = Utilities.UnsubscribeHeaderParser.Parse(
+                string.IsNullOrEmpty(listUnsubscribe) ? null : listUnsubscribe,
+                string.IsNullOrEmpty(listUnsubscribePost) ? null : listUnsubscribePost)
         };
     }
 
