@@ -454,6 +454,14 @@ public class GoogleProviderService : IGoogleProviderService
             _logger.LogInformation("Moved email {EmailId} to folder/label '{Folder}' for Google account {AccountId}", 
                 emailId, destinationFolder, accountId);
         }
+        catch (Google.GoogleApiException gex) when (gex.Message.Contains("Label") || gex.Message.Contains("label"))
+        {
+            _logger.LogError(gex, "Invalid label '{Label}' for Google account {AccountId}", 
+                destinationFolder, accountId);
+            throw new InvalidOperationException(
+                $"Invalid label '{destinationFolder}'. Use system labels (INBOX, TRASH, SPAM) or get valid custom label IDs from Gmail settings.", 
+                gex);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error moving email {EmailId} to folder/label '{Folder}' for Google account {AccountId}", 
