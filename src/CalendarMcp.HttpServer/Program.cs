@@ -133,6 +133,7 @@ public class Program
             .WithTools<CalendarMcp.Core.Tools.SearchEmailsTool>()
             .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
             .WithTools<CalendarMcp.Core.Tools.DeleteEmailTool>()
+            .WithTools<CalendarMcp.Core.Tools.MarkEmailAsReadTool>()
             .WithTools<CalendarMcp.Core.Tools.GetContextualEmailSummaryTool>()
             .WithTools<CalendarMcp.Core.Tools.ListCalendarsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetCalendarEventsTool>()
