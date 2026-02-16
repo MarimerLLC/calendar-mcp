@@ -414,6 +414,42 @@ public class OutlookComProviderService : IOutlookComProviderService
         }
     }
 
+    public async Task MoveEmailAsync(
+        string accountId,
+        string emailId,
+        string destinationFolder,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            throw new InvalidOperationException($"Cannot move email: No authentication token for account {accountId}");
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            // Microsoft Graph supports moving messages by updating the parentFolderId
+            // or using the Move endpoint. We'll use the Move endpoint which is more explicit.
+            // Common folders: "inbox", "archive", "deleteditems", "drafts", "sentitems", "junkemail"
+            await graphClient.Me.Messages[emailId].Move.PostAsync(new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
+            {
+                DestinationId = destinationFolder
+            }, cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Moved email {EmailId} to folder '{Folder}' for Outlook.com account {AccountId}", 
+                emailId, destinationFolder, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error moving email {EmailId} to folder '{Folder}' for Outlook.com account {AccountId}", 
+                emailId, destinationFolder, accountId);
+            throw;
+        }
+    }
+
     public async Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
         string accountId, 
         CancellationToken cancellationToken = default)

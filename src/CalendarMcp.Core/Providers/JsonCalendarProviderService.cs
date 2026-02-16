@@ -337,6 +337,11 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("JSON calendar provider does not support marking emails as read.");
 
+    public Task MoveEmailAsync(
+        string accountId, string emailId, string destinationFolder,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("JSON calendar provider does not support moving emails.");
+
     #endregion
 
     #region Calendar Write Operations (Not Supported)
