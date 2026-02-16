@@ -343,19 +343,49 @@ Update existing calendar event.
 ```
 
 #### `delete_event`
-Delete calendar event.
+Delete calendar event (requires organizer permissions or edit access).
 
 **Parameters**:
-- `accountId`: Specific account ID (required)
-- `calendarId`: Specific calendar ID (required)
 - `eventId`: Event ID to delete (required)
+- `accountId` (optional): Specific account, or let router decide
+- `calendarId` (optional): Specific calendar within account
 
 **Returns**:
 ```json
 {
-  "success": true
+  "success": true,
+  "message": "Event deleted successfully",
+  "eventId": "evt-456",
+  "accountUsed": "work-account",
+  "calendarUsed": "default"
 }
 ```
+
+#### `respond_to_event`
+Respond to a calendar event invitation with accept, tentative, or decline.
+
+**Parameters**:
+- `eventId`: Event ID to respond to (required)
+- `response`: Response type - 'accept', 'tentative', or 'decline' (required)
+- `accountId` (optional): Specific account, or let router decide
+- `calendarId` (optional): Specific calendar within account
+- `comment` (optional): Optional comment to include with response
+
+**Returns**:
+```json
+{
+  "success": true,
+  "message": "Event response sent: decline",
+  "eventId": "evt-456",
+  "response": "declined",
+  "accountUsed": "work-account",
+  "calendarUsed": "default"
+}
+```
+
+**Note**: The difference between `delete_event` and `respond_to_event` with "decline":
+- **delete_event**: Permanently removes the event from your calendar (requires organizer or edit permissions)
+- **respond_to_event (decline)**: Sends a decline response to the meeting organizer and removes it from your calendar (used when you're an attendee)
 
 ## Multi-Account Aggregation
 

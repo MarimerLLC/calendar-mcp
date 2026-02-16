@@ -87,4 +87,12 @@ public interface IProviderService
         string calendarId,
         string eventId,
         CancellationToken cancellationToken = default);
+    
+    Task RespondToEventAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        string response,
+        string? comment = null,
+        CancellationToken cancellationToken = default);
 }

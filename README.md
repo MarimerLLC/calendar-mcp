@@ -29,6 +29,8 @@ The server exposes these tools to AI assistants:
 - **get_calendar_event_details** — Get full event details
 - **find_available_times** — Find free time across all calendars
 - **create_event** — Create calendar events
+- **delete_event** — Delete calendar events (requires organizer/edit permissions)
+- **respond_to_event** — Accept, tentatively accept, or decline event invitations
 
 See [docs/mcp-tools.md](docs/mcp-tools.md) for full tool specifications.
 

@@ -692,6 +692,71 @@ public class GoogleProviderService : IGoogleProviderService
         }
     }
 
+    public async Task RespondToEventAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        string response,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            throw new InvalidOperationException($"Cannot respond to event: No authentication credential for account {accountId}");
+        }
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+            
+            // First, get the event to find the current user's attendee entry
+            var getRequest = service.Events.Get(calendarId, eventId);
+            var evt = await getRequest.ExecuteAsync(cancellationToken);
+
+            if (evt.Attendees == null || !evt.Attendees.Any())
+            {
+                throw new InvalidOperationException("Event has no attendees, cannot respond");
+            }
+
+            // Find the current user's attendee entry
+            var myAttendee = evt.Attendees.FirstOrDefault(a => a.Self == true);
+            if (myAttendee == null)
+            {
+                throw new InvalidOperationException("You are not an attendee of this event");
+            }
+
+            // Update the response status
+            var normalizedResponse = response.ToLowerInvariant();
+            myAttendee.ResponseStatus = normalizedResponse switch
+            {
+                "accept" or "accepted" => "accepted",
+                "tentative" or "tentativelyaccepted" => "tentative",
+                "decline" or "declined" => "declined",
+                _ => throw new ArgumentException($"Invalid response type: {response}. Valid values are: accept, tentative, decline")
+            };
+
+            // Note: Google Calendar doesn't support comments like Microsoft Graph, so we just log it
+            if (!string.IsNullOrEmpty(comment))
+            {
+                _logger.LogInformation("Response comment (not sent to organizer): {Comment}", comment);
+            }
+
+            // Update the event with the new response
+            var updateRequest = service.Events.Update(evt, calendarId, eventId);
+            updateRequest.SendUpdates = EventsResource.UpdateRequest.SendUpdatesEnum.All;
+            await updateRequest.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Responded to event {EventId} with {Response} for Google account {AccountId}", 
+                eventId, myAttendee.ResponseStatus, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error responding to event {EventId} for Google account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
     #region Helper Methods
 
     private EmailMessage ConvertToEmailMessage(Message message, string accountId, bool includeBody = false)

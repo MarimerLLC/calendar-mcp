@@ -44,6 +44,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GetCalendarEventsTool>();
         services.AddSingleton<GetCalendarEventDetailsTool>();
         services.AddSingleton<CreateEventTool>();
+        services.AddSingleton<DeleteEventTool>();
+        services.AddSingleton<RespondToEventTool>();
         
         return services;
     }
