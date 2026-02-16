@@ -38,10 +38,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GetEmailsTool>();
         services.AddSingleton<GetEmailDetailsTool>();
         services.AddSingleton<SearchEmailsTool>();
+        services.AddSingleton<SendEmailTool>();
+        services.AddSingleton<DeleteEmailTool>();
         services.AddSingleton<ListCalendarsTool>();
         services.AddSingleton<GetCalendarEventsTool>();
         services.AddSingleton<GetCalendarEventDetailsTool>();
-        services.AddSingleton<SendEmailTool>();
         services.AddSingleton<CreateEventTool>();
         
         return services;

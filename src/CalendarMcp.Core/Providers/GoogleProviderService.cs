@@ -327,6 +327,32 @@ public class GoogleProviderService : IGoogleProviderService
         }
     }
 
+    public async Task DeleteEmailAsync(
+        string accountId,
+        string emailId,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            throw new InvalidOperationException($"Cannot delete email: No authentication credential for account {accountId}");
+        }
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            var request = service.Users.Messages.Delete("me", emailId);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Deleted email {EmailId} from Google account {AccountId}", emailId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting email {EmailId} from Google account {AccountId}", emailId, accountId);
+            throw;
+        }
+    }
+
     public async Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
         string accountId, 
         CancellationToken cancellationToken = default)
