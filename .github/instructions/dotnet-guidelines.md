@@ -49,3 +49,39 @@
 - Structure configuration files (appsettings.json) for clarity and maintainability
 - Use options pattern (`IOptions<T>`) for strongly typed configuration access
 - Validate configuration settings at application startup
+
+## Testing Best Practices
+
+While there's currently no dedicated test project in the repository, when adding tests:
+
+- Use **xUnit** as the primary test framework (aligned with .NET community standards)
+- Use **Moq** or **NSubstitute** for mocking dependencies
+- Follow **Arrange-Act-Assert (AAA)** pattern for test structure
+- Write tests for both success and error cases
+- Use descriptive test method names: `MethodName_Scenario_ExpectedResult`
+- Test public interfaces, not private implementation details
+- Mock external dependencies (provider services, authentication services)
+- Keep tests isolated and independent (no test should depend on another)
+
+Example test structure:
+```csharp
+public class ListAccountsToolTests
+{
+    [Fact]
+    public async Task ListAccounts_WithMultipleAccounts_ReturnsAllAccounts()
+    {
+        // Arrange
+        var mockRegistry = new Mock<IAccountRegistry>();
+        var mockLogger = new Mock<ILogger<ListAccountsTool>>();
+        mockRegistry.Setup(r => r.GetAllAccountsAsync())
+            .ReturnsAsync(new[] { /* test accounts */ });
+        var tool = new ListAccountsTool(mockRegistry.Object, mockLogger.Object);
+        
+        // Act
+        var result = await tool.ListAccounts();
+        
+        // Assert
+        Assert.NotNull(result);
+        Assert.Contains("accounts", result);
+    }
+}
