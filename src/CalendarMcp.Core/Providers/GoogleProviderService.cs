@@ -442,10 +442,10 @@ public class GoogleProviderService : IGoogleProviderService
             }
             else
             {
-                // Treat as a label ID directly (could be a custom label)
+                // Treat as a custom label ID and add it to the message
+                // Note: Custom labels are additive - they don't remove INBOX by default
+                // This preserves the message in inbox while adding the label
                 modifyRequest.AddLabelIds = new List<string> { destinationFolder };
-                // Optionally remove INBOX if adding a new label
-                // modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
             }
 
             var request = service.Users.Messages.Modify(modifyRequest, "me", emailId);

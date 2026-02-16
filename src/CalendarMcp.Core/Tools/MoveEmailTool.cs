@@ -19,7 +19,7 @@ public sealed class MoveEmailTool(
     public async Task<string> MoveEmail(
         [Description("Account ID (required)")] string accountId,
         [Description("Email message ID to move (required)")] string emailId,
-        [Description("Destination folder or label. For Microsoft: 'inbox', 'archive', 'deleteditems', 'drafts', 'sentitems', 'junkemail'. For Google: 'inbox', 'archive', 'trash', 'spam', or custom label ID (required)")] string destinationFolder)
+        [Description("Destination folder or label. Common values work across providers: 'archive' (removes from inbox), 'inbox', 'trash'/'deleteditems' (to trash), 'spam'/'junkemail' (to spam). Microsoft also supports: 'drafts', 'sentitems'. Google also supports: custom label IDs (additive - keeps in inbox) (required)")] string destinationFolder)
     {
         logger.LogInformation("Moving email: accountId={AccountId}, emailId={EmailId}, destinationFolder={DestinationFolder}",
             accountId, emailId, destinationFolder);
