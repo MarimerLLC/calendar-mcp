@@ -276,6 +276,11 @@ public class IcsProviderService : IIcsProviderService
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider does not support deleting emails.");
 
+    public Task MarkEmailAsReadAsync(
+        string accountId, string emailId, bool isRead,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("ICS provider does not support marking emails as read.");
+
     #endregion
 
     #region Calendar Write Operations (Not Supported)

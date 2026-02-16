@@ -353,6 +353,48 @@ public class GoogleProviderService : IGoogleProviderService
         }
     }
 
+    public async Task MarkEmailAsReadAsync(
+        string accountId,
+        string emailId,
+        bool isRead,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            throw new InvalidOperationException($"Cannot mark email as read: No authentication credential for account {accountId}");
+        }
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            var modifyRequest = new ModifyMessageRequest();
+
+            if (isRead)
+            {
+                // Remove UNREAD label to mark as read
+                modifyRequest.RemoveLabelIds = new List<string> { "UNREAD" };
+            }
+            else
+            {
+                // Add UNREAD label to mark as unread
+                modifyRequest.AddLabelIds = new List<string> { "UNREAD" };
+            }
+
+            var request = service.Users.Messages.Modify(modifyRequest, "me", emailId);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Marked email {EmailId} as {ReadStatus} for Google account {AccountId}", 
+                emailId, isRead ? "read" : "unread", accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking email {EmailId} as {ReadStatus} for Google account {AccountId}", 
+                emailId, isRead ? "read" : "unread", accountId);
+            throw;
+        }
+    }
+
     public async Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
         string accountId, 
         CancellationToken cancellationToken = default)

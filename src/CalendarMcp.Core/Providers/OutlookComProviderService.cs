@@ -364,6 +364,41 @@ public class OutlookComProviderService : IOutlookComProviderService
         }
     }
 
+    public async Task MarkEmailAsReadAsync(
+        string accountId,
+        string emailId,
+        bool isRead,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            throw new InvalidOperationException($"Cannot mark email as read: No authentication token for account {accountId}");
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var message = new Message
+            {
+                IsRead = isRead
+            };
+
+            await graphClient.Me.Messages[emailId].PatchAsync(message, cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Marked email {EmailId} as {ReadStatus} for Outlook.com account {AccountId}", 
+                emailId, isRead ? "read" : "unread", accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking email {EmailId} as {ReadStatus} for Outlook.com account {AccountId}", 
+                emailId, isRead ? "read" : "unread", accountId);
+            throw;
+        }
+    }
+
     public async Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
         string accountId, 
         CancellationToken cancellationToken = default)
