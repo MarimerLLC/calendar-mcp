@@ -128,6 +128,7 @@ You need to enable both Gmail and Google Calendar APIs.
    - `https://www.googleapis.com/auth/gmail.readonly` - Read email
    - `https://www.googleapis.com/auth/gmail.send` - Send email
    - `https://www.googleapis.com/auth/gmail.compose` - Compose email
+   - `https://www.googleapis.com/auth/gmail.modify` - Modify emails (move, delete, mark read/unread)
    - `https://www.googleapis.com/auth/calendar.readonly` - Read calendar
    - `https://www.googleapis.com/auth/calendar.events` - Manage calendar events
 
