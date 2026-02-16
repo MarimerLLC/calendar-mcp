@@ -350,6 +350,11 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("JSON calendar provider is read-only.");
 
+    public Task RespondToEventAsync(
+        string accountId, string calendarId, string eventId, string response, string? comment = null,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("JSON calendar provider is read-only.");
+
     #endregion
 
     #region JSON-to-CalendarEvent Mapping

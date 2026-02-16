@@ -294,6 +294,11 @@ public class IcsProviderService : IIcsProviderService
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider is read-only.");
 
+    public Task RespondToEventAsync(
+        string accountId, string calendarId, string eventId, string response, string? comment = null,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("ICS provider is read-only.");
+
     #endregion
 
     #region ICS-to-CalendarEvent Mapping

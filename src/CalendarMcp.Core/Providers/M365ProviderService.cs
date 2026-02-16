@@ -896,4 +896,75 @@ public class M365ProviderService : IM365ProviderService
             throw;
         }
     }
+
+    public async Task RespondToEventAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        string response,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            throw new InvalidOperationException($"Cannot respond to event: No authentication token for account {accountId}");
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            // Microsoft Graph uses specific actions for accepting/declining events
+            var normalizedResponse = response.ToLowerInvariant();
+            
+            switch (normalizedResponse)
+            {
+                case "accept":
+                case "accepted":
+                    await graphClient.Me.Events[eventId].Accept.PostAsync(
+                        new Microsoft.Graph.Me.Events.Item.Accept.AcceptPostRequestBody
+                        {
+                            Comment = comment,
+                            SendResponse = true
+                        },
+                        cancellationToken: cancellationToken);
+                    _logger.LogInformation("Accepted event {EventId} for M365 account {AccountId}", eventId, accountId);
+                    break;
+
+                case "tentative":
+                case "tentativelyaccepted":
+                    await graphClient.Me.Events[eventId].TentativelyAccept.PostAsync(
+                        new Microsoft.Graph.Me.Events.Item.TentativelyAccept.TentativelyAcceptPostRequestBody
+                        {
+                            Comment = comment,
+                            SendResponse = true
+                        },
+                        cancellationToken: cancellationToken);
+                    _logger.LogInformation("Tentatively accepted event {EventId} for M365 account {AccountId}", eventId, accountId);
+                    break;
+
+                case "decline":
+                case "declined":
+                    await graphClient.Me.Events[eventId].Decline.PostAsync(
+                        new Microsoft.Graph.Me.Events.Item.Decline.DeclinePostRequestBody
+                        {
+                            Comment = comment,
+                            SendResponse = true
+                        },
+                        cancellationToken: cancellationToken);
+                    _logger.LogInformation("Declined event {EventId} for M365 account {AccountId}", eventId, accountId);
+                    break;
+
+                default:
+                    throw new ArgumentException($"Invalid response type: {response}. Valid values are: accept, tentative, decline");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error responding to event {EventId} for M365 account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
 }
