@@ -327,6 +327,11 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("JSON calendar provider does not support sending emails.");
 
+    public Task DeleteEmailAsync(
+        string accountId, string emailId,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("JSON calendar provider does not support deleting emails.");
+
     #endregion
 
     #region Calendar Write Operations (Not Supported)

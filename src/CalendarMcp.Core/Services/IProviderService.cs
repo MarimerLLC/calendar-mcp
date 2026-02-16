@@ -36,6 +36,11 @@ public interface IProviderService
         List<string>? cc = null,
         CancellationToken cancellationToken = default);
     
+    Task DeleteEmailAsync(
+        string accountId,
+        string emailId,
+        CancellationToken cancellationToken = default);
+    
     // Calendar operations
     Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
         string accountId,
