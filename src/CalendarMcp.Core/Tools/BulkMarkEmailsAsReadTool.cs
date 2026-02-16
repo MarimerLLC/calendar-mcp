@@ -1,0 +1,142 @@
+using System.ComponentModel;
+using System.Text.Json;
+using CalendarMcp.Core.Models;
+using CalendarMcp.Core.Services;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Server;
+
+namespace CalendarMcp.Core.Tools;
+
+/// <summary>
+/// MCP tool for marking multiple emails as read or unread in a single batch operation
+/// </summary>
+[McpServerToolType]
+public sealed class BulkMarkEmailsAsReadTool(
+    IAccountRegistry accountRegistry,
+    IProviderServiceFactory providerFactory,
+    ILogger<BulkMarkEmailsAsReadTool> logger)
+{
+    private static readonly SemaphoreSlim Throttle = new(10);
+    private const int MaxBatchSize = 50;
+
+    [McpServerTool, Description("Mark multiple emails as read or unread in a single batch operation. More efficient than calling mark_email_as_read repeatedly.")]
+    public async Task<string> BulkMarkEmailsAsRead(
+        [Description("JSON array of objects with 'accountId' and 'emailId' fields, e.g. [{\"accountId\":\"acc1\",\"emailId\":\"msg1\"},{\"accountId\":\"acc1\",\"emailId\":\"msg2\"}]. Maximum 50 items.")] string emails,
+        [Description("True to mark as read, false to mark as unread (required)")] bool isRead)
+    {
+        logger.LogInformation("Bulk marking emails as {ReadStatus}", isRead ? "read" : "unread");
+
+        try
+        {
+            var items = ParseEmailItems(emails);
+            if (items == null)
+            {
+                return JsonSerializer.Serialize(new { error = "Invalid JSON. Expected an array of {\"accountId\":\"...\",\"emailId\":\"...\"} objects." });
+            }
+
+            if (items.Count == 0)
+            {
+                return JsonSerializer.Serialize(new { error = "emails array must not be empty" });
+            }
+
+            if (items.Count > MaxBatchSize)
+            {
+                return JsonSerializer.Serialize(new { error = $"Batch size {items.Count} exceeds maximum of {MaxBatchSize}" });
+            }
+
+            // Resolve accounts once per unique accountId
+            var accounts = await ResolveAccountsAsync(items);
+
+            var results = await Task.WhenAll(items.Select(async item =>
+            {
+                await Throttle.WaitAsync();
+                try
+                {
+                    if (!accounts.TryGetValue(item.AccountId, out var account))
+                    {
+                        return new BulkResultItem(item.EmailId, item.AccountId, false, $"Account '{item.AccountId}' not found");
+                    }
+
+                    var provider = providerFactory.GetProvider(account.Provider);
+                    await provider.MarkEmailAsReadAsync(item.AccountId, item.EmailId, isRead, CancellationToken.None);
+                    return new BulkResultItem(item.EmailId, item.AccountId, true, null);
+                }
+                catch (Exception ex)
+                {
+                    return new BulkResultItem(item.EmailId, item.AccountId, false, ex.Message);
+                }
+                finally
+                {
+                    Throttle.Release();
+                }
+            }));
+
+            var succeeded = results.Count(r => r.Success);
+            var failed = results.Count(r => !r.Success);
+
+            logger.LogInformation("Bulk mark as {ReadStatus} complete: {Succeeded} succeeded, {Failed} failed out of {Total}",
+                isRead ? "read" : "unread", succeeded, failed, results.Length);
+
+            return JsonSerializer.Serialize(new
+            {
+                totalRequested = results.Length,
+                succeeded,
+                failed,
+                isRead,
+                results = results.Select(r => r.Success
+                    ? new { r.EmailId, r.AccountId, r.Success, error = (string?)null }
+                    : new { r.EmailId, r.AccountId, r.Success, error = r.Error })
+            }, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error in bulk_mark_emails_as_read tool");
+            return JsonSerializer.Serialize(new { error = "Failed to bulk mark emails", message = ex.Message });
+        }
+    }
+
+    private static List<EmailItem>? ParseEmailItems(string json)
+    {
+        try
+        {
+            var items = JsonSerializer.Deserialize<List<EmailItem>>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (items == null) return null;
+
+            foreach (var item in items)
+            {
+                if (string.IsNullOrEmpty(item.AccountId) || string.IsNullOrEmpty(item.EmailId))
+                    return null;
+            }
+
+            return items;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task<Dictionary<string, AccountInfo>> ResolveAccountsAsync(List<EmailItem> items)
+    {
+        var result = new Dictionary<string, AccountInfo>();
+        foreach (var accountId in items.Select(i => i.AccountId).Distinct())
+        {
+            var account = await accountRegistry.GetAccountAsync(accountId);
+            if (account != null)
+                result[accountId] = account;
+        }
+        return result;
+    }
+
+    private sealed record EmailItem(string AccountId, string EmailId)
+    {
+        public string AccountId { get; init; } = AccountId ?? "";
+        public string EmailId { get; init; } = EmailId ?? "";
+    }
+
+    private sealed record BulkResultItem(string EmailId, string AccountId, bool Success, string? Error);
+}
