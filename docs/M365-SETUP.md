@@ -77,6 +77,7 @@ After creation, note these values (you'll need them for the CLI):
 4. Select **Delegated permissions**
 5. Add these permissions:
    - `Mail.Read` - Read user mail
+   - `Mail.ReadWrite` - Move, delete, and manage user mail
    - `Mail.Send` - Send mail as user
    - `Calendars.ReadWrite` - Full access to user calendars
    - `Files.Read` *(optional)* - Read files from OneDrive/SharePoint (only needed if using JSON calendar accounts that reference M365-hosted files)
@@ -384,6 +385,7 @@ Users will need the **Client ID** to configure their installation.
 | Permission | Justification |
 |------------|---------------|
 | `Mail.Read` | Read user's emails for AI summarization and search |
+| `Mail.ReadWrite` | Move, delete, and manage user's emails |
 | `Mail.Send` | Send emails on behalf of user |
 | `Calendars.ReadWrite` | Read user's calendar and manage events |
 
@@ -515,6 +517,7 @@ Only grant permissions needed for current functionality:
 
 **Current phase (Phase 1):**
 - `Mail.Read` - ✅ Required
+- `Mail.ReadWrite` - ✅ Required (move, delete, mark read/unread)
 - `Calendars.ReadWrite` - ✅ Required for read-only calendar (ReadWrite needed for MCP standard)
 - `Mail.Send` - ⚠️ Optional (future feature, can be granted later)
 
@@ -668,10 +671,11 @@ Remove-AzureADServiceAppRoleAssignment -ObjectId $userId -AppRoleAssignmentId $s
 To use different scopes, modify the code in `M365AuthenticationService.cs`:
 
 ```csharp
-var scopes = new[] 
-{ 
-    "Mail.Read", 
-    "Mail.Send", 
+var scopes = new[]
+{
+    "Mail.Read",
+    "Mail.ReadWrite",
+    "Mail.Send",
     "Calendars.ReadWrite",
     "Contacts.Read"  // Add additional scopes as needed
 };
