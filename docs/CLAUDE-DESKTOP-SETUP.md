@@ -397,7 +397,7 @@ User: "Find free time that doesn't conflict with any of my calendars"
 - **Configure Additional Accounts**: Add more M365, Outlook.com, or Google accounts
 - **Explore Features**: Try different queries and explore what the MCP server can do
 - **Customize Settings**: Adjust logging, routing, and other settings in `appsettings.json`
-- **Provide Feedback**: Report issues or suggest features on [GitHub](https://github.com/rockfordlhotka/calendar-mcp/issues)
+- **Provide Feedback**: Report issues or suggest features on [GitHub](https://github.com/MarimerLLC/calendar-mcp/issues)
 
 ## Related Documentation
 

@@ -41,7 +41,7 @@ This is the easiest method and does not require installing .NET on your system.
 
 **Step 1: Download Installer**
 
-1. Go to the [Releases page](https://github.com/rockfordlhotka/calendar-mcp/releases) on GitHub
+1. Go to the [Releases page](https://github.com/MarimerLLC/calendar-mcp/releases) on GitHub
 2. Download `calendar-mcp-setup-win-x64.exe`
 
 **Step 2: Run Installer**
@@ -78,7 +78,7 @@ CalendarMcp.Cli --version
 
 #### Step 1: Download
 
-1. Go to the [Releases page](https://github.com/rockfordlhotka/calendar-mcp/releases) on GitHub
+1. Go to the [Releases page](https://github.com/MarimerLLC/calendar-mcp/releases) on GitHub
 2. Download the appropriate archive for your platform:
    - **Windows**: `calendar-mcp-win-x64.zip`
    - **Linux**: `calendar-mcp-linux-x64.tar.gz`
@@ -144,7 +144,7 @@ If you prefer to build from source or need the latest development version:
 #### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/rockfordlhotka/calendar-mcp.git
+git clone https://github.com/MarimerLLC/calendar-mcp.git
 cd calendar-mcp
 ```
 
@@ -348,10 +348,10 @@ After successful installation:
 1. **Configure Accounts**: Follow the [M365 Setup Guide](M365-SETUP.md) and [Google Setup Guide](GOOGLE-SETUP.md)
 2. **Test the Server**: Use Claude Desktop to interact with your emails and calendar
 3. **Explore Features**: See the [README](../README.md) for available commands and use cases
-4. **Join the Community**: Report issues and contribute on [GitHub](https://github.com/rockfordlhotka/calendar-mcp)
+4. **Join the Community**: Report issues and contribute on [GitHub](https://github.com/MarimerLLC/calendar-mcp)
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/rockfordlhotka/calendar-mcp/issues)
+- **Issues**: [GitHub Issues](https://github.com/MarimerLLC/calendar-mcp/issues)
 - **Documentation**: [docs/](.)
 - **License**: MIT - see [LICENSE](../LICENSE)

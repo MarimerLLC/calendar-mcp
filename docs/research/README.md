@@ -121,7 +121,7 @@ Single-user private environment:
 
 - **Research**: GitHub Copilot (AI Agent)
 - **Date**: February 12, 2026
-- **Issue**: [Add HTTP head for MCP server](https://github.com/rockfordlhotka/calendar-mcp/issues/XXX)
+- **Issue**: [Add HTTP head for MCP server](https://github.com/MarimerLLC/calendar-mcp/issues/XXX)
 
 ---
 

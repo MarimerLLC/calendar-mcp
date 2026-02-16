@@ -8,7 +8,7 @@
 #define MyAppName "Calendar MCP"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Calendar MCP Project"
-#define MyAppURL "https://github.com/rockfordlhotka/calendar-mcp"
+#define MyAppURL "https://github.com/MarimerLLC/calendar-mcp"
 #define MyAppExeName "CalendarMcp.Cli.exe"
 #define MyAppServerExeName "CalendarMcp.StdioServer.exe"
 

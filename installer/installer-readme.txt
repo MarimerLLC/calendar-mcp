@@ -29,15 +29,15 @@ AFTER INSTALLATION
    - Default installation path: C:\Program Files\Calendar MCP\
 
 3. Documentation:
-   - Installation Guide: https://github.com/rockfordlhotka/calendar-mcp/blob/main/docs/INSTALLATION.md
-   - M365 Setup: https://github.com/rockfordlhotka/calendar-mcp/blob/main/docs/M365-SETUP.md
-   - Google Setup: https://github.com/rockfordlhotka/calendar-mcp/blob/main/docs/GOOGLE-SETUP.md
-   - Claude Desktop: https://github.com/rockfordlhotka/calendar-mcp/blob/main/docs/CLAUDE-DESKTOP-SETUP.md
+   - Installation Guide: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/INSTALLATION.md
+   - M365 Setup: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/M365-SETUP.md
+   - Google Setup: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/GOOGLE-SETUP.md
+   - Claude Desktop: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/CLAUDE-DESKTOP-SETUP.md
 
 SUPPORT
 -------
-Issues: https://github.com/rockfordlhotka/calendar-mcp/issues
-Documentation: https://github.com/rockfordlhotka/calendar-mcp/tree/main/docs
+Issues: https://github.com/MarimerLLC/calendar-mcp/issues
+Documentation: https://github.com/MarimerLLC/calendar-mcp/tree/main/docs
 
 LICENSE
 -------

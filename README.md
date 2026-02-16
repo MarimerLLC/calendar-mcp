@@ -42,7 +42,7 @@ See [docs/mcp-tools.md](docs/mcp-tools.md) for full tool specifications.
 
 ### Install
 
-Download a pre-built package from [Releases](https://github.com/rockfordlhotka/calendar-mcp/releases):
+Download a pre-built package from [Releases](https://github.com/MarimerLLC/calendar-mcp/releases):
 
 | Platform | Package |
 |----------|---------|
@@ -120,7 +120,7 @@ See the HTTP transport documentation for Kubernetes and other container orchestr
 ## Building from Source
 
 ```bash
-git clone https://github.com/rockfordlhotka/calendar-mcp.git
+git clone https://github.com/MarimerLLC/calendar-mcp.git
 cd calendar-mcp
 dotnet build src/calendar-mcp.slnx --configuration Release
 ```

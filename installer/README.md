@@ -96,5 +96,5 @@ Name: "addtopath"; Description: "Add Calendar MCP to system PATH"; Flags: checke
 ## Support
 
 For issues with the installer:
-- [GitHub Issues](https://github.com/rockfordlhotka/calendar-mcp/issues)
+- [GitHub Issues](https://github.com/MarimerLLC/calendar-mcp/issues)
 - [Installation Documentation](../docs/INSTALLATION.md)

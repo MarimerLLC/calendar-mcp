@@ -75,5 +75,5 @@ The new `copilot-instructions.md` file serves as the main entry point that refer
 
 ## References
 
-- Issue: [Set up Copilot Instructions](https://github.com/rockfordlhotka/calendar-mcp/issues/XX)
+- Issue: [Set up Copilot Instructions](https://github.com/MarimerLLC/calendar-mcp/issues/XX)
 - Best Practices: https://gh.io/copilot-coding-agent-tips

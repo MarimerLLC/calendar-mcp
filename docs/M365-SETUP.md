@@ -278,7 +278,7 @@ Calendar MCP is a Model Context Protocol (MCP) server that enables AI assistants
 - Uses OAuth 2.0 with delegated permissions (user context)
 - Tokens stored locally on user's machine (encrypted)
 - No server-side storage or transmission of credentials
-- Open-source project: [github.com/rockfordlhotka/calendar-mcp](https://github.com/rockfordlhotka/calendar-mcp)
+- Open-source project: [github.com/MarimerLLC/calendar-mcp](https://github.com/MarimerLLC/calendar-mcp)
 
 ### Deployment Scenarios
 
@@ -613,9 +613,9 @@ Remove-AzureADServiceAppRoleAssignment -ObjectId $userId -AppRoleAssignmentId $s
 - [Conditional Access Policies](https://learn.microsoft.com/en-us/azure/active-directory/conditional-access/)
 
 **For Calendar MCP:**
-- [GitHub Repository](https://github.com/rockfordlhotka/calendar-mcp)
-- [Issue Tracker](https://github.com/rockfordlhotka/calendar-mcp/issues)
-- [Security Policy](https://github.com/rockfordlhotka/calendar-mcp/security)
+- [GitHub Repository](https://github.com/MarimerLLC/calendar-mcp)
+- [Issue Tracker](https://github.com/MarimerLLC/calendar-mcp/issues)
+- [Security Policy](https://github.com/MarimerLLC/calendar-mcp/security)
 
 ---
 
