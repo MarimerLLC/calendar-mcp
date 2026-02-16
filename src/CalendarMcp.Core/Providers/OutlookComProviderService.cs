@@ -232,12 +232,26 @@ public class OutlookComProviderService : IOutlookComProviderService
 
             var message = await graphClient.Me.Messages[emailId].GetAsync(config =>
             {
-                config.QueryParameters.Select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "body"];
+                config.QueryParameters.Select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "body", "internetMessageHeaders"];
             }, cancellationToken);
 
             if (message == null)
             {
                 return null;
+            }
+
+            // Extract unsubscribe headers
+            string? listUnsubscribe = null;
+            string? listUnsubscribePost = null;
+            if (message.InternetMessageHeaders != null)
+            {
+                foreach (var header in message.InternetMessageHeaders)
+                {
+                    if (string.Equals(header.Name, "List-Unsubscribe", StringComparison.OrdinalIgnoreCase))
+                        listUnsubscribe = header.Value;
+                    else if (string.Equals(header.Name, "List-Unsubscribe-Post", StringComparison.OrdinalIgnoreCase))
+                        listUnsubscribePost = header.Value;
+                }
             }
 
             var result = new EmailMessage
@@ -253,7 +267,8 @@ public class OutlookComProviderService : IOutlookComProviderService
                 BodyFormat = message.Body?.ContentType == BodyType.Html ? "html" : "text",
                 ReceivedDateTime = message.ReceivedDateTime?.DateTime ?? DateTime.MinValue,
                 IsRead = message.IsRead ?? false,
-                HasAttachments = message.HasAttachments ?? false
+                HasAttachments = message.HasAttachments ?? false,
+                UnsubscribeInfo = Utilities.UnsubscribeHeaderParser.Parse(listUnsubscribe, listUnsubscribePost)
             };
 
             _logger.LogInformation("Retrieved email details for {EmailId} from Outlook.com account {AccountId}", emailId, accountId);

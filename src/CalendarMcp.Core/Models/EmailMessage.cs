@@ -69,6 +69,11 @@ public class EmailMessage
     /// Attachment details (if retrieved)
     /// </summary>
     public List<EmailAttachment> Attachments { get; init; } = new();
+
+    /// <summary>
+    /// Parsed unsubscribe information from List-Unsubscribe headers (RFC 2369/8058)
+    /// </summary>
+    public UnsubscribeInfo? UnsubscribeInfo { get; init; }
 }
 
 /// <summary>

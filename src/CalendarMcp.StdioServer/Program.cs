@@ -128,6 +128,8 @@ public class Program
                     .WithTools<CalendarMcp.Core.Tools.CreateEventTool>()
                     .WithTools<CalendarMcp.Core.Tools.DeleteEventTool>()
                     .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
+                    .WithTools<CalendarMcp.Core.Tools.GetUnsubscribeInfoTool>()
+                    .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>()
                     .WithStdioServerTransport();
             });
 

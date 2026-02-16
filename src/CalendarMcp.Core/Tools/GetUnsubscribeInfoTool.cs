@@ -1,0 +1,88 @@
+using System.ComponentModel;
+using System.Text.Json;
+using CalendarMcp.Core.Services;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol.Server;
+
+namespace CalendarMcp.Core.Tools;
+
+/// <summary>
+/// MCP tool for inspecting email unsubscribe options (List-Unsubscribe headers)
+/// </summary>
+[McpServerToolType]
+public sealed class GetUnsubscribeInfoTool(
+    IAccountRegistry accountRegistry,
+    IProviderServiceFactory providerFactory,
+    ILogger<GetUnsubscribeInfoTool> logger)
+{
+    [McpServerTool, Description("Check if an email supports list unsubscribe (RFC 2369/8058). Returns available unsubscribe methods.")]
+    public async Task<string> GetUnsubscribeInfo(
+        [Description("Account ID (required)")] string accountId,
+        [Description("Email message ID (required)")] string emailId)
+    {
+        logger.LogInformation("Getting unsubscribe info: accountId={AccountId}, emailId={EmailId}",
+            accountId, emailId);
+
+        try
+        {
+            if (string.IsNullOrEmpty(accountId))
+                return JsonSerializer.Serialize(new { error = "accountId is required" });
+
+            if (string.IsNullOrEmpty(emailId))
+                return JsonSerializer.Serialize(new { error = "emailId is required" });
+
+            var account = await accountRegistry.GetAccountAsync(accountId);
+            if (account == null)
+                return JsonSerializer.Serialize(new { error = $"Account '{accountId}' not found" });
+
+            var provider = providerFactory.GetProvider(account.Provider);
+            var email = await provider.GetEmailDetailsAsync(accountId, emailId, CancellationToken.None);
+
+            if (email == null)
+                return JsonSerializer.Serialize(new { error = $"Email '{emailId}' not found in account '{accountId}'" });
+
+            if (email.UnsubscribeInfo == null)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    hasUnsubscribe = false,
+                    message = "This email does not contain List-Unsubscribe headers"
+                }, new JsonSerializerOptions { WriteIndented = true });
+            }
+
+            var info = email.UnsubscribeInfo;
+            var response = new
+            {
+                hasUnsubscribe = true,
+                supportsOneClick = info.SupportsOneClick,
+                hasHttpsUrl = info.HttpsUrl != null,
+                hasMailtoUrl = info.MailtoUrl != null,
+                availableMethods = GetAvailableMethods(info),
+                recommendedMethod = info.SupportsOneClick ? "one-click" : info.HttpsUrl != null ? "https" : "mailto"
+            };
+
+            logger.LogInformation("Retrieved unsubscribe info for {EmailId} from account {AccountId}",
+                emailId, accountId);
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error in get_unsubscribe_info tool");
+            return JsonSerializer.Serialize(new
+            {
+                error = "Failed to get unsubscribe info",
+                message = ex.Message
+            });
+        }
+    }
+
+    private static List<string> GetAvailableMethods(Models.UnsubscribeInfo info)
+    {
+        var methods = new List<string>();
+        if (info.SupportsOneClick) methods.Add("one-click");
+        if (info.HttpsUrl != null) methods.Add("https");
+        if (info.MailtoUrl != null) methods.Add("mailto");
+        return methods;
+    }
+}
