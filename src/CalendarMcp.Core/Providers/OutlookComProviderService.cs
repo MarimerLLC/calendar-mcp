@@ -337,6 +337,33 @@ public class OutlookComProviderService : IOutlookComProviderService
         }
     }
 
+    public async Task DeleteEmailAsync(
+        string accountId,
+        string emailId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            throw new InvalidOperationException($"Cannot delete email: No authentication token for account {accountId}");
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            await graphClient.Me.Messages[emailId].DeleteAsync(cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Deleted email {EmailId} from Outlook.com account {AccountId}", emailId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting email {EmailId} from Outlook.com account {AccountId}", emailId, accountId);
+            throw;
+        }
+    }
+
     public async Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
         string accountId, 
         CancellationToken cancellationToken = default)
