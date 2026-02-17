@@ -147,7 +147,8 @@ public class Program
             .WithTools<CalendarMcp.Core.Tools.DeleteEventTool>()
             .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
             .WithTools<CalendarMcp.Core.Tools.GetUnsubscribeInfoTool>()
-            .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>();
+            .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>()
+            .WithTools<CalendarMcp.Core.Tools.DiagnosticEchoTool>();
 
         var app = builder.Build();
 

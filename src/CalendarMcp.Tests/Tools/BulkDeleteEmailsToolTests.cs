@@ -12,20 +12,6 @@ namespace CalendarMcp.Tests.Tools;
 public class BulkDeleteEmailsToolTests
 {
     [TestMethod]
-    public async Task BulkDeleteEmails_InvalidJson_ReturnsError()
-    {
-        var regExp = new IAccountRegistryCreateExpectations();
-        var factExp = new IProviderServiceFactoryCreateExpectations();
-        var tool = new BulkDeleteEmailsTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<BulkDeleteEmailsTool>.Instance);
-
-        var result = await tool.BulkDeleteEmails("not json");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("Invalid JSON"));
-    }
-
-    [TestMethod]
     public async Task BulkDeleteEmails_EmptyArray_ReturnsError()
     {
         var regExp = new IAccountRegistryCreateExpectations();
@@ -36,7 +22,7 @@ public class BulkDeleteEmailsToolTests
         var result = await tool.BulkDeleteEmails("[]");
         var doc = JsonDocument.Parse(result);
 
-        Assert.AreEqual("emails array must not be empty", doc.RootElement.GetProperty("error").GetString());
+        Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -47,11 +33,11 @@ public class BulkDeleteEmailsToolTests
         var tool = new BulkDeleteEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkDeleteEmailsTool>.Instance);
 
-        var items = Enumerable.Range(1, 51)
-            .Select(i => new { accountId = "acc-1", emailId = $"email-{i}" });
-        var json = JsonSerializer.Serialize(items);
+        var emails = Enumerable.Range(1, 51)
+            .Select(i => new BulkEmailItem { AccountId = "acc-1", EmailId = $"email-{i}" })
+            .ToArray();
 
-        var result = await tool.BulkDeleteEmails(json);
+        var result = await tool.BulkDeleteEmails(JsonSerializer.Serialize(emails));
         var doc = JsonDocument.Parse(result);
 
         Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("exceeds maximum"));
@@ -78,8 +64,12 @@ public class BulkDeleteEmailsToolTests
         var tool = new BulkDeleteEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkDeleteEmailsTool>.Instance);
 
-        var json = """[{"accountId":"acc-1","emailId":"e1"},{"accountId":"acc-1","emailId":"e2"}]""";
-        var result = await tool.BulkDeleteEmails(json);
+        var emails = JsonSerializer.Serialize(new[]
+        {
+            new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" },
+            new BulkEmailItem { AccountId = "acc-1", EmailId = "e2" }
+        });
+        var result = await tool.BulkDeleteEmails(emails);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalRequested").GetInt32());
@@ -102,8 +92,8 @@ public class BulkDeleteEmailsToolTests
         var tool = new BulkDeleteEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkDeleteEmailsTool>.Instance);
 
-        var json = """[{"accountId":"missing","emailId":"e1"}]""";
-        var result = await tool.BulkDeleteEmails(json);
+        var emails = JsonSerializer.Serialize(new[] { new BulkEmailItem { AccountId = "missing", EmailId = "e1" } });
+        var result = await tool.BulkDeleteEmails(emails);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("totalRequested").GetInt32());

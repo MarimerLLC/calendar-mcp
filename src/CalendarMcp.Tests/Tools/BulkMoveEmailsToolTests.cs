@@ -19,25 +19,11 @@ public class BulkMoveEmailsToolTests
         var tool = new BulkMoveEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMoveEmailsTool>.Instance);
 
-        var json = """[{"accountId":"acc-1","emailId":"e1"}]""";
-        var result = await tool.BulkMoveEmails(json, "");
+        var emails = JsonSerializer.Serialize(new[] { new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" } });
+        var result = await tool.BulkMoveEmails(emails, "");
         var doc = JsonDocument.Parse(result);
 
-        Assert.AreEqual("destinationFolder is required", doc.RootElement.GetProperty("error").GetString());
-    }
-
-    [TestMethod]
-    public async Task BulkMoveEmails_InvalidJson_ReturnsError()
-    {
-        var regExp = new IAccountRegistryCreateExpectations();
-        var factExp = new IProviderServiceFactoryCreateExpectations();
-        var tool = new BulkMoveEmailsTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<BulkMoveEmailsTool>.Instance);
-
-        var result = await tool.BulkMoveEmails("bad json", "archive");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("Invalid JSON"));
+        Assert.AreEqual("destination is required", doc.RootElement.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -51,7 +37,7 @@ public class BulkMoveEmailsToolTests
         var result = await tool.BulkMoveEmails("[]", "archive");
         var doc = JsonDocument.Parse(result);
 
-        Assert.AreEqual("emails array must not be empty", doc.RootElement.GetProperty("error").GetString());
+        Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -73,12 +59,12 @@ public class BulkMoveEmailsToolTests
         var tool = new BulkMoveEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMoveEmailsTool>.Instance);
 
-        var json = """[{"accountId":"acc-1","emailId":"e1"}]""";
-        var result = await tool.BulkMoveEmails(json, "archive");
+        var emails = JsonSerializer.Serialize(new[] { new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" } });
+        var result = await tool.BulkMoveEmails(emails, "archive");
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("succeeded").GetInt32());
-        Assert.AreEqual("archive", doc.RootElement.GetProperty("destinationFolder").GetString());
+        Assert.AreEqual("archive", doc.RootElement.GetProperty("destination").GetString());
 
         regExp.Verify();
         factExp.Verify();

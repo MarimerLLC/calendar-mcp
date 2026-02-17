@@ -50,7 +50,7 @@ public class MoveEmailToolTests
         var result = await tool.MoveEmail("acc-1", "email-1", "");
         var doc = JsonDocument.Parse(result);
 
-        Assert.AreEqual("destinationFolder is required", doc.RootElement.GetProperty("error").GetString());
+        Assert.AreEqual("destination is required", doc.RootElement.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -94,7 +94,7 @@ public class MoveEmailToolTests
         var doc = JsonDocument.Parse(result);
 
         Assert.IsTrue(doc.RootElement.GetProperty("success").GetBoolean());
-        Assert.AreEqual("archive", doc.RootElement.GetProperty("destinationFolder").GetString());
+        Assert.AreEqual("archive", doc.RootElement.GetProperty("destination").GetString());
 
         regExp.Verify();
         factExp.Verify();
