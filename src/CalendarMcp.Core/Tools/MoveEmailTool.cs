@@ -19,10 +19,10 @@ public sealed class MoveEmailTool(
     public async Task<string> MoveEmail(
         [Description("Account ID (required)")] string accountId,
         [Description("Email message ID to move (required)")] string emailId,
-        [Description("Destination folder or label: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft only), 'sentitems' (Microsoft only), or custom label ID (Google only). Aliases: 'deleteditems'='trash', 'junkemail'='spam' (required)")] string destinationFolder)
+        [Description("Destination folder or label: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft only), 'sentitems' (Microsoft only), or custom label ID (Google only). Aliases: 'deleteditems'='trash', 'junkemail'='spam' (required)")] string destination)
     {
-        logger.LogInformation("Moving email: accountId={AccountId}, emailId={EmailId}, destinationFolder={DestinationFolder}",
-            accountId, emailId, destinationFolder);
+        logger.LogInformation("Moving email: accountId={AccountId}, emailId={EmailId}, destination={Destination}",
+            accountId, emailId, destination);
 
         try
         {
@@ -42,11 +42,11 @@ public sealed class MoveEmailTool(
                 });
             }
 
-            if (string.IsNullOrEmpty(destinationFolder))
+            if (string.IsNullOrEmpty(destination))
             {
                 return JsonSerializer.Serialize(new
                 {
-                    error = "destinationFolder is required"
+                    error = "destination is required"
                 });
             }
 
@@ -60,19 +60,19 @@ public sealed class MoveEmailTool(
             }
 
             var provider = providerFactory.GetProvider(account.Provider);
-            await provider.MoveEmailAsync(accountId, emailId, destinationFolder, CancellationToken.None);
+            await provider.MoveEmailAsync(accountId, emailId, destination, CancellationToken.None);
 
             var response = new
             {
                 success = true,
                 emailId = emailId,
                 accountId = accountId,
-                destinationFolder = destinationFolder,
-                message = $"Email '{emailId}' moved to '{destinationFolder}' in account '{accountId}'"
+                destination = destination,
+                message = $"Email '{emailId}' moved to '{destination}' in account '{accountId}'"
             };
 
-            logger.LogInformation("Moved email {EmailId} to folder '{DestinationFolder}' in account {AccountId}",
-                emailId, destinationFolder, accountId);
+            logger.LogInformation("Moved email {EmailId} to folder '{Destination}' in account {AccountId}",
+                emailId, destination, accountId);
 
             return JsonSerializer.Serialize(response, new JsonSerializerOptions
             {

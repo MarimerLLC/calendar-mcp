@@ -21,33 +21,46 @@ public sealed class BulkMarkEmailsAsReadTool(
 
     [McpServerTool, Description("Mark multiple emails as read or unread in a single batch operation. More efficient than calling mark_email_as_read repeatedly.")]
     public async Task<string> BulkMarkEmailsAsRead(
-        [Description("JSON array of objects with 'accountId' and 'emailId' fields, e.g. [{\"accountId\":\"acc1\",\"emailId\":\"msg1\"},{\"accountId\":\"acc1\",\"emailId\":\"msg2\"}]. Maximum 50 items.")] string emails,
+        [Description("JSON array of objects with 'accountId' and 'emailId' fields. Example: [{\"accountId\":\"acct1\",\"emailId\":\"msg1\"}]. Maximum 50 items.")] string items,
         [Description("True to mark as read, false to mark as unread (required)")] bool isRead)
     {
         logger.LogInformation("Bulk marking emails as {ReadStatus}", isRead ? "read" : "unread");
 
         try
         {
-            var items = ParseEmailItems(emails);
-            if (items == null)
+            BulkEmailItem[]? parsedItems;
+            try
             {
-                return JsonSerializer.Serialize(new { error = "Invalid JSON. Expected an array of {\"accountId\":\"...\",\"emailId\":\"...\"} objects." });
+                parsedItems = JsonSerializer.Deserialize<BulkEmailItem[]>(items);
+            }
+            catch (JsonException ex)
+            {
+                return JsonSerializer.Serialize(new { error = "Invalid items JSON format", message = ex.Message });
             }
 
-            if (items.Count == 0)
+            if (parsedItems == null || parsedItems.Length == 0)
             {
-                return JsonSerializer.Serialize(new { error = "emails array must not be empty" });
+                return JsonSerializer.Serialize(new { error = "items array must not be empty" });
             }
 
-            if (items.Count > MaxBatchSize)
+            if (parsedItems.Length > MaxBatchSize)
             {
-                return JsonSerializer.Serialize(new { error = $"Batch size {items.Count} exceeds maximum of {MaxBatchSize}" });
+                return JsonSerializer.Serialize(new { error = $"Batch size {parsedItems.Length} exceeds maximum of {MaxBatchSize}" });
+            }
+
+            // Validate all items have required fields
+            foreach (var item in parsedItems)
+            {
+                if (string.IsNullOrEmpty(item.AccountId) || string.IsNullOrEmpty(item.EmailId))
+                {
+                    return JsonSerializer.Serialize(new { error = "Each item must have 'accountId' and 'emailId' fields" });
+                }
             }
 
             // Resolve accounts once per unique accountId
-            var accounts = await ResolveAccountsAsync(items);
+            var accounts = await ResolveAccountsAsync(parsedItems);
 
-            var results = await Task.WhenAll(items.Select(async item =>
+            var results = await Task.WhenAll(parsedItems.Select(async item =>
             {
                 await Throttle.WaitAsync();
                 try
@@ -95,32 +108,7 @@ public sealed class BulkMarkEmailsAsReadTool(
         }
     }
 
-    private static List<EmailItem>? ParseEmailItems(string json)
-    {
-        try
-        {
-            var items = JsonSerializer.Deserialize<List<EmailItem>>(json, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-
-            if (items == null) return null;
-
-            foreach (var item in items)
-            {
-                if (string.IsNullOrEmpty(item.AccountId) || string.IsNullOrEmpty(item.EmailId))
-                    return null;
-            }
-
-            return items;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private async Task<Dictionary<string, AccountInfo>> ResolveAccountsAsync(List<EmailItem> items)
+    private async Task<Dictionary<string, AccountInfo>> ResolveAccountsAsync(BulkEmailItem[] items)
     {
         var result = new Dictionary<string, AccountInfo>();
         foreach (var accountId in items.Select(i => i.AccountId).Distinct())
@@ -130,12 +118,6 @@ public sealed class BulkMarkEmailsAsReadTool(
                 result[accountId] = account;
         }
         return result;
-    }
-
-    private sealed record EmailItem(string AccountId, string EmailId)
-    {
-        public string AccountId { get; init; } = AccountId ?? "";
-        public string EmailId { get; init; } = EmailId ?? "";
     }
 
     private sealed record BulkResultItem(string EmailId, string AccountId, bool Success, string? Error);

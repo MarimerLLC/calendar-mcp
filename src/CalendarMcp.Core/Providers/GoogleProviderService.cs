@@ -333,14 +333,20 @@ public class GoogleProviderService : IGoogleProviderService
         try
         {
             var service = CreateGmailService(credential);
-            var request = service.Users.Messages.Delete("me", emailId);
+            // Move to trash and remove from inbox instead of permanently deleting
+            var modifyRequest = new ModifyMessageRequest
+            {
+                AddLabelIds = new List<string> { "TRASH" },
+                RemoveLabelIds = new List<string> { "INBOX" }
+            };
+            var request = service.Users.Messages.Modify(modifyRequest, "me", emailId);
             await request.ExecuteAsync(cancellationToken);
 
-            _logger.LogInformation("Deleted email {EmailId} from Google account {AccountId}", emailId, accountId);
+            _logger.LogInformation("Trashed email {EmailId} from Google account {AccountId}", emailId, accountId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting email {EmailId} from Google account {AccountId}", emailId, accountId);
+            _logger.LogError(ex, "Error trashing email {EmailId} from Google account {AccountId}", emailId, accountId);
             throw;
         }
     }

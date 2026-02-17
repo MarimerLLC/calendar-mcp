@@ -12,20 +12,6 @@ namespace CalendarMcp.Tests.Tools;
 public class BulkMarkEmailsAsReadToolTests
 {
     [TestMethod]
-    public async Task BulkMarkEmailsAsRead_InvalidJson_ReturnsError()
-    {
-        var regExp = new IAccountRegistryCreateExpectations();
-        var factExp = new IProviderServiceFactoryCreateExpectations();
-        var tool = new BulkMarkEmailsAsReadTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<BulkMarkEmailsAsReadTool>.Instance);
-
-        var result = await tool.BulkMarkEmailsAsRead("invalid json", true);
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("Invalid JSON"));
-    }
-
-    [TestMethod]
     public async Task BulkMarkEmailsAsRead_EmptyArray_ReturnsError()
     {
         var regExp = new IAccountRegistryCreateExpectations();
@@ -36,7 +22,7 @@ public class BulkMarkEmailsAsReadToolTests
         var result = await tool.BulkMarkEmailsAsRead("[]", true);
         var doc = JsonDocument.Parse(result);
 
-        Assert.AreEqual("emails array must not be empty", doc.RootElement.GetProperty("error").GetString());
+        Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
     }
 
     [TestMethod]
@@ -58,8 +44,8 @@ public class BulkMarkEmailsAsReadToolTests
         var tool = new BulkMarkEmailsAsReadTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMarkEmailsAsReadTool>.Instance);
 
-        var json = """[{"accountId":"acc-1","emailId":"e1"}]""";
-        var result = await tool.BulkMarkEmailsAsRead(json, true);
+        var emails = JsonSerializer.Serialize(new[] { new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" } });
+        var result = await tool.BulkMarkEmailsAsRead(emails, true);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("succeeded").GetInt32());

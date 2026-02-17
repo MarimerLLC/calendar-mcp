@@ -21,38 +21,51 @@ public sealed class BulkMoveEmailsTool(
 
     [McpServerTool, Description("Move multiple emails to a folder or apply labels in a single batch operation. More efficient than calling move_email repeatedly.")]
     public async Task<string> BulkMoveEmails(
-        [Description("JSON array of objects with 'accountId' and 'emailId' fields, e.g. [{\"accountId\":\"acc1\",\"emailId\":\"msg1\"},{\"accountId\":\"acc1\",\"emailId\":\"msg2\"}]. Maximum 50 items.")] string emails,
-        [Description("Destination folder or label for all emails: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft only), 'sentitems' (Microsoft only), or custom label ID (Google only). Aliases: 'deleteditems'='trash', 'junkemail'='spam' (required)")] string destinationFolder)
+        [Description("JSON array of objects with 'accountId' and 'emailId' fields. Example: [{\"accountId\":\"acct1\",\"emailId\":\"msg1\"}]. Maximum 50 items.")] string items,
+        [Description("Destination folder or label for all emails: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft only), 'sentitems' (Microsoft only), or custom label ID (Google only). Aliases: 'deleteditems'='trash', 'junkemail'='spam' (required)")] string destination)
     {
-        logger.LogInformation("Bulk moving emails to {DestinationFolder}", destinationFolder);
+        logger.LogInformation("Bulk moving emails to {Destination}", destination);
 
         try
         {
-            if (string.IsNullOrEmpty(destinationFolder))
+            if (string.IsNullOrEmpty(destination))
             {
-                return JsonSerializer.Serialize(new { error = "destinationFolder is required" });
+                return JsonSerializer.Serialize(new { error = "destination is required" });
             }
 
-            var items = ParseEmailItems(emails);
-            if (items == null)
+            BulkEmailItem[]? parsedItems;
+            try
             {
-                return JsonSerializer.Serialize(new { error = "Invalid JSON. Expected an array of {\"accountId\":\"...\",\"emailId\":\"...\"} objects." });
+                parsedItems = JsonSerializer.Deserialize<BulkEmailItem[]>(items);
+            }
+            catch (JsonException ex)
+            {
+                return JsonSerializer.Serialize(new { error = "Invalid items JSON format", message = ex.Message });
             }
 
-            if (items.Count == 0)
+            if (parsedItems == null || parsedItems.Length == 0)
             {
-                return JsonSerializer.Serialize(new { error = "emails array must not be empty" });
+                return JsonSerializer.Serialize(new { error = "items array must not be empty" });
             }
 
-            if (items.Count > MaxBatchSize)
+            if (parsedItems.Length > MaxBatchSize)
             {
-                return JsonSerializer.Serialize(new { error = $"Batch size {items.Count} exceeds maximum of {MaxBatchSize}" });
+                return JsonSerializer.Serialize(new { error = $"Batch size {parsedItems.Length} exceeds maximum of {MaxBatchSize}" });
+            }
+
+            // Validate all items have required fields
+            foreach (var item in parsedItems)
+            {
+                if (string.IsNullOrEmpty(item.AccountId) || string.IsNullOrEmpty(item.EmailId))
+                {
+                    return JsonSerializer.Serialize(new { error = "Each item must have 'accountId' and 'emailId' fields" });
+                }
             }
 
             // Resolve accounts once per unique accountId
-            var accounts = await ResolveAccountsAsync(items);
+            var accounts = await ResolveAccountsAsync(parsedItems);
 
-            var results = await Task.WhenAll(items.Select(async item =>
+            var results = await Task.WhenAll(parsedItems.Select(async item =>
             {
                 await Throttle.WaitAsync();
                 try
@@ -63,7 +76,7 @@ public sealed class BulkMoveEmailsTool(
                     }
 
                     var provider = providerFactory.GetProvider(account.Provider);
-                    await provider.MoveEmailAsync(item.AccountId, item.EmailId, destinationFolder, CancellationToken.None);
+                    await provider.MoveEmailAsync(item.AccountId, item.EmailId, destination, CancellationToken.None);
                     return new BulkResultItem(item.EmailId, item.AccountId, true, null);
                 }
                 catch (Exception ex)
@@ -79,15 +92,15 @@ public sealed class BulkMoveEmailsTool(
             var succeeded = results.Count(r => r.Success);
             var failed = results.Count(r => !r.Success);
 
-            logger.LogInformation("Bulk move to '{DestinationFolder}' complete: {Succeeded} succeeded, {Failed} failed out of {Total}",
-                destinationFolder, succeeded, failed, results.Length);
+            logger.LogInformation("Bulk move to '{Destination}' complete: {Succeeded} succeeded, {Failed} failed out of {Total}",
+                destination, succeeded, failed, results.Length);
 
             return JsonSerializer.Serialize(new
             {
                 totalRequested = results.Length,
                 succeeded,
                 failed,
-                destinationFolder,
+                destination,
                 results = results.Select(r => r.Success
                     ? new { r.EmailId, r.AccountId, r.Success, error = (string?)null }
                     : new { r.EmailId, r.AccountId, r.Success, error = r.Error })
@@ -100,32 +113,7 @@ public sealed class BulkMoveEmailsTool(
         }
     }
 
-    private static List<EmailItem>? ParseEmailItems(string json)
-    {
-        try
-        {
-            var items = JsonSerializer.Deserialize<List<EmailItem>>(json, new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true
-            });
-
-            if (items == null) return null;
-
-            foreach (var item in items)
-            {
-                if (string.IsNullOrEmpty(item.AccountId) || string.IsNullOrEmpty(item.EmailId))
-                    return null;
-            }
-
-            return items;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private async Task<Dictionary<string, AccountInfo>> ResolveAccountsAsync(List<EmailItem> items)
+    private async Task<Dictionary<string, AccountInfo>> ResolveAccountsAsync(BulkEmailItem[] items)
     {
         var result = new Dictionary<string, AccountInfo>();
         foreach (var accountId in items.Select(i => i.AccountId).Distinct())
@@ -135,12 +123,6 @@ public sealed class BulkMoveEmailsTool(
                 result[accountId] = account;
         }
         return result;
-    }
-
-    private sealed record EmailItem(string AccountId, string EmailId)
-    {
-        public string AccountId { get; init; } = AccountId ?? "";
-        public string EmailId { get; init; } = EmailId ?? "";
     }
 
     private sealed record BulkResultItem(string EmailId, string AccountId, bool Success, string? Error);
