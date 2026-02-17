@@ -59,7 +59,6 @@ public static class M365Scopes
 
 /// <summary>
 /// Centralized Outlook.com (personal Microsoft account) OAuth scope constants.
-/// Intentionally excludes Mail.ReadWrite — personal accounts use fewer scopes.
 /// </summary>
 public static class OutlookComScopes
 {
@@ -70,6 +69,7 @@ public static class OutlookComScopes
     [
         "Mail.Read",
         "Mail.Send",
+        "Mail.ReadWrite",
         "Calendars.ReadWrite"
     ];
 
@@ -80,6 +80,7 @@ public static class OutlookComScopes
     [
         "Mail.Read",
         "Mail.Send",
+        "Mail.ReadWrite",
         "Calendars.ReadWrite",
         "Files.Read"
     ];
