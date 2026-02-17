@@ -18,14 +18,7 @@ public class GoogleOAuthManager
     private readonly ILogger<GoogleOAuthManager> _logger;
     private readonly ConcurrentDictionary<string, PendingOAuthState> _pendingStates = new();
 
-    private static readonly string[] Scopes =
-    [
-        "https://www.googleapis.com/auth/gmail.readonly",
-        "https://www.googleapis.com/auth/gmail.send",
-        "https://www.googleapis.com/auth/gmail.compose",
-        "https://www.googleapis.com/auth/calendar.readonly",
-        "https://www.googleapis.com/auth/calendar.events"
-    ];
+    private static readonly string[] Scopes = CalendarMcp.Core.Constants.GoogleScopes.Default;
 
     public GoogleOAuthManager(ILogger<GoogleOAuthManager> logger)
     {

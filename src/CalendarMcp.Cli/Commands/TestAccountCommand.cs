@@ -194,12 +194,7 @@ public class TestAccountCommand : AsyncCommand<TestAccountCommand.Settings>
             return 1;
         }
 
-        // Default scopes for Google
-        var scopes = new[]
-        {
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/calendar.readonly"
-        };
+        var scopes = CalendarMcp.Core.Constants.GoogleScopes.ReadOnly;
 
         AnsiConsole.MarkupLine("[yellow]Testing cached credential...[/]");
 

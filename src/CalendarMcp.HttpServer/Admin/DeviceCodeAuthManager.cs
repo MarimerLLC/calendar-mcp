@@ -109,12 +109,11 @@ public class DeviceCodeAuthManager
             ?? account.ProviderConfig.GetValueOrDefault("clientId")
             ?? throw new InvalidOperationException($"Account '{account.Id}' is missing ClientId in ProviderConfig.");
 
-        // Build explicit scopes - .default doesn't work for personal/consumer accounts
-        var scopeList = new List<string>
+        // Start from the base scopes for the provider, plus offline_access for refresh tokens.
+        // DeviceCodeAuthManager handles both M365 and Outlook.com personal accounts;
+        // both share the same base scopes (OutlookComScopes.Default is the common subset).
+        var scopeList = new List<string>(CalendarMcp.Core.Constants.OutlookComScopes.Default)
         {
-            "Mail.Read",
-            "Mail.Send",
-            "Calendars.ReadWrite",
             "offline_access"
         };
 

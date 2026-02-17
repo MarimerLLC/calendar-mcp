@@ -223,11 +223,7 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
             return "[yellow]Missing config[/]";
         }
 
-        var scopes = new[]
-        {
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/calendar.readonly"
-        };
+        var scopes = CalendarMcp.Core.Constants.GoogleScopes.ReadOnly;
 
         var hasCredential = await _googleAuthService.HasValidCredentialAsync(
             clientId,

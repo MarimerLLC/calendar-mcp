@@ -96,15 +96,7 @@ public class AddOutlookComAccountCommand : AsyncCommand<AddOutlookComAccountComm
             new TextPrompt<int>("[green]Priority[/] (higher = preferred, default is 0):")
                 .DefaultValue(0));
 
-        // Default scopes for Outlook.com - same as M365 using Graph API
-        // Include Files.Read for OneDrive access (needed by JSON calendar accounts)
-        var scopes = new[]
-        {
-            "Mail.Read",
-            "Mail.Send",
-            "Calendars.ReadWrite",
-            "Files.Read"
-        };
+        var scopes = CalendarMcp.Core.Constants.OutlookComScopes.WithFiles;
 
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[yellow]Starting Device Code authentication...[/]");

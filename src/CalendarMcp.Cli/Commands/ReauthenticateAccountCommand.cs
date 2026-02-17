@@ -209,13 +209,8 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
             return 1;
         }
 
-        // Default scopes
-        var scopeList = new List<string>
-        {
-            "Mail.Read",
-            "Mail.Send",
-            "Calendars.ReadWrite"
-        };
+        // Start from the base Outlook.com scopes (common subset for both M365 and personal accounts)
+        var scopeList = new List<string>(CalendarMcp.Core.Constants.OutlookComScopes.Default);
 
         // Check if any JSON calendar accounts reference this account for OneDrive access
         if (allAccounts != null)
@@ -367,15 +362,7 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
             return 1;
         }
 
-        // Default scopes for Google
-        var scopes = new[]
-        {
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/gmail.send",
-            "https://www.googleapis.com/auth/gmail.compose",
-            "https://www.googleapis.com/auth/calendar.readonly",
-            "https://www.googleapis.com/auth/calendar.events"
-        };
+        var scopes = CalendarMcp.Core.Constants.GoogleScopes.Default;
 
         AnsiConsole.MarkupLine("[yellow]Starting authentication...[/]");
         AnsiConsole.MarkupLine("[dim]A browser window will open. Please sign in with your Google account.[/]");

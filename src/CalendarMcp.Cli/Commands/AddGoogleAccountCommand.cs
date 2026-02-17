@@ -98,15 +98,7 @@ public class AddGoogleAccountCommand : AsyncCommand<AddGoogleAccountCommand.Sett
             new TextPrompt<int>("[green]Priority[/] (higher = preferred, default is 0):")
                 .DefaultValue(0));
 
-        // Default scopes for Gmail/Calendar
-        var scopes = new[]
-        {
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/gmail.send",
-            "https://www.googleapis.com/auth/gmail.compose",
-            "https://www.googleapis.com/auth/calendar.readonly",
-            "https://www.googleapis.com/auth/calendar.events"
-        };
+        var scopes = CalendarMcp.Core.Constants.GoogleScopes.Default;
 
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[yellow]Starting authentication...[/]");

@@ -232,11 +232,7 @@ public class RemoveAccountCommand : AsyncCommand<RemoveAccountCommand.Settings>
         if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
             return false;
 
-        var scopes = new[]
-        {
-            "https://www.googleapis.com/auth/gmail.readonly",
-            "https://www.googleapis.com/auth/calendar.readonly"
-        };
+        var scopes = CalendarMcp.Core.Constants.GoogleScopes.ReadOnly;
 
         return await _googleAuthService.HasValidCredentialAsync(clientId, clientSecret, scopes, accountId);
     }

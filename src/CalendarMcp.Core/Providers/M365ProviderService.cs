@@ -16,14 +16,7 @@ public class M365ProviderService : IM365ProviderService
     private readonly IM365AuthenticationService _authService;
     private readonly IAccountRegistry _accountRegistry;
 
-    // Default scopes for Microsoft Graph API access
-    private static readonly string[] DefaultScopes = new[] 
-    { 
-        "Mail.Read", 
-        "Mail.Send",
-        "Mail.ReadWrite",  // Required for moving/archiving emails
-        "Calendars.ReadWrite" 
-    };
+    private static readonly string[] DefaultScopes = Constants.M365Scopes.Default;
 
     public M365ProviderService(
         ILogger<M365ProviderService> logger,

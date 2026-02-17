@@ -1,7 +1,9 @@
 using CalendarMcp.Auth;
+using CalendarMcp.Core.Configuration;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace CalendarMcp.HttpServer.Admin;
 
@@ -279,7 +281,8 @@ public static class AdminEndpoints
         string accountId,
         HttpContext httpContext,
         IAccountRegistry accountRegistry,
-        GoogleOAuthManager oauthManager)
+        GoogleOAuthManager oauthManager,
+        IOptions<CalendarMcpConfiguration> config)
     {
         var account = await accountRegistry.GetAccountAsync(accountId);
         if (account == null)
@@ -294,8 +297,7 @@ public static class AdminEndpoints
         }
 
         // Build the callback redirect URI from the current request
-        var request = httpContext.Request;
-        var redirectUri = UriHelper.BuildAbsolute(request.Scheme, request.Host, "/admin/auth/google/callback");
+        var redirectUri = BuildRedirectUri(httpContext.Request, "/admin/auth/google/callback", config.Value);
 
         var authUrl = oauthManager.GetAuthorizationUrl(accountId, clientId, clientSecret, redirectUri);
         return Results.Redirect(authUrl);
@@ -307,6 +309,7 @@ public static class AdminEndpoints
     private static async Task<IResult> GoogleOAuthCallback(
         HttpContext httpContext,
         GoogleOAuthManager oauthManager,
+        IOptions<CalendarMcpConfiguration> config,
         CancellationToken cancellationToken)
     {
         var query = httpContext.Request.Query;
@@ -326,8 +329,7 @@ public static class AdminEndpoints
 
         try
         {
-            var request = httpContext.Request;
-            var redirectUri = UriHelper.BuildAbsolute(request.Scheme, request.Host, "/admin/auth/google/callback");
+            var redirectUri = BuildRedirectUri(httpContext.Request, "/admin/auth/google/callback", config.Value);
 
             var accountId = await oauthManager.ExchangeCodeAsync(state, code, redirectUri, cancellationToken);
             return Results.Redirect($"/admin/ui/auth/{accountId}?googleAuth=success");
@@ -336,5 +338,24 @@ public static class AdminEndpoints
         {
             return Results.Redirect($"/admin/ui?googleAuth=failed&error={Uri.EscapeDataString(ex.Message)}");
         }
+    }
+
+    /// <summary>
+    /// Build a redirect URI. Priority:
+    /// 1. ExternalBaseUrl from configuration (handles TLS-terminating proxies like Tailscale)
+    /// 2. X-Forwarded-Proto/Host headers (standard reverse proxy)
+    /// 3. Request scheme/host (direct access)
+    /// </summary>
+    private static string BuildRedirectUri(HttpRequest request, string path, CalendarMcpConfiguration config)
+    {
+        if (!string.IsNullOrEmpty(config.ExternalBaseUrl))
+        {
+            return $"{config.ExternalBaseUrl.TrimEnd('/')}{path}";
+        }
+
+        var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? request.Scheme;
+        var host = request.Headers["X-Forwarded-Host"].FirstOrDefault() ?? request.Host.Host;
+
+        return $"{scheme}://{host}{path}";
     }
 }

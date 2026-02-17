@@ -17,13 +17,7 @@ public class OutlookComProviderService : IOutlookComProviderService
     private readonly IM365AuthenticationService _authService;
     private readonly IAccountRegistry _accountRegistry;
 
-    // Default scopes for Microsoft Graph API access
-    private static readonly string[] DefaultScopes = new[] 
-    { 
-        "Mail.Read", 
-        "Mail.Send", 
-        "Calendars.ReadWrite" 
-    };
+    private static readonly string[] DefaultScopes = Constants.OutlookComScopes.Default;
 
     public OutlookComProviderService(
         ILogger<OutlookComProviderService> logger,

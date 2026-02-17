@@ -20,15 +20,7 @@ public class GoogleProviderService : IGoogleProviderService
     private readonly ILogger<GoogleProviderService> _logger;
     private readonly IAccountRegistry _accountRegistry;
 
-    // Default scopes for Google API access
-    private static readonly string[] DefaultScopes = new[]
-    {
-        "https://www.googleapis.com/auth/gmail.readonly",
-        "https://www.googleapis.com/auth/gmail.send",
-        "https://www.googleapis.com/auth/gmail.modify",  // Required for moving/archiving emails
-        "https://www.googleapis.com/auth/calendar.readonly",
-        "https://www.googleapis.com/auth/calendar.events"
-    };
+    private static readonly string[] DefaultScopes = Constants.GoogleScopes.Default;
 
     public GoogleProviderService(
         ILogger<GoogleProviderService> logger,

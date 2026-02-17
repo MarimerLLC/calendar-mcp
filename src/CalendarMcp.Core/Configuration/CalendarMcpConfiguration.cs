@@ -16,6 +16,13 @@ public class CalendarMcpConfiguration
     /// Telemetry configuration
     /// </summary>
     public TelemetryConfiguration Telemetry { get; set; } = new();
+
+    /// <summary>
+    /// External base URL for OAuth redirect URIs (e.g. "https://calendar-mcp.tail920062.ts.net").
+    /// When set, this overrides auto-detection from request headers.
+    /// Can also be set via CALENDARMCP__EXTERNALBASEURL environment variable.
+    /// </summary>
+    public string? ExternalBaseUrl { get; set; }
 }
 
 /// <summary>

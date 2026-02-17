@@ -87,15 +87,7 @@ public class AddM365AccountCommand : AsyncCommand<AddM365AccountCommand.Settings
             new TextPrompt<int>("[green]Priority[/] (higher = preferred, default is 0):")
                 .DefaultValue(0));
 
-        // Default scopes for M365
-        // Include Files.Read for OneDrive access (needed by JSON calendar accounts)
-        var scopes = new[]
-        {
-            "Mail.Read",
-            "Mail.Send",
-            "Calendars.ReadWrite",
-            "Files.Read"
-        };
+        var scopes = CalendarMcp.Core.Constants.M365Scopes.WithFiles;
 
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[yellow]Starting authentication...[/]");
