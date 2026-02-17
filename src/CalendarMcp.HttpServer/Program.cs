@@ -4,6 +4,7 @@ using CalendarMcp.HttpServer.Admin;
 using CalendarMcp.HttpServer.BlazorAdmin;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using Scalar.AspNetCore;
@@ -150,6 +151,11 @@ public class Program
 
         var app = builder.Build();
 
+        // Trust forwarded headers from reverse proxies (e.g., Tailscale Ingress)
+        app.UseForwardedHeaders(new ForwardedHeadersOptions
+        {
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+        });
         app.MapStaticAssets();
         app.UseAuthentication();
         app.UseAuthorization();

@@ -78,3 +78,25 @@ spec:
       name: http
   selector:
     app: calendar-mcp
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: calendar-mcp-tailscale
+  annotations:
+    tailscale.com/hostname: calendar-mcp
+spec:
+  ingressClassName: tailscale
+  tls:
+    - hosts:
+        - calendar-mcp.tail920062.ts.net
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: calendar-mcp
+                port:
+                  number: 8080
