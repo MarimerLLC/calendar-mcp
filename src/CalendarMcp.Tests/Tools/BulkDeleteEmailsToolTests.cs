@@ -19,7 +19,7 @@ public class BulkDeleteEmailsToolTests
         var tool = new BulkDeleteEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkDeleteEmailsTool>.Instance);
 
-        var result = await tool.BulkDeleteEmails("[]");
+        var result = await tool.BulkDeleteEmails([]);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
@@ -37,7 +37,7 @@ public class BulkDeleteEmailsToolTests
             .Select(i => new BulkEmailItem { AccountId = "acc-1", EmailId = $"email-{i}" })
             .ToArray();
 
-        var result = await tool.BulkDeleteEmails(JsonSerializer.Serialize(emails));
+        var result = await tool.BulkDeleteEmails(emails);
         var doc = JsonDocument.Parse(result);
 
         Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("exceeds maximum"));
@@ -64,12 +64,11 @@ public class BulkDeleteEmailsToolTests
         var tool = new BulkDeleteEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkDeleteEmailsTool>.Instance);
 
-        var emails = JsonSerializer.Serialize(new[]
-        {
+        var result = await tool.BulkDeleteEmails(
+        [
             new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" },
             new BulkEmailItem { AccountId = "acc-1", EmailId = "e2" }
-        });
-        var result = await tool.BulkDeleteEmails(emails);
+        ]);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(2, doc.RootElement.GetProperty("totalRequested").GetInt32());
@@ -92,8 +91,7 @@ public class BulkDeleteEmailsToolTests
         var tool = new BulkDeleteEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkDeleteEmailsTool>.Instance);
 
-        var emails = JsonSerializer.Serialize(new[] { new BulkEmailItem { AccountId = "missing", EmailId = "e1" } });
-        var result = await tool.BulkDeleteEmails(emails);
+        var result = await tool.BulkDeleteEmails([new BulkEmailItem { AccountId = "missing", EmailId = "e1" }]);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("totalRequested").GetInt32());

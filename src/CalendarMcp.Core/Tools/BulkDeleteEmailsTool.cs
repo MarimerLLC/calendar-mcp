@@ -21,34 +21,24 @@ public sealed class BulkDeleteEmailsTool(
 
     [McpServerTool, Description("Delete multiple emails in a single batch operation. More efficient than calling delete_email repeatedly.")]
     public async Task<string> BulkDeleteEmails(
-        [Description("JSON array of objects with 'accountId' and 'emailId' fields. Example: [{\"accountId\":\"acct1\",\"emailId\":\"msg1\"}]. Maximum 50 items.")] string items)
+        [Description("Array of emails to delete, each with 'accountId' and 'emailId'. Maximum 50 items.")] BulkEmailItem[] items)
     {
         logger.LogInformation("Bulk deleting emails");
 
         try
         {
-            BulkEmailItem[]? parsedItems;
-            try
-            {
-                parsedItems = JsonSerializer.Deserialize<BulkEmailItem[]>(items);
-            }
-            catch (JsonException ex)
-            {
-                return JsonSerializer.Serialize(new { error = "Invalid items JSON format", message = ex.Message });
-            }
-
-            if (parsedItems == null || parsedItems.Length == 0)
+            if (items == null || items.Length == 0)
             {
                 return JsonSerializer.Serialize(new { error = "items array must not be empty" });
             }
 
-            if (parsedItems.Length > MaxBatchSize)
+            if (items.Length > MaxBatchSize)
             {
-                return JsonSerializer.Serialize(new { error = $"Batch size {parsedItems.Length} exceeds maximum of {MaxBatchSize}" });
+                return JsonSerializer.Serialize(new { error = $"Batch size {items.Length} exceeds maximum of {MaxBatchSize}" });
             }
 
             // Validate all items have required fields
-            foreach (var item in parsedItems)
+            foreach (var item in items)
             {
                 if (string.IsNullOrEmpty(item.AccountId) || string.IsNullOrEmpty(item.EmailId))
                 {
@@ -57,9 +47,9 @@ public sealed class BulkDeleteEmailsTool(
             }
 
             // Resolve accounts once per unique accountId
-            var accounts = await ResolveAccountsAsync(parsedItems);
+            var accounts = await ResolveAccountsAsync(items);
 
-            var results = await Task.WhenAll(parsedItems.Select(async item =>
+            var results = await Task.WhenAll(items.Select(async item =>
             {
                 await Throttle.WaitAsync();
                 try

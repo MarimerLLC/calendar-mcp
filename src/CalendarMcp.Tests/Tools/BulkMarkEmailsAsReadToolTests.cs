@@ -19,7 +19,7 @@ public class BulkMarkEmailsAsReadToolTests
         var tool = new BulkMarkEmailsAsReadTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMarkEmailsAsReadTool>.Instance);
 
-        var result = await tool.BulkMarkEmailsAsRead("[]", true);
+        var result = await tool.BulkMarkEmailsAsRead([], true);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
@@ -44,8 +44,7 @@ public class BulkMarkEmailsAsReadToolTests
         var tool = new BulkMarkEmailsAsReadTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMarkEmailsAsReadTool>.Instance);
 
-        var emails = JsonSerializer.Serialize(new[] { new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" } });
-        var result = await tool.BulkMarkEmailsAsRead(emails, true);
+        var result = await tool.BulkMarkEmailsAsRead([new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" }], true);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("succeeded").GetInt32());

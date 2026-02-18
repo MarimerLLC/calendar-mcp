@@ -19,8 +19,7 @@ public class BulkMoveEmailsToolTests
         var tool = new BulkMoveEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMoveEmailsTool>.Instance);
 
-        var emails = JsonSerializer.Serialize(new[] { new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" } });
-        var result = await tool.BulkMoveEmails(emails, "");
+        var result = await tool.BulkMoveEmails([new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" }], "");
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual("destination is required", doc.RootElement.GetProperty("error").GetString());
@@ -34,7 +33,7 @@ public class BulkMoveEmailsToolTests
         var tool = new BulkMoveEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMoveEmailsTool>.Instance);
 
-        var result = await tool.BulkMoveEmails("[]", "archive");
+        var result = await tool.BulkMoveEmails([], "archive");
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
@@ -59,8 +58,7 @@ public class BulkMoveEmailsToolTests
         var tool = new BulkMoveEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMoveEmailsTool>.Instance);
 
-        var emails = JsonSerializer.Serialize(new[] { new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" } });
-        var result = await tool.BulkMoveEmails(emails, "archive");
+        var result = await tool.BulkMoveEmails([new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" }], "archive");
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("succeeded").GetInt32());
