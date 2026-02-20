@@ -551,8 +551,8 @@ public class OutlookComProviderService : IOutlookComProviderService
                         AccountId = accountId,
                         CalendarId = calendarId ?? "primary",
                         Subject = evt.Subject ?? string.Empty,
-                        Start = DateTime.TryParse(evt.Start?.DateTime, out var startDt) ? startDt : DateTime.MinValue,
-                        End = DateTime.TryParse(evt.End?.DateTime, out var endDt) ? endDt : DateTime.MinValue,
+                        Start = ParseM365DateTime(evt.Start),
+                        End = ParseM365DateTime(evt.End),
                         Location = evt.Location?.DisplayName ?? string.Empty,
                         Body = evt.Body?.Content ?? string.Empty,
                         Organizer = evt.Organizer?.EmailAddress?.Address ?? string.Empty,
@@ -668,6 +668,21 @@ public class OutlookComProviderService : IOutlookComProviderService
         {
             _logger.LogError(ex, "Error getting calendar event details for {EventId} from Outlook.com account {AccountId}", eventId, accountId);
             return null;
+        }
+    }
+
+    private static DateTimeOffset ParseM365DateTime(DateTimeTimeZone? dtz)
+    {
+        if (dtz?.DateTime == null || !DateTime.TryParse(dtz.DateTime, out var dt))
+            return DateTimeOffset.MinValue;
+        try
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(dtz.TimeZone ?? "UTC");
+            return new DateTimeOffset(dt, tz.GetUtcOffset(dt));
+        }
+        catch
+        {
+            return new DateTimeOffset(dt, TimeSpan.Zero);
         }
     }
 

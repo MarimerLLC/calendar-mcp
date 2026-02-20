@@ -26,14 +26,14 @@ public class CalendarEvent
     public string Subject { get; init; } = string.Empty;
     
     /// <summary>
-    /// Event start date/time
+    /// Event start date/time with UTC offset (ISO 8601 with offset, e.g. 2026-02-20T09:00:00-06:00)
     /// </summary>
-    public DateTime Start { get; init; }
-    
+    public DateTimeOffset Start { get; init; }
+
     /// <summary>
-    /// Event end date/time
+    /// Event end date/time with UTC offset (ISO 8601 with offset, e.g. 2026-02-20T10:00:00-06:00)
     /// </summary>
-    public DateTime End { get; init; }
+    public DateTimeOffset End { get; init; }
     
     /// <summary>
     /// Event location

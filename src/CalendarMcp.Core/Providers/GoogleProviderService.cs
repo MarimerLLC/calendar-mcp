@@ -1011,22 +1011,18 @@ public class GoogleProviderService : IGoogleProviderService
         return Encoding.UTF8.GetString(bytes);
     }
 
-    private static DateTime GetEventDateTime(EventDateTime? eventDateTime)
+    private static DateTimeOffset GetEventDateTime(EventDateTime? eventDateTime)
     {
         if (eventDateTime == null)
-            return DateTime.MinValue;
+            return DateTimeOffset.MinValue;
 
         if (eventDateTime.DateTimeDateTimeOffset.HasValue)
-        {
-            return eventDateTime.DateTimeDateTimeOffset.Value.DateTime;
-        }
+            return eventDateTime.DateTimeDateTimeOffset.Value;
 
         if (!string.IsNullOrEmpty(eventDateTime.Date))
-        {
-            return DateTime.Parse(eventDateTime.Date);
-        }
+            return DateTimeOffset.Parse(eventDateTime.Date);
 
-        return DateTime.MinValue;
+        return DateTimeOffset.MinValue;
     }
 
     private static string MapGoogleResponseStatus(string? responseStatus)

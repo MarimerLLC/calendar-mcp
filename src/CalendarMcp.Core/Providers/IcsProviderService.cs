@@ -321,18 +321,19 @@ public class IcsProviderService : IIcsProviderService
     private CalendarEvent? MapToCalendarEvent(
         IcsCalendarEvent icsEvent, string accountId, Occurrence? occurrence = null)
     {
-        DateTime evtStart, evtEnd;
+        DateTimeOffset evtStart, evtEnd;
 
         if (occurrence != null)
         {
-            evtStart = occurrence.Period.StartTime.AsUtc;
-            evtEnd = occurrence.Period.EndTime?.AsUtc
-                     ?? evtStart + (icsEvent.DtEnd?.AsUtc - icsEvent.DtStart?.AsUtc ?? TimeSpan.FromHours(1));
+            evtStart = new DateTimeOffset(occurrence.Period.StartTime.AsUtc, TimeSpan.Zero);
+            var occEnd = occurrence.Period.EndTime?.AsUtc
+                         ?? occurrence.Period.StartTime.AsUtc + (icsEvent.DtEnd?.AsUtc - icsEvent.DtStart?.AsUtc ?? TimeSpan.FromHours(1));
+            evtEnd = new DateTimeOffset(occEnd, TimeSpan.Zero);
         }
         else
         {
-            evtStart = icsEvent.DtStart?.AsUtc ?? DateTime.MinValue;
-            evtEnd = icsEvent.DtEnd?.AsUtc ?? evtStart;
+            evtStart = icsEvent.DtStart != null ? new DateTimeOffset(icsEvent.DtStart.AsUtc, TimeSpan.Zero) : DateTimeOffset.MinValue;
+            evtEnd = icsEvent.DtEnd != null ? new DateTimeOffset(icsEvent.DtEnd.AsUtc, TimeSpan.Zero) : evtStart;
         }
 
         var isAllDay = icsEvent.IsAllDay;

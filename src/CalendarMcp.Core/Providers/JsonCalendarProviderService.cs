@@ -271,7 +271,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
                 continue;
 
             // Filter by date range
-            if (evtStart.Value < end && evtEnd.Value > start)
+            if (evtStart.Value < new DateTimeOffset(end, TimeSpan.Zero) && evtEnd.Value > new DateTimeOffset(start, TimeSpan.Zero))
             {
                 events.Add(MapToCalendarEvent(entry, accountId, evtStart.Value, evtEnd.Value));
             }
@@ -375,7 +375,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
     #region JSON-to-CalendarEvent Mapping
 
     private CalendarEvent MapToCalendarEvent(
-        JsonCalendarEntry entry, string accountId, DateTime start, DateTime end)
+        JsonCalendarEntry entry, string accountId, DateTimeOffset start, DateTimeOffset end)
     {
         // Parse attendees from semicolon/comma-separated strings
         var requiredAttendees = ParseAttendeeString(entry.RequiredAttendees);
@@ -522,14 +522,14 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
             .ToList();
     }
 
-    private static DateTime? ParseDateTime(string? withTimeZone, string? fallback)
+    private static DateTimeOffset? ParseDateTime(string? withTimeZone, string? fallback)
     {
         // Prefer the timezone-aware version
-        if (!string.IsNullOrEmpty(withTimeZone) && DateTime.TryParse(withTimeZone, out var tzDate))
-            return tzDate.ToUniversalTime();
+        if (!string.IsNullOrEmpty(withTimeZone) && DateTimeOffset.TryParse(withTimeZone, out var tzDate))
+            return tzDate;
 
-        if (!string.IsNullOrEmpty(fallback) && DateTime.TryParse(fallback, out var date))
-            return date.ToUniversalTime();
+        if (!string.IsNullOrEmpty(fallback) && DateTimeOffset.TryParse(fallback, out var date))
+            return date;
 
         return null;
     }
