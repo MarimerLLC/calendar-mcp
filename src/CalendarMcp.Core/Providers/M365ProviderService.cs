@@ -156,17 +156,15 @@ public class M365ProviderService : IM365ProviderService
 
             var messages = await graphClient.Me.Messages.GetAsync(config =>
             {
+                // $orderby is not supported with $search — sort client-side instead
                 // Request more results if we need to filter by date client-side
                 config.QueryParameters.Top = (fromDate.HasValue || toDate.HasValue) ? count * 3 : count;
-                config.QueryParameters.Orderby = ["receivedDateTime desc"];
                 config.QueryParameters.Select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "bodyPreview"];
-                
+
                 // Use $search for text search across subject, body, sender
-                // The query should be quoted for exact phrase or unquoted for keyword search
-                config.QueryParameters.Search = $"\"{searchQuery}\"";
-                
-                // Note: $filter cannot be combined with $search on messages
+                // Note: $filter and $orderby cannot be combined with $search on messages
                 // Date filtering will be done client-side if needed
+                config.QueryParameters.Search = $"\"{searchQuery}\"";
             }, cancellationToken);
 
             var result = new List<EmailMessage>();
@@ -204,9 +202,9 @@ public class M365ProviderService : IM365ProviderService
                 }
             }
 
-            _logger.LogInformation("Search returned {Count} emails from M365 account {AccountId} for query '{Query}'", 
+            _logger.LogInformation("Search returned {Count} emails from M365 account {AccountId} for query '{Query}'",
                 result.Count, accountId, query);
-            return result;
+            return result.OrderByDescending(e => e.ReceivedDateTime);
         }
         catch (Exception ex)
         {

@@ -157,8 +157,8 @@ public class OutlookComProviderService : IOutlookComProviderService
 
             var messages = await graphClient.Me.Messages.GetAsync(config =>
             {
+                // $orderby is not supported with $search — sort client-side instead
                 config.QueryParameters.Top = (fromDate.HasValue || toDate.HasValue) ? count * 3 : count;
-                config.QueryParameters.Orderby = ["receivedDateTime desc"];
                 config.QueryParameters.Select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "bodyPreview"];
                 config.QueryParameters.Search = $"\"{query}\"";
             }, cancellationToken);
@@ -197,9 +197,9 @@ public class OutlookComProviderService : IOutlookComProviderService
                 }
             }
 
-            _logger.LogInformation("Search returned {Count} emails from Outlook.com account {AccountId} for query '{Query}'", 
+            _logger.LogInformation("Search returned {Count} emails from Outlook.com account {AccountId} for query '{Query}'",
                 result.Count, accountId, query);
-            return result;
+            return result.OrderByDescending(e => e.ReceivedDateTime);
         }
         catch (Exception ex)
         {
