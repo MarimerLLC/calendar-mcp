@@ -152,10 +152,14 @@ public class Program
         var app = builder.Build();
 
         // Trust forwarded headers from reverse proxies (e.g., Tailscale Ingress)
-        app.UseForwardedHeaders(new ForwardedHeadersOptions
+        // KnownNetworks/KnownProxies are cleared so cluster-internal proxies are trusted
+        var forwardedHeadersOptions = new ForwardedHeadersOptions
         {
             ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
-        });
+        };
+        forwardedHeadersOptions.KnownIPNetworks.Clear();
+        forwardedHeadersOptions.KnownProxies.Clear();
+        app.UseForwardedHeaders(forwardedHeadersOptions);
         app.MapStaticAssets();
         app.UseAuthentication();
         app.UseAuthorization();
