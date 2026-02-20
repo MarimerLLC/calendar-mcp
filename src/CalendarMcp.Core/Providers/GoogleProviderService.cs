@@ -652,14 +652,15 @@ public class GoogleProviderService : IGoogleProviderService
     }
 
     public async Task<string> CreateEventAsync(
-        string accountId, 
-        string? calendarId, 
-        string subject, 
-        DateTime start, 
-        DateTime end, 
-        string? location = null, 
-        List<string>? attendees = null, 
-        string? body = null, 
+        string accountId,
+        string? calendarId,
+        string subject,
+        DateTime start,
+        DateTime end,
+        string? location = null,
+        List<string>? attendees = null,
+        string? body = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -681,12 +682,12 @@ public class GoogleProviderService : IGoogleProviderService
                 Start = new EventDateTime
                 {
                     DateTimeDateTimeOffset = new DateTimeOffset(start),
-                    TimeZone = TimeZoneInfo.Local.Id
+                    TimeZone = timeZone ?? "UTC"
                 },
                 End = new EventDateTime
                 {
                     DateTimeDateTimeOffset = new DateTimeOffset(end),
-                    TimeZone = TimeZoneInfo.Local.Id
+                    TimeZone = timeZone ?? "UTC"
                 }
             };
 

@@ -16,13 +16,13 @@ public sealed class GetCalendarEventsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetCalendarEventsTool> logger)
 {
-    [McpServerTool, Description("Get events (past/present/future) for specific account or all accounts")]
+    [McpServerTool, Description("Get calendar events for a date range from one or all accounts. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start, end, location, attendees, isAllDay, organizer. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
     public async Task<string> GetCalendarEvents(
-        [Description("Start date for event range (ISO 8601 format); defaults to today if omitted")] DateTime? startDate = null,
-        [Description("End date for event range (ISO 8601 format); defaults to 7 days after startDate if omitted")] DateTime? endDate = null,
-        [Description("Specific account ID, or omit for all accounts")] string? accountId = null,
-        [Description("Specific calendar ID, or omit for all calendars")] string? calendarId = null,
-        [Description("Maximum number of events to retrieve")] int count = 50)
+        [Description("Start of the date range (ISO 8601 format, e.g. '2026-02-20'). Defaults to today.")] DateTime? startDate = null,
+        [Description("End of the date range (ISO 8601 format, e.g. '2026-02-27'). Defaults to 7 days after startDate.")] DateTime? endDate = null,
+        [Description("Account ID to query, or omit to query all accounts. Obtain from list_accounts.")] string? accountId = null,
+        [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars.")] string? calendarId = null,
+        [Description("Maximum number of events to return per account (default 50)")] int count = 50)
     {
         var resolvedStart = startDate ?? DateTime.Today;
         var resolvedEnd = endDate ?? resolvedStart.AddDays(7);

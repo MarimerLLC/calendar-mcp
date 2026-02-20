@@ -14,7 +14,7 @@ public sealed class ListAccountsTool(
     IAccountRegistry accountRegistry,
     ILogger<ListAccountsTool> logger)
 {
-    [McpServerTool, Description("Get list of all configured accounts across all providers")]
+    [McpServerTool, Description("List all configured email and calendar accounts. Returns accountId, provider, displayName, and domains for each. Use the accountId values when calling other tools to scope operations to a specific account.")]
     public async Task<string> ListAccounts()
     {
         logger.LogInformation("Listing all accounts");

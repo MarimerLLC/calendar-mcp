@@ -17,8 +17,8 @@ public sealed class GetEmailDetailsTool(
 {
     [McpServerTool, Description("Get full email content including body and attachments for a specific email")]
     public async Task<string> GetEmailDetails(
-        [Description("Account ID (required)")] string accountId,
-        [Description("Email message ID (required)")] string emailId)
+        [Description("Account ID that owns the email. Obtain from the accountId field returned by get_emails or search_emails.")] string accountId,
+        [Description("Email message ID. Obtain from the id field returned by get_emails or search_emails.")] string emailId)
     {
         logger.LogInformation("Getting email details: accountId={AccountId}, emailId={EmailId}",
             accountId, emailId);

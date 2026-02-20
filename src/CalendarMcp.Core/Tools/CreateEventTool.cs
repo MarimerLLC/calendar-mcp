@@ -15,16 +15,17 @@ public sealed class CreateEventTool(
     IProviderServiceFactory providerFactory,
     ILogger<CreateEventTool> logger)
 {
-    [McpServerTool, Description("Create calendar event in specific calendar (requires explicit account selection or smart routing)")]
+    [McpServerTool, Description("Create a calendar event. Always pass the timeZone parameter using the user's local IANA timezone (e.g. 'America/Chicago', 'America/New_York', 'Europe/London') so events are created at the correct local time. Requires explicit account selection or smart routing.")]
     public async Task<string> CreateEvent(
         [Description("Event subject/title")] string subject,
         [Description("Event start date and time (ISO 8601 format)")] DateTime start,
         [Description("Event end date and time (ISO 8601 format)")] DateTime end,
-        [Description("Specific account ID, or omit for smart routing")] string? accountId = null,
-        [Description("Specific calendar ID, or omit for default calendar")] string? calendarId = null,
+        [Description("Account ID to create the event in. Omitting uses the first configured account — provide explicitly to target the correct account. Obtain from list_accounts.")] string? accountId = null,
+        [Description("Calendar ID to create the event in, or omit for the default calendar. Obtain from list_calendars.")] string? calendarId = null,
         [Description("Event location")] string? location = null,
         [Description("List of attendee email addresses")] List<string>? attendees = null,
-        [Description("Event description/body")] string? body = null)
+        [Description("Event description/body")] string? body = null,
+        [Description("IANA timezone name for the event (e.g. 'America/Chicago', 'America/New_York', 'Europe/London'). Required to create events at the correct local time.")] string? timeZone = null)
     {
         // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
         body = StripCdataWrapper(body);
@@ -66,7 +67,7 @@ public sealed class CreateEventTool(
             // Create event
             var provider = providerFactory.GetProvider(account.Provider);
             var eventId = await provider.CreateEventAsync(
-                account.Id, calendarId, subject, start, end, location, attendees, body, CancellationToken.None);
+                account.Id, calendarId, subject, start, end, location, attendees, body, timeZone, CancellationToken.None);
 
             var result = new
             {

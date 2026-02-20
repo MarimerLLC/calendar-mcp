@@ -15,11 +15,11 @@ public sealed class DeleteEventTool(
     IProviderServiceFactory providerFactory,
     ILogger<DeleteEventTool> logger)
 {
-    [McpServerTool, Description("Delete a calendar event (requires organizer permissions or edit access)")]
+    [McpServerTool, Description("Delete a calendar event. Always pass accountId — without it, the first configured account is used which may be wrong. Obtain eventId and accountId from get_calendar_events or get_calendar_event_details before calling this tool.")]
     public async Task<string> DeleteEvent(
-        [Description("Event ID to delete")] string eventId,
-        [Description("Specific account ID, or omit for smart routing")] string? accountId = null,
-        [Description("Specific calendar ID, or omit for default calendar")] string? calendarId = null)
+        [Description("Event ID to delete. Must be obtained from get_calendar_events or get_calendar_event_details.")] string eventId,
+        [Description("Account ID that owns the event. Always provide this — omitting it routes to the first account, which may not own the event.")] string? accountId = null,
+        [Description("Calendar ID containing the event, or omit for default calendar")] string? calendarId = null)
     {
         logger.LogInformation("Deleting event: eventId={EventId}, accountId={AccountId}, calendarId={CalendarId}",
             eventId, accountId, calendarId);

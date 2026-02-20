@@ -36,11 +36,11 @@ public sealed partial class GetContextualEmailSummaryTool(
     [McpServerTool(Name = "get_contextual_email_summary"), 
      Description("Get a contextual, topic-grouped summary of emails across all accounts with persona detection and account mismatch analysis. Returns clustered results showing which topics span which accounts, identifies emails that may have been sent to the wrong account, and provides context about which 'persona' senders are addressing.")]
     public async Task<string> GetContextualEmailSummary(
-        [Description("Optional topic keywords to focus on (comma-separated). If omitted, analyzes all recent emails.")] string? topics = null,
-        [Description("Number of emails to analyze per account (default 50)")] int countPerAccount = 50,
-        [Description("Only analyze unread emails")] bool unreadOnly = false,
-        [Description("Include full body preview in results")] bool includeBodyPreview = false,
-        [Description("Maximum sample emails per topic cluster (default 5)")] int maxSamplesPerCluster = 5)
+        [Description("Topic keywords to focus on, comma-separated (e.g. 'invoice, budget'). If omitted, analyzes all recent emails across built-in topic categories.")] string? topics = null,
+        [Description("Number of emails to fetch per account for analysis (default 50)")] int countPerAccount = 50,
+        [Description("If true, only analyze unread emails")] bool unreadOnly = false,
+        [Description("If true, include a 150-character body preview for each sample email in the results")] bool includeBodyPreview = false,
+        [Description("Maximum number of sample emails to include per topic cluster (default 5)")] int maxSamplesPerCluster = 5)
     {
         logger.LogInformation(
             "Getting contextual email summary: topics={Topics}, countPerAccount={Count}, unreadOnly={UnreadOnly}",

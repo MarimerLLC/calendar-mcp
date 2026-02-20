@@ -15,14 +15,14 @@ public sealed class SendEmailTool(
     IProviderServiceFactory providerFactory,
     ILogger<SendEmailTool> logger)
 {
-    [McpServerTool, Description("Send email from specific account (requires explicit account selection or smart routing)")]
+    [McpServerTool, Description("Send an email. If accountId is omitted, smart routing selects the account whose domains match the recipient's email domain; if no match, the first configured account is used. Provide accountId explicitly to guarantee which account sends the message.")]
     public async Task<string> SendEmail(
         [Description("Recipient email address")] string to,
-        [Description("Email subject")] string subject,
-        [Description("Email body content")] string body,
-        [Description("Specific account ID, or omit for smart routing")] string? accountId = null,
-        [Description("Body format: 'html' or 'text'")] string bodyFormat = "html",
-        [Description("CC recipients")] List<string>? cc = null)
+        [Description("Email subject line")] string subject,
+        [Description("Email body content. Use HTML when bodyFormat is 'html' (the default).")] string body,
+        [Description("Account ID to send from. Omit to use smart routing (matches recipient domain to account domains, then falls back to first account). Obtain from list_accounts.")] string? accountId = null,
+        [Description("Body content format: 'html' (default) or 'text'")] string bodyFormat = "html",
+        [Description("CC recipient email addresses")] List<string>? cc = null)
     {
         // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
         body = StripCdataWrapper(body);

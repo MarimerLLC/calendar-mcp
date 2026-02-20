@@ -17,9 +17,9 @@ public sealed class MarkEmailAsReadTool(
 {
     [McpServerTool, Description("Mark an email as read or unread")]
     public async Task<string> MarkEmailAsRead(
-        [Description("Account ID (required)")] string accountId,
-        [Description("Email message ID to mark (required)")] string emailId,
-        [Description("True to mark as read, false to mark as unread (required)")] bool isRead)
+        [Description("Account ID that owns the email. Obtain from the accountId field returned by get_emails or search_emails.")] string accountId,
+        [Description("Email message ID to mark. Obtain from the id field returned by get_emails or search_emails.")] string emailId,
+        [Description("True to mark as read, false to mark as unread")] bool isRead)
     {
         logger.LogInformation("Marking email as read: accountId={AccountId}, emailId={EmailId}, isRead={IsRead}",
             accountId, emailId, isRead);

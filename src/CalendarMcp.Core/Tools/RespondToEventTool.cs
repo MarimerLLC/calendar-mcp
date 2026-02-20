@@ -15,13 +15,13 @@ public sealed class RespondToEventTool(
     IProviderServiceFactory providerFactory,
     ILogger<RespondToEventTool> logger)
 {
-    [McpServerTool, Description("Respond to a calendar event invitation with accept, tentative, or decline")]
+    [McpServerTool, Description("Accept, tentatively accept, or decline a calendar event invitation. Always pass accountId — without it, the first configured account is used which may be wrong. Obtain eventId and accountId from get_calendar_events or get_calendar_event_details before calling this tool.")]
     public async Task<string> RespondToEvent(
-        [Description("Event ID to respond to")] string eventId,
-        [Description("Response type: 'accept', 'tentative', or 'decline'")] string response,
-        [Description("Specific account ID, or omit for smart routing")] string? accountId = null,
-        [Description("Specific calendar ID, or omit for default calendar")] string? calendarId = null,
-        [Description("Optional comment to include with response")] string? comment = null)
+        [Description("Event ID to respond to. Must be obtained from get_calendar_events or get_calendar_event_details.")] string eventId,
+        [Description("Response: 'accept', 'tentative', or 'decline'")] string response,
+        [Description("Account ID that received the invitation. Always provide this — omitting it routes to the first account, which may not have the event.")] string? accountId = null,
+        [Description("Calendar ID containing the event, or omit for default calendar")] string? calendarId = null,
+        [Description("Optional message to include with the response")] string? comment = null)
     {
         logger.LogInformation("Responding to event: eventId={EventId}, response={Response}, accountId={AccountId}, calendarId={CalendarId}",
             eventId, response, accountId, calendarId);

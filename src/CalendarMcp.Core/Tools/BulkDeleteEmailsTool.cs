@@ -21,7 +21,7 @@ public sealed class BulkDeleteEmailsTool(
 
     [McpServerTool, Description("Delete multiple emails in a single batch operation. More efficient than calling delete_email repeatedly.")]
     public async Task<string> BulkDeleteEmails(
-        [Description("Array of emails to delete, each with 'accountId' and 'emailId'. Maximum 50 items.")] BulkEmailItem[] items)
+        [Description("Array of emails to delete, each with 'accountId' and 'emailId'. Maximum 50 items. Obtain values from get_emails or search_emails.")] BulkEmailItem[] items)
     {
         logger.LogInformation("Bulk deleting emails");
 

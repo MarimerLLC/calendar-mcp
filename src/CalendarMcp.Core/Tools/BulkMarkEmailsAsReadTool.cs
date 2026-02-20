@@ -21,8 +21,8 @@ public sealed class BulkMarkEmailsAsReadTool(
 
     [McpServerTool, Description("Mark multiple emails as read or unread in a single batch operation. More efficient than calling mark_email_as_read repeatedly.")]
     public async Task<string> BulkMarkEmailsAsRead(
-        [Description("Array of emails to mark, each with 'accountId' and 'emailId'. Maximum 50 items.")] BulkEmailItem[] items,
-        [Description("True to mark as read, false to mark as unread (required)")] bool isRead)
+        [Description("Array of emails to mark, each with 'accountId' and 'emailId'. Maximum 50 items. Obtain values from get_emails or search_emails.")] BulkEmailItem[] items,
+        [Description("True to mark as read, false to mark as unread")] bool isRead)
     {
         logger.LogInformation("Bulk marking emails as {ReadStatus}", isRead ? "read" : "unread");
 

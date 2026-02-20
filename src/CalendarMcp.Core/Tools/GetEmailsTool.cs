@@ -16,11 +16,11 @@ public sealed class GetEmailsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetEmailsTool> logger)
 {
-    [McpServerTool, Description("Get emails (unread/read, filtered by count) for specific account or all accounts")]
+    [McpServerTool, Description("Get recent emails from one or all accounts, sorted newest first. Returns id, accountId, subject, from, receivedDateTime, isRead, hasAttachments. Use get_email_details for full body content. Use accountId from list_accounts to scope to a specific account.")]
     public async Task<string> GetEmails(
-        [Description("Specific account ID, or omit for all accounts")] string? accountId = null,
-        [Description("Number of emails to retrieve")] int count = 20,
-        [Description("Only return unread emails")] bool unreadOnly = false)
+        [Description("Account ID to query, or omit for all accounts. Obtain from list_accounts.")] string? accountId = null,
+        [Description("Maximum number of emails to return per account (default 20)")] int count = 20,
+        [Description("If true, only return unread emails")] bool unreadOnly = false)
     {
         logger.LogInformation("Getting emails: accountId={AccountId}, count={Count}, unreadOnly={UnreadOnly}",
             accountId, count, unreadOnly);

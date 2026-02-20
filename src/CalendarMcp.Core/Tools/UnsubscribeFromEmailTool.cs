@@ -19,9 +19,9 @@ public sealed class UnsubscribeFromEmailTool(
 {
     [McpServerTool, Description("Unsubscribe from an email mailing list using List-Unsubscribe headers (RFC 2369/8058). Supports one-click POST, returning HTTPS link, or sending mailto unsubscribe.")]
     public async Task<string> UnsubscribeFromEmail(
-        [Description("Account ID (required)")] string accountId,
-        [Description("Email message ID (required)")] string emailId,
-        [Description("Unsubscribe method: 'auto' (default, tries one-click then https then mailto), 'one-click', 'https', or 'mailto'")] string method = "auto")
+        [Description("Account ID that owns the email. Obtain from the accountId field returned by get_emails or search_emails.")] string accountId,
+        [Description("Email message ID. Obtain from the id field returned by get_emails or search_emails.")] string emailId,
+        [Description("Unsubscribe method: 'auto' (default — tries one-click POST, then returns HTTPS link, then sends mailto), 'one-click' (RFC 8058 POST), 'https' (returns URL for user to open), or 'mailto' (sends unsubscribe email)")] string method = "auto")
     {
         logger.LogInformation("Unsubscribe request: accountId={AccountId}, emailId={EmailId}, method={Method}",
             accountId, emailId, method);

@@ -17,8 +17,8 @@ public sealed class DeleteEmailTool(
 {
     [McpServerTool, Description("Delete an email from a specific account")]
     public async Task<string> DeleteEmail(
-        [Description("Account ID (required)")] string accountId,
-        [Description("Email message ID to delete (required)")] string emailId)
+        [Description("Account ID that owns the email. Obtain from list_accounts or from the accountId field returned by get_emails or search_emails.")] string accountId,
+        [Description("Email message ID to delete. Obtain from get_emails or search_emails.")] string emailId)
     {
         logger.LogInformation("Deleting email: accountId={AccountId}, emailId={EmailId}",
             accountId, emailId);

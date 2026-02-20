@@ -16,11 +16,11 @@ public sealed class GetCalendarEventDetailsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetCalendarEventDetailsTool> logger)
 {
-    [McpServerTool, Description("Get full calendar event details including attendee responses, free/busy status, recurrence info, and online meeting details")]
+    [McpServerTool, Description("Get full details for a single calendar event including attendee responses, free/busy status, recurrence pattern, and online meeting link. Use this after get_calendar_events to fetch richer data for a specific event.")]
     public async Task<string> GetCalendarEventDetails(
-        [Description("Account ID (required)")] string accountId,
-        [Description("Calendar ID (use 'primary' for default calendar)")] string calendarId,
-        [Description("Event ID (required)")] string eventId)
+        [Description("Account ID from get_calendar_events")] string accountId,
+        [Description("Calendar ID from get_calendar_events, or 'primary' for the default calendar")] string calendarId,
+        [Description("Event ID from get_calendar_events")] string eventId)
     {
         logger.LogInformation("Getting calendar event details: accountId={AccountId}, calendarId={CalendarId}, eventId={EventId}",
             accountId, calendarId, eventId);

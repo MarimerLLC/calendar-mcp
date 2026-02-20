@@ -16,13 +16,13 @@ public sealed class SearchEmailsTool(
     IProviderServiceFactory providerFactory,
     ILogger<SearchEmailsTool> logger)
 {
-    [McpServerTool, Description("Search emails by sender/subject/criteria for specific account or all accounts")]
+    [McpServerTool, Description("Search emails by keyword across one or all accounts. Returns id, accountId, subject, from, receivedDateTime, isRead, hasAttachments. Use get_email_details for full body content.")]
     public async Task<string> SearchEmails(
-        [Description("Search query string")] string query,
-        [Description("Specific account ID, or omit for all accounts")] string? accountId = null,
-        [Description("Number of emails to retrieve")] int count = 20,
-        [Description("Start date for search (ISO 8601 format)")] DateTime? fromDate = null,
-        [Description("End date for search (ISO 8601 format)")] DateTime? toDate = null)
+        [Description("Full-text search query (searches subject and body). Supports keywords, sender addresses, and phrases.")] string query,
+        [Description("Account ID to search, or omit for all accounts. Obtain from list_accounts.")] string? accountId = null,
+        [Description("Maximum number of results to return per account (default 20)")] int count = 20,
+        [Description("Only return emails received on or after this date (ISO 8601 format, e.g. '2026-02-01')")] DateTime? fromDate = null,
+        [Description("Only return emails received on or before this date (ISO 8601 format, e.g. '2026-02-28')")] DateTime? toDate = null)
     {
         logger.LogInformation("Searching emails: query={Query}, accountId={AccountId}, count={Count}",
             query, accountId, count);

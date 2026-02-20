@@ -17,8 +17,8 @@ public sealed class GetUnsubscribeInfoTool(
 {
     [McpServerTool, Description("Check if an email supports list unsubscribe (RFC 2369/8058). Returns available unsubscribe methods.")]
     public async Task<string> GetUnsubscribeInfo(
-        [Description("Account ID (required)")] string accountId,
-        [Description("Email message ID (required)")] string emailId)
+        [Description("Account ID that owns the email. Obtain from the accountId field returned by get_emails or search_emails.")] string accountId,
+        [Description("Email message ID. Obtain from the id field returned by get_emails or search_emails.")] string emailId)
     {
         logger.LogInformation("Getting unsubscribe info: accountId={AccountId}, emailId={EmailId}",
             accountId, emailId);

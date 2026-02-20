@@ -796,14 +796,15 @@ public class OutlookComProviderService : IOutlookComProviderService
     }
 
     public async Task<string> CreateEventAsync(
-        string accountId, 
-        string? calendarId, 
-        string subject, 
-        DateTime start, 
-        DateTime end, 
-        string? location = null, 
-        List<string>? attendees = null, 
-        string? body = null, 
+        string accountId,
+        string? calendarId,
+        string subject,
+        DateTime start,
+        DateTime end,
+        string? location = null,
+        List<string>? attendees = null,
+        string? body = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
@@ -823,12 +824,12 @@ public class OutlookComProviderService : IOutlookComProviderService
                 Start = new DateTimeTimeZone
                 {
                     DateTime = start.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = TimeZoneInfo.Local.Id
+                    TimeZone = timeZone ?? "UTC"
                 },
                 End = new DateTimeTimeZone
                 {
                     DateTime = end.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = TimeZoneInfo.Local.Id
+                    TimeZone = timeZone ?? "UTC"
                 }
             };
 
