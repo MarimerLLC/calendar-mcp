@@ -26,7 +26,7 @@ public class CreateEventToolTests
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.CreateEventAsync(
             "acc-1", Arg.Any<string?>(), "Meeting", Arg.Any<DateTime>(), Arg.Any<DateTime>(),
-            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult("new-event-id"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -76,7 +76,7 @@ public class CreateEventToolTests
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.CreateEventAsync(
             "acc-1", Arg.Any<string?>(), "Meeting", Arg.Any<DateTime>(), Arg.Any<DateTime>(),
-            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult("ev-id"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
