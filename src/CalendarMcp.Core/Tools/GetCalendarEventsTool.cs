@@ -18,14 +18,17 @@ public sealed class GetCalendarEventsTool(
 {
     [McpServerTool, Description("Get events (past/present/future) for specific account or all accounts")]
     public async Task<string> GetCalendarEvents(
-        [Description("Start date for event range (ISO 8601 format)")] DateTime startDate,
-        [Description("End date for event range (ISO 8601 format)")] DateTime endDate,
+        [Description("Start date for event range (ISO 8601 format); defaults to today if omitted")] DateTime? startDate = null,
+        [Description("End date for event range (ISO 8601 format); defaults to 7 days after startDate if omitted")] DateTime? endDate = null,
         [Description("Specific account ID, or omit for all accounts")] string? accountId = null,
         [Description("Specific calendar ID, or omit for all calendars")] string? calendarId = null,
         [Description("Maximum number of events to retrieve")] int count = 50)
     {
+        var resolvedStart = startDate ?? DateTime.Today;
+        var resolvedEnd = endDate ?? resolvedStart.AddDays(7);
+
         logger.LogInformation("Getting calendar events: startDate={StartDate}, endDate={EndDate}, accountId={AccountId}, count={Count}",
-            startDate, endDate, accountId, count);
+            resolvedStart, resolvedEnd, accountId, count);
 
         try
         {
@@ -52,7 +55,7 @@ public sealed class GetCalendarEventsTool(
                 {
                     var provider = providerFactory.GetProvider(account!.Provider);
                     var events = await provider.GetCalendarEventsAsync(
-                        account.Id, calendarId, startDate, endDate, count, CancellationToken.None);
+                        account.Id, calendarId, resolvedStart, resolvedEnd, count, CancellationToken.None);
                     return events;
                 }
                 catch (Exception ex)
@@ -90,7 +93,7 @@ public sealed class GetCalendarEventsTool(
             };
 
             logger.LogInformation("Retrieved {Count} events from {AccountCount} accounts between {Start} and {End}",
-                allEvents.Count, validAccounts.Count, startDate, endDate);
+                allEvents.Count, validAccounts.Count, resolvedStart, resolvedEnd);
 
             return JsonSerializer.Serialize(response, new JsonSerializerOptions
             {
