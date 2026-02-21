@@ -28,6 +28,7 @@ Create **one multi-tenant app registration** to use across all M365 tenants:
      - `Mail.Read`
      - `Mail.Send`
      - `Calendars.ReadWrite`
+     - `Contacts.ReadWrite`
    - Click "Grant admin consent" (if you have permissions)
 9. **Important**: Each tenant admin must consent when their users first authenticate
 
@@ -64,7 +65,7 @@ Create **one OAuth client** to use across all Google accounts:
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com)
 2. Create new project (or use existing)
-3. Enable APIs: Gmail API, Google Calendar API
+3. Enable APIs: Gmail API, Google Calendar API, People API
 4. Go to "Credentials" → Create credentials → OAuth client ID
 5. Application type: "Desktop app"
 6. Name: "Calendar-MCP"
@@ -73,6 +74,7 @@ Create **one OAuth client** to use across all Google accounts:
    - `gmail.readonly`
    - `gmail.send`
    - `calendar`
+   - `contacts`
 
 **Pros**: Simple, one set of credentials for all accounts, works for personal and most Workspace accounts
 **Cons**: May not work if Workspace admin restricts external OAuth apps
@@ -118,17 +120,17 @@ calendar-mcp-setup add-account
 # For Microsoft 365:
 #   6. Tenant ID
 #   7. Client ID
-#   8. Scopes (default: Mail.Read,Mail.Send,Calendars.ReadWrite)
+#   8. Scopes (default: Mail.Read,Mail.Send,Calendars.ReadWrite,Contacts.ReadWrite)
 #
 # For Google:
 #   6. Client ID
 #   7. Client Secret
 #   8. User Email
-#   9. Scopes (default: gmail.readonly,gmail.send,calendar)
+#   9. Scopes (default: gmail.readonly,gmail.send,calendar,contacts)
 #
 # For Outlook.com:
 #   6. Client ID
-#   7. Scopes (default: Mail.Read,Mail.Send,Calendars.ReadWrite)
+#   7. Scopes (default: Mail.Read,Mail.Send,Calendars.ReadWrite,Contacts.ReadWrite)
 #
 # → Opens browser for OAuth authentication
 # → Saves token to credential store
@@ -237,7 +239,7 @@ Stored in `appsettings.json`:
       "configuration": {
         "tenantId": "12345678-1234-1234-1234-123456789abc",
         "clientId": "87654321-4321-4321-4321-cba987654321",
-        "scopes": ["Mail.Read", "Mail.Send", "Calendars.ReadWrite"]
+        "scopes": ["Mail.Read", "Mail.Send", "Calendars.ReadWrite", "Contacts.ReadWrite"]
       }
     }
   ]

@@ -76,7 +76,7 @@ Create **separate OAuth clients** for each Workspace organization.
 
 ### Step 2: Enable Required APIs
 
-You need to enable both Gmail and Google Calendar APIs.
+You need to enable the Gmail, Google Calendar, and Google People APIs.
 
 #### Enable Gmail API
 
@@ -91,6 +91,14 @@ You need to enable both Gmail and Google Calendar APIs.
 1. Stay in **"APIs & Services"** → **"Library"**
 2. Search for `Google Calendar API`
 3. Click on **"Google Calendar API"**
+4. Click **"Enable"**
+5. Wait for the API to be enabled
+
+#### Enable People API
+
+1. Stay in **"APIs & Services"** → **"Library"**
+2. Search for `People API`
+3. Click on **"People API"**
 4. Click **"Enable"**
 5. Wait for the API to be enabled
 
@@ -131,6 +139,7 @@ You need to enable both Gmail and Google Calendar APIs.
    - `https://www.googleapis.com/auth/gmail.modify` - Modify emails (move, delete, mark read/unread)
    - `https://www.googleapis.com/auth/calendar.readonly` - Read calendar
    - `https://www.googleapis.com/auth/calendar.events` - Manage calendar events
+   - `https://www.googleapis.com/auth/contacts` - Read and manage contacts
 
 3. Click **"Update"**
 4. Click **"Save and Continue"**
@@ -251,6 +260,7 @@ After entering details:
    - Read email
    - Send email
    - Manage calendar
+   - Manage contacts
 4. Click **"Allow"**
 5. Browser will show "Authentication complete" or similar message
 6. Return to CLI - authentication is complete
@@ -413,14 +423,15 @@ Submit your app for Google verification (requires review process).
 
 ### Error: "API not enabled"
 
-**Cause:** Gmail or Calendar API not enabled in the project.
+**Cause:** Gmail, Calendar, or People API not enabled in the project.
 
 **Solution:**
 1. Go to Google Cloud Console → APIs & Services → Library
 2. Search and enable "Gmail API"
 3. Search and enable "Google Calendar API"
-4. Wait a few minutes for changes to propagate
-5. Try authentication again
+4. Search and enable "People API"
+5. Wait a few minutes for changes to propagate
+6. Try authentication again
 
 ### Error: "Insufficient permissions"
 
@@ -499,4 +510,5 @@ For service accounts with domain-wide delegation:
 - [Google Cloud Console](https://console.cloud.google.com)
 - [Gmail API Documentation](https://developers.google.com/gmail/api)
 - [Google Calendar API Documentation](https://developers.google.com/calendar)
+- [People API Documentation](https://developers.google.com/people)
 - [OAuth 2.0 Documentation](https://developers.google.com/identity/protocols/oauth2)

@@ -261,6 +261,7 @@ Before using the CLI for Microsoft accounts, you need to create an Azure AD App 
      - `Mail.Read`
      - `Mail.Send`
      - `Calendars.ReadWrite`
+     - `Contacts.ReadWrite`
    - Grant admin consent (if required by your organization)
 6. **Authentication** tab:
    - Enable "Allow public client flows" to Yes
@@ -274,6 +275,7 @@ Before using the CLI for Google accounts, you need to create OAuth 2.0 credentia
 3. Enable the following APIs:
    - Gmail API
    - Google Calendar API
+   - People API
 4. Navigate to **APIs & Services** > **Credentials**
 5. Click **Create Credentials** > **OAuth client ID**
 6. Configure:
@@ -290,6 +292,7 @@ Before using the CLI for Google accounts, you need to create OAuth 2.0 credentia
      - `https://www.googleapis.com/auth/gmail.compose`
      - `https://www.googleapis.com/auth/calendar.readonly`
      - `https://www.googleapis.com/auth/calendar.events`
+     - `https://www.googleapis.com/auth/contacts`
 
 ## Troubleshooting
 

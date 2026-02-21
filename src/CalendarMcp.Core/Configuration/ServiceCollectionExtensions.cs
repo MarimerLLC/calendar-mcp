@@ -63,7 +63,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RespondToEventTool>();
         services.AddSingleton<GetUnsubscribeInfoTool>();
         services.AddSingleton<UnsubscribeFromEmailTool>();
-        
+        services.AddSingleton<GetContactsTool>();
+        services.AddSingleton<SearchContactsTool>();
+        services.AddSingleton<GetContactDetailsTool>();
+        services.AddSingleton<CreateContactTool>();
+        services.AddSingleton<UpdateContactTool>();
+        services.AddSingleton<DeleteContactTool>();
+
         return services;
     }
 }

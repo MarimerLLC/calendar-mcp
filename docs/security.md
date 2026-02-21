@@ -371,6 +371,7 @@ var emails = await _m365Provider.GetEmailsAsync("work-account", ...);
 **Request minimal scopes**:
 - ✅ Mail.Read (not Mail.ReadWrite if only reading)
 - ✅ Calendars.ReadWrite (only if writing calendar events)
+- ✅ Contacts.ReadWrite (only if managing contacts)
 - ❌ Don't request User.Read.All if not needed
 
 **Per-account scopes**:
@@ -378,7 +379,7 @@ var emails = await _m365Provider.GetEmailsAsync("work-account", ...);
 {
   "accounts": [{
     "id": "readonly-account",
-    "scopes": ["Mail.Read", "Calendars.Read"]  // No write permissions
+    "scopes": ["Mail.Read", "Calendars.Read", "Contacts.Read"]  // No write permissions
   }]
 }
 ```

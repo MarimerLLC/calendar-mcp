@@ -5,10 +5,14 @@ using Google.Apis.Calendar.v3;
 using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Gmail.v1;
 using Google.Apis.Gmail.v1.Data;
+using Google.Apis.PeopleService.v1;
+using Google.Apis.PeopleService.v1.Data;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
 using System.Text;
+using Person = Google.Apis.PeopleService.v1.Data.Person;
+using Event = Google.Apis.Calendar.v3.Data.Event;
 
 namespace CalendarMcp.Core.Providers;
 
@@ -21,6 +25,8 @@ public class GoogleProviderService : IGoogleProviderService
     private readonly IAccountRegistry _accountRegistry;
 
     private static readonly string[] DefaultScopes = Constants.GoogleScopes.Default;
+
+    private const string PersonFields = "names,emailAddresses,phoneNumbers,addresses,organizations,biographies,birthdays,memberships,metadata";
 
     public GoogleProviderService(
         ILogger<GoogleProviderService> logger,
@@ -115,6 +121,15 @@ public class GoogleProviderService : IGoogleProviderService
     private CalendarService CreateCalendarService(UserCredential credential)
     {
         return new CalendarService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = "CalendarMcp"
+        });
+    }
+
+    private PeopleServiceService CreatePeopleService(UserCredential credential)
+    {
+        return new PeopleServiceService(new BaseClientService.Initializer
         {
             HttpClientInitializer = credential,
             ApplicationName = "CalendarMcp"
@@ -872,6 +887,429 @@ public class GoogleProviderService : IGoogleProviderService
             throw;
         }
     }
+
+    #region Contact Operations
+
+    public async Task<IEnumerable<Models.Contact>> GetContactsAsync(
+        string accountId,
+        int count = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            return Enumerable.Empty<Models.Contact>();
+        }
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var request = service.People.Connections.List("people/me");
+            request.PersonFields = PersonFields;
+            request.PageSize = count;
+            request.SortOrder = PeopleResource.ConnectionsResource.ListRequest.SortOrderEnum.LASTMODIFIEDASCENDING;
+
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            if (response.Connections == null || response.Connections.Count == 0)
+            {
+                _logger.LogInformation("No contacts found for Google account {AccountId}", accountId);
+                return Enumerable.Empty<Models.Contact>();
+            }
+
+            var result = response.Connections
+                .Select(p => MapGooglePerson(p, accountId))
+                .ToList();
+
+            _logger.LogInformation("Retrieved {Count} contacts from Google account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching contacts from Google account {AccountId}", accountId);
+            return Enumerable.Empty<Models.Contact>();
+        }
+    }
+
+    public async Task<IEnumerable<Models.Contact>> SearchContactsAsync(
+        string accountId,
+        string query,
+        int count = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            return Enumerable.Empty<Models.Contact>();
+        }
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var request = service.People.SearchContacts();
+            request.Query = query;
+            request.ReadMask = PersonFields;
+            request.PageSize = count;
+
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            if (response.Results == null || response.Results.Count == 0)
+            {
+                _logger.LogInformation("No contacts found for search query '{Query}' in Google account {AccountId}", query, accountId);
+                return Enumerable.Empty<Models.Contact>();
+            }
+
+            var result = response.Results
+                .Where(r => r.Person != null)
+                .Select(r => MapGooglePerson(r.Person, accountId))
+                .ToList();
+
+            _logger.LogInformation("Search returned {Count} contacts from Google account {AccountId} for query '{Query}'",
+                result.Count, accountId, query);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching contacts from Google account {AccountId} with query '{Query}'", accountId, query);
+            return Enumerable.Empty<Models.Contact>();
+        }
+    }
+
+    public async Task<Models.Contact?> GetContactDetailsAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var resourceName = contactId.StartsWith("people/") ? contactId : $"people/{contactId}";
+            var request = service.People.Get(resourceName);
+            request.PersonFields = PersonFields;
+
+            var person = await request.ExecuteAsync(cancellationToken);
+
+            if (person == null)
+            {
+                return null;
+            }
+
+            var result = MapGooglePerson(person, accountId);
+            _logger.LogInformation("Retrieved contact details for {ContactId} from Google account {AccountId}", contactId, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting contact details for {ContactId} from Google account {AccountId}", contactId, accountId);
+            return null;
+        }
+    }
+
+    public async Task<string> CreateContactAsync(
+        string accountId,
+        string displayName,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            throw new InvalidOperationException($"Cannot create contact: No authentication credential for account {accountId}");
+        }
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var person = new Person
+            {
+                Names = new List<Name>
+                {
+                    new Name
+                    {
+                        DisplayName = displayName,
+                        GivenName = givenName ?? string.Empty,
+                        FamilyName = surname ?? string.Empty
+                    }
+                }
+            };
+
+            if (emailAddresses != null && emailAddresses.Count > 0)
+            {
+                person.EmailAddresses = emailAddresses.Select(e => new EmailAddress
+                {
+                    Value = e.Trim()
+                }).ToList();
+            }
+
+            if (phoneNumbers != null && phoneNumbers.Count > 0)
+            {
+                person.PhoneNumbers = phoneNumbers.Select(p => new PhoneNumber
+                {
+                    Value = p.Trim()
+                }).ToList();
+            }
+
+            if (!string.IsNullOrEmpty(jobTitle) || !string.IsNullOrEmpty(companyName))
+            {
+                person.Organizations = new List<Organization>
+                {
+                    new Organization
+                    {
+                        Title = jobTitle,
+                        Name = companyName
+                    }
+                };
+            }
+
+            if (!string.IsNullOrEmpty(notes))
+            {
+                person.Biographies = new List<Biography>
+                {
+                    new Biography { Value = notes }
+                };
+            }
+
+            var request = service.People.CreateContact(person);
+            var created = await request.ExecuteAsync(cancellationToken);
+
+            var contactId = created.ResourceName ?? string.Empty;
+            _logger.LogInformation("Created contact {ContactId} in Google account {AccountId}", contactId, accountId);
+            return contactId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating contact in Google account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task UpdateContactAsync(
+        string accountId,
+        string contactId,
+        string? displayName = null,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        string? etag = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            throw new InvalidOperationException($"Cannot update contact: No authentication credential for account {accountId}");
+        }
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var resourceName = contactId.StartsWith("people/") ? contactId : $"people/{contactId}";
+
+            // Fetch current contact to get etag if not provided
+            if (string.IsNullOrEmpty(etag))
+            {
+                var getRequest = service.People.Get(resourceName);
+                getRequest.PersonFields = PersonFields;
+                var current = await getRequest.ExecuteAsync(cancellationToken);
+                etag = current.ETag;
+            }
+
+            var person = new Person
+            {
+                ETag = etag
+            };
+
+            var updateFields = new List<string>();
+
+            if (!string.IsNullOrEmpty(displayName) || !string.IsNullOrEmpty(givenName) || !string.IsNullOrEmpty(surname))
+            {
+                person.Names = new List<Name>
+                {
+                    new Name
+                    {
+                        DisplayName = displayName ?? string.Empty,
+                        GivenName = givenName ?? string.Empty,
+                        FamilyName = surname ?? string.Empty
+                    }
+                };
+                updateFields.Add("names");
+            }
+
+            if (emailAddresses != null)
+            {
+                person.EmailAddresses = emailAddresses.Select(e => new EmailAddress
+                {
+                    Value = e.Trim()
+                }).ToList();
+                updateFields.Add("emailAddresses");
+            }
+
+            if (phoneNumbers != null)
+            {
+                person.PhoneNumbers = phoneNumbers.Select(p => new PhoneNumber
+                {
+                    Value = p.Trim()
+                }).ToList();
+                updateFields.Add("phoneNumbers");
+            }
+
+            if (!string.IsNullOrEmpty(jobTitle) || !string.IsNullOrEmpty(companyName))
+            {
+                person.Organizations = new List<Organization>
+                {
+                    new Organization
+                    {
+                        Title = jobTitle,
+                        Name = companyName
+                    }
+                };
+                updateFields.Add("organizations");
+            }
+
+            if (!string.IsNullOrEmpty(notes))
+            {
+                person.Biographies = new List<Biography>
+                {
+                    new Biography { Value = notes }
+                };
+                updateFields.Add("biographies");
+            }
+
+            if (updateFields.Count == 0)
+            {
+                _logger.LogWarning("No fields to update for contact {ContactId}", contactId);
+                return;
+            }
+
+            var request = service.People.UpdateContact(person, resourceName);
+            request.UpdatePersonFields = string.Join(",", updateFields);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Updated contact {ContactId} in Google account {AccountId}", contactId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating contact {ContactId} in Google account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    public async Task DeleteContactAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null)
+        {
+            throw new InvalidOperationException($"Cannot delete contact: No authentication credential for account {accountId}");
+        }
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var resourceName = contactId.StartsWith("people/") ? contactId : $"people/{contactId}";
+            var request = service.People.DeleteContact(resourceName);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Deleted contact {ContactId} from Google account {AccountId}", contactId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting contact {ContactId} from Google account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    private static Models.Contact MapGooglePerson(Person person, string accountId)
+    {
+        var name = person.Names?.FirstOrDefault();
+        var org = person.Organizations?.FirstOrDefault();
+
+        var emails = person.EmailAddresses?.Select(e => new ContactEmail
+        {
+            Address = e.Value ?? string.Empty,
+            Label = e.Type ?? "other"
+        }).ToList() ?? new List<ContactEmail>();
+
+        var phones = person.PhoneNumbers?.Select(p => new ContactPhone
+        {
+            Number = p.Value ?? string.Empty,
+            Label = p.Type ?? "other"
+        }).ToList() ?? new List<ContactPhone>();
+
+        var addresses = person.Addresses?.Select(a => new Models.ContactAddress
+        {
+            Street = a.StreetAddress ?? string.Empty,
+            City = a.City ?? string.Empty,
+            State = a.Region ?? string.Empty,
+            PostalCode = a.PostalCode ?? string.Empty,
+            Country = a.Country ?? string.Empty,
+            Label = a.Type ?? "other"
+        }).ToList() ?? new List<Models.ContactAddress>();
+
+        // Extract contact ID from resource name (e.g., "people/c1234567890")
+        var id = person.ResourceName ?? string.Empty;
+
+        DateTime? birthday = null;
+        var bday = person.Birthdays?.FirstOrDefault()?.Date;
+        if (bday != null && bday.Year.HasValue && bday.Month.HasValue && bday.Day.HasValue)
+        {
+            birthday = new DateTime(bday.Year.Value, bday.Month.Value, bday.Day.Value);
+        }
+
+        var groups = person.Memberships?
+            .Where(m => m.ContactGroupMembership != null)
+            .Select(m => m.ContactGroupMembership.ContactGroupId ?? string.Empty)
+            .Where(g => !string.IsNullOrEmpty(g))
+            .ToList() ?? new List<string>();
+
+        var metadata = person.Metadata?.Sources?.FirstOrDefault();
+
+        return new Models.Contact
+        {
+            Id = id,
+            AccountId = accountId,
+            DisplayName = name?.DisplayName ?? string.Empty,
+            GivenName = name?.GivenName ?? string.Empty,
+            Surname = name?.FamilyName ?? string.Empty,
+            EmailAddresses = emails,
+            PhoneNumbers = phones,
+            JobTitle = org?.Title ?? string.Empty,
+            CompanyName = org?.Name ?? string.Empty,
+            Department = org?.Department ?? string.Empty,
+            Addresses = addresses,
+            Birthday = birthday,
+            Notes = person.Biographies?.FirstOrDefault()?.Value ?? string.Empty,
+            Groups = groups,
+            Etag = person.ETag,
+            CreatedDateTime = null, // Google People API doesn't expose creation date directly
+            LastModifiedDateTime = metadata?.UpdateTimeDateTimeOffset?.DateTime
+        };
+    }
+
+    #endregion
 
     #region Helper Methods
 

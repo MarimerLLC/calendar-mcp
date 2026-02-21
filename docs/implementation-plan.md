@@ -52,6 +52,9 @@ This document outlines the phased implementation strategy for Calendar-MCP, from
     - `list_calendars`
     - `get_calendar_events`
     - `find_available_times`
+    - `get_contacts`
+    - `search_contacts`
+    - `get_contact_details`
 13. Implement workflow engine for multi-account aggregation
 14. Add OpenTelemetry instrumentation
 
@@ -116,6 +119,7 @@ This document outlines the phased implementation strategy for Calendar-MCP, from
 
 29. Implement `send_email` tool
 30. Implement `create_event` / `update_event` / `delete_event` tools
+31. Implement `create_contact` / `update_contact` / `delete_contact` tools
 31. Add smart routing for write operations
 32. Extensive testing of write operations
 

@@ -68,7 +68,7 @@ All tools implement the MCP protocol using:
 - All models defined
 - Service interfaces defined
 - Provider stubs created
-- All 7 MCP tools implemented
+- All 13 MCP tools implemented
 - Configuration system
 - DI registration
 
@@ -144,6 +144,7 @@ Based on the multi-head architecture pattern:
 - Microsoft.Identity.Client 4.66.2
 - Google.Apis.Gmail.v1 1.69.0.3742
 - Google.Apis.Calendar.v3 1.68.0.3592
+- Google.Apis.PeopleService.v1 1.69.0.3785
 - Google.Apis.Auth 1.69.0
 - Microsoft.Extensions.* 10.0.0
 

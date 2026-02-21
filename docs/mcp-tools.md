@@ -2,7 +2,7 @@
 
 ## Overview
 
-Calendar-MCP exposes tools through the Model Context Protocol (MCP) that AI assistants can use to query and manage emails and calendars across multiple accounts.
+Calendar-MCP exposes tools through the Model Context Protocol (MCP) that AI assistants can use to query and manage emails, calendars, and contacts across multiple accounts.
 
 ## Core Tools
 
@@ -387,11 +387,143 @@ Respond to a calendar event invitation with accept, tentative, or decline.
 - **delete_event**: Permanently removes the event from your calendar (requires organizer or edit permissions)
 - **respond_to_event (decline)**: Sends a decline response to the meeting organizer and removes it from your calendar (used when you're an attendee)
 
+### Contact Operations
+
+#### `get_contacts`
+Get contacts from specific account or all accounts.
+
+**Parameters**:
+- `accountId` (optional): Specific account ID, or omit for all accounts
+- `count` (default: 50): Number of contacts to retrieve
+
+**Returns**:
+```json
+{
+  "contacts": [
+    {
+      "id": "contact-123",
+      "accountId": "work-account",
+      "displayName": "Jane Doe",
+      "emailAddresses": ["jane@example.com"],
+      "phoneNumbers": ["555-0100"],
+      "companyName": "Acme Corp",
+      "jobTitle": "Engineer"
+    }
+  ]
+}
+```
+
+#### `search_contacts`
+Search contacts by name, email, company, or other criteria.
+
+**Parameters**:
+- `accountId` (optional): Specific account ID, or omit for all accounts
+- `query`: Search query string (required)
+- `count` (default: 50): Max results
+
+**Returns**: Same format as `get_contacts`
+
+#### `get_contact_details`
+Get full contact details including addresses, birthday, and notes.
+
+**Parameters**:
+- `accountId`: Specific account ID (required)
+- `contactId`: Contact ID (required)
+
+**Returns**:
+```json
+{
+  "id": "contact-123",
+  "accountId": "work-account",
+  "displayName": "Jane Doe",
+  "givenName": "Jane",
+  "surname": "Doe",
+  "emailAddresses": [
+    { "address": "jane@example.com", "type": "work" }
+  ],
+  "phoneNumbers": [
+    { "number": "555-0100", "type": "mobile" }
+  ],
+  "jobTitle": "Engineer",
+  "companyName": "Acme Corp",
+  "department": "Engineering",
+  "addresses": [
+    { "street": "123 Main St", "city": "Anytown", "state": "CA", "postalCode": "90210", "type": "home" }
+  ],
+  "birthday": "1990-01-15",
+  "notes": "Met at conference",
+  "etag": "abc123"
+}
+```
+
+#### `create_contact`
+Create a new contact in a specific account.
+
+**Parameters**:
+- `accountId` (optional): Specific account, or use first writable account
+- `displayName` (optional): Full display name
+- `givenName` (optional): First name
+- `surname` (optional): Last name
+- `email` (optional): Email address (or comma-separated list)
+- `phone` (optional): Phone number (or comma-separated list)
+- `jobTitle` (optional): Job title
+- `companyName` (optional): Company name
+- `notes` (optional): Notes
+
+**Returns**:
+```json
+{
+  "success": true,
+  "contactId": "contact-456",
+  "accountUsed": "work-account"
+}
+```
+
+#### `update_contact`
+Update an existing contact's information.
+
+**Parameters**:
+- `accountId`: Specific account ID (required)
+- `contactId`: Contact ID (required)
+- `displayName` (optional): Updated display name
+- `givenName` (optional): Updated first name
+- `surname` (optional): Updated last name
+- `email` (optional): Updated email (or comma-separated list)
+- `phone` (optional): Updated phone (or comma-separated list)
+- `jobTitle` (optional): Updated job title
+- `companyName` (optional): Updated company
+- `notes` (optional): Updated notes
+
+**Returns**:
+```json
+{
+  "success": true,
+  "contactId": "contact-123",
+  "accountId": "work-account"
+}
+```
+
+#### `delete_contact`
+Delete a contact from a specific account.
+
+**Parameters**:
+- `accountId`: Specific account ID (required)
+- `contactId`: Contact ID (required)
+
+**Returns**:
+```json
+{
+  "success": true,
+  "contactId": "contact-123",
+  "accountId": "work-account"
+}
+```
+
 ## Multi-Account Aggregation
 
 ### Read Operations
 
-For read operations (get_emails, get_calendar_events, etc.), when `accountId` is omitted, the workflow engine:
+For read operations (get_emails, get_calendar_events, get_contacts, etc.), when `accountId` is omitted, the workflow engine:
 
 1. **Parallel Execution**: Queries all accounts simultaneously using `Task.WhenAll`
 2. **Result Merging**: Combines results from all accounts
@@ -412,7 +544,7 @@ User: "Show me my unread emails"
 
 ### Write Operations
 
-For write operations (send_email, create_event, etc.), exactly ONE account must be selected:
+For write operations (send_email, create_event, create_contact, etc.), exactly ONE account must be selected:
 
 1. **Router Decision**: Smart router determines best account
 2. **Ambiguity Handling**: If unclear, ask user to specify

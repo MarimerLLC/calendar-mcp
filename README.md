@@ -1,20 +1,20 @@
 # Calendar & Email MCP Server
 
-A Model Context Protocol (MCP) server that gives AI assistants access to email and calendar data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, ICS feeds, and JSON calendar files.
+A Model Context Protocol (MCP) server that gives AI assistants access to email, calendar, and contact data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, ICS feeds, and JSON calendar files.
 
 ## Overview
 
-Calendar-MCP aggregates email and calendar information from multiple providers into a unified set of MCP tools. AI assistants like Claude Desktop, VS Code with Copilot, and other MCP-compatible clients can query across all your accounts at once, search emails, check calendars, find free time, send messages, and create events.
+Calendar-MCP aggregates email, calendar, and contact information from multiple providers into a unified set of MCP tools. AI assistants like Claude Desktop, VS Code with Copilot, and other MCP-compatible clients can query across all your accounts at once, search emails, check calendars, find free time, send messages, create events, and manage contacts.
 
 ### Supported Providers
 
-| Provider | Email | Calendar | Auth |
-|----------|:-----:|:--------:|------|
-| Microsoft 365 | Yes | Yes | OAuth 2.0 (MSAL) |
-| Outlook.com | Yes | Yes | OAuth 2.0 (MSAL) |
-| Google Workspace / Gmail | Yes | Yes | OAuth 2.0 |
-| ICS Calendar Feeds | -- | Read-only | None (public URLs) |
-| JSON Calendar Files | -- | Read-only | None (local files) |
+| Provider | Email | Calendar | Contacts | Auth |
+|----------|:-----:|:--------:|:--------:|------|
+| Microsoft 365 | Yes | Yes | Yes | OAuth 2.0 (MSAL) |
+| Outlook.com | Yes | Yes | Yes | OAuth 2.0 (MSAL) |
+| Google Workspace / Gmail | Yes | Yes | Yes | OAuth 2.0 |
+| ICS Calendar Feeds | -- | Read-only | -- | None (public URLs) |
+| JSON Calendar Files | -- | Read-only | -- | None (local files) |
 
 ### MCP Tools
 
@@ -31,6 +31,9 @@ The server exposes these tools to AI assistants:
 - **create_event** — Create calendar events
 - **delete_event** — Delete calendar events (requires organizer/edit permissions)
 - **respond_to_event** — Accept, tentatively accept, or decline event invitations
+- **get_contacts** / **search_contacts** — Read and search contacts across accounts
+- **get_contact_details** — Get full contact information
+- **create_contact** / **update_contact** / **delete_contact** — Manage contacts
 
 See [docs/mcp-tools.md](docs/mcp-tools.md) for full tool specifications.
 

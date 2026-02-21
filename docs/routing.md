@@ -113,8 +113,8 @@ RULES:
 2. For work-related keywords, prefer work accounts
 3. For personal keywords, prefer personal accounts
 4. If unclear, use the default account
-5. For read operations (get_emails, list_calendars), you can return multiple accounts
-6. For write operations (send_email, create_event), return exactly ONE account
+5. For read operations (get_emails, list_calendars, get_contacts), you can return multiple accounts
+6. For write operations (send_email, create_event, create_contact), return exactly ONE account
 
 OUTPUT FORMAT (JSON):
 {

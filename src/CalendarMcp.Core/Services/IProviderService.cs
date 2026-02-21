@@ -35,24 +35,24 @@ public interface IProviderService
         string bodyFormat = "html",
         List<string>? cc = null,
         CancellationToken cancellationToken = default);
-    
+
     Task DeleteEmailAsync(
         string accountId,
         string emailId,
         CancellationToken cancellationToken = default);
-    
+
     Task MarkEmailAsReadAsync(
         string accountId,
         string emailId,
         bool isRead,
         CancellationToken cancellationToken = default);
-    
+
     Task MoveEmailAsync(
         string accountId,
         string emailId,
         string destinationFolder,
         CancellationToken cancellationToken = default);
-    
+
     // Calendar operations
     Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
         string accountId,
@@ -100,12 +100,60 @@ public interface IProviderService
         string calendarId,
         string eventId,
         CancellationToken cancellationToken = default);
-    
+
     Task RespondToEventAsync(
         string accountId,
         string calendarId,
         string eventId,
         string response,
         string? comment = null,
+        CancellationToken cancellationToken = default);
+
+    // Contact operations
+    Task<IEnumerable<Contact>> GetContactsAsync(
+        string accountId,
+        int count = 50,
+        CancellationToken cancellationToken = default);
+
+    Task<IEnumerable<Contact>> SearchContactsAsync(
+        string accountId,
+        string query,
+        int count = 50,
+        CancellationToken cancellationToken = default);
+
+    Task<Contact?> GetContactDetailsAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default);
+
+    Task<string> CreateContactAsync(
+        string accountId,
+        string displayName,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateContactAsync(
+        string accountId,
+        string contactId,
+        string? displayName = null,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        string? etag = null,
+        CancellationToken cancellationToken = default);
+
+    Task DeleteContactAsync(
+        string accountId,
+        string contactId,
         CancellationToken cancellationToken = default);
 }
