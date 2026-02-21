@@ -81,6 +81,7 @@ public interface IProviderService
         string? location = null,
         List<string>? attendees = null,
         string? body = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default);
     
     Task UpdateEventAsync(

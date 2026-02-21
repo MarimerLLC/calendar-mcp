@@ -12,6 +12,7 @@ using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using Person = Google.Apis.PeopleService.v1.Data.Person;
+using Event = Google.Apis.Calendar.v3.Data.Event;
 
 namespace CalendarMcp.Core.Providers;
 
