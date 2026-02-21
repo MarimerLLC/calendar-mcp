@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Calendar-MCP is a Model Context Protocol (MCP) server written in C# / .NET that provides AI assistants (Claude, ChatGPT, GitHub Copilot) with unified access to multiple email and calendar accounts simultaneously across Microsoft 365 (multiple tenants), Outlook.com, and Google Workspace.
+Calendar-MCP is a Model Context Protocol (MCP) server written in C# / .NET that provides AI assistants (Claude, ChatGPT, GitHub Copilot) with unified access to multiple email, calendar, and contact accounts simultaneously across Microsoft 365 (multiple tenants), Outlook.com, and Google Workspace.
 
 ## Core Problem
 
@@ -17,14 +17,13 @@ Currently, no AI assistant can access all these services simultaneously in a mul
 
 ### Phase 1 - Core Functionality (Current)
 - Multi-account authentication and management
-- Read-only email queries (unread, search, details)
-- Read-only calendar queries (events, availability)
+- Email operations (read, search, send)
+- Calendar operations (read, create events)
+- Contact operations (read, search, create, update, delete)
 - Unified view aggregation across all accounts
 - OpenTelemetry instrumentation
 
-### Phase 2 - Write Operations (Planned)
-- Send email with smart account routing
-- Create calendar events with smart calendar routing
+### Phase 2 - Advanced Features (Planned)
 - Email threading and conversation tracking
 - Advanced search capabilities
 
@@ -45,7 +44,7 @@ Currently, no AI assistant can access all these services simultaneously in a mul
 
 - **Language**: C# / .NET 10
 - **MCP Framework**: ModelContextProtocol NuGet package
-- **Provider SDKs**: Microsoft.Graph, Google.Apis.Gmail/Calendar
+- **Provider SDKs**: Microsoft.Graph, Google.Apis.Gmail/Calendar/PeopleService
 - **AI Routing**: Configurable (Ollama, OpenAI, Anthropic, Azure OpenAI, custom)
 - **Authentication**: OAuth 2.0 with MSAL (Microsoft) and Google OAuth
 - **Observability**: OpenTelemetry (logging, tracing, metrics)

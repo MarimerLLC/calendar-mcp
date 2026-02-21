@@ -206,6 +206,7 @@ This architecture ensures:
   - **Microsoft.Identity.Client** - MSAL authentication
   - **Google.Apis.Gmail.v1** - Gmail API
   - **Google.Apis.Calendar.v3** - Google Calendar API
+  - **Google.Apis.PeopleService.v1** - Google People (Contacts) API
   - **Google.Apis.Auth** - Google OAuth 2.0
 - **AI Routing**: Configurable LLM backend
   - Local: Ollama (Phi-3.5-mini, Qwen2-7B, etc.)
@@ -241,7 +242,7 @@ All three provider integrations have been validated through working spike projec
 - **Pattern**: `MultiTenantAuthenticator` manages multiple `IPublicClientApplication` instances
 
 #### Google Workspace (GoogleWorkspace spike)
-- **SDK**: Google.Apis.Gmail.v1, Google.Apis.Calendar.v3, Google.Apis.Auth
+- **SDK**: Google.Apis.Gmail.v1, Google.Apis.Calendar.v3, Google.Apis.PeopleService.v1, Google.Apis.Auth
 - **Status**: ✅ Fully validated with Gmail and Calendar operations
 - **Authentication**: OAuth 2.0 via GoogleWebAuthorizationBroker with FileDataStore
 - **Key Findings**:

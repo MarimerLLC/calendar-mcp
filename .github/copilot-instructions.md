@@ -40,7 +40,7 @@ This MCP server enables AI assistants (Claude, ChatGPT, GitHub Copilot) to acces
 
 - **Language**: C# / .NET 10
 - **MCP Framework**: ModelContextProtocol NuGet package
-- **Provider SDKs**: Microsoft.Graph, Google.Apis.Gmail/Calendar
+- **Provider SDKs**: Microsoft.Graph, Google.Apis.Gmail/Calendar/PeopleService
 - **Authentication**: OAuth 2.0 with MSAL (Microsoft) and Google OAuth
 - **Observability**: OpenTelemetry (logging, tracing, metrics)
 - **Console UI**: Spectre.Console for rich console applications

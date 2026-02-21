@@ -70,7 +70,7 @@ All three providers implemented as stubs with logging:
 - **ProviderServiceFactory**: Routes requests to correct provider
 - **AccountRegistry**: Loads and manages account configuration
 
-### ✅ MCP Tools (7 tools)
+### ✅ MCP Tools (13 tools)
 All tools from `/docs/mcp-tools.md` implemented:
 
 1. **list_accounts**: Get all configured accounts
@@ -80,6 +80,12 @@ All tools from `/docs/mcp-tools.md` implemented:
 5. **get_calendar_events**: Get calendar events with date ranges
 6. **send_email**: Send email with smart domain-based routing
 7. **create_event**: Create calendar events
+8. **get_contacts**: Get contacts from specific or all accounts
+9. **search_contacts**: Search contacts across accounts
+10. **get_contact_details**: Get full contact information
+11. **create_contact**: Create new contact
+12. **update_contact**: Update existing contact
+13. **delete_contact**: Delete contact
 
 Each tool includes:
 - Proper MCP protocol implementation
@@ -106,8 +112,8 @@ Updated `CalendarMcp.StdioServer` to:
 ## Key Design Patterns
 
 ### Multi-Account Aggregation
-- **Read operations** (get_emails, list_calendars, get_calendar_events): Query all enabled accounts in parallel using `Task.WhenAll`, merge and sort results
-- **Write operations** (send_email, create_event): Smart routing to select ONE account based on domain matching or priority
+- **Read operations** (get_emails, list_calendars, get_calendar_events, get_contacts): Query all enabled accounts in parallel using `Task.WhenAll`, merge and sort results
+- **Write operations** (send_email, create_event, create_contact): Smart routing to select ONE account based on domain matching or priority
 
 ### Provider Isolation
 - Each provider service manages multiple accounts of its type

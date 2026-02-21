@@ -126,13 +126,21 @@ graph TD
 - `create_event` - Create calendar event
 - `update_event` / `delete_event` - Manage events
 
+### Contact Operations
+- `get_contacts` - Get contacts from specific or all accounts
+- `search_contacts` - Search contacts by name, email, company
+- `get_contact_details` - Get full contact information
+- `create_contact` - Create new contact
+- `update_contact` - Update existing contact
+- `delete_contact` - Delete contact
+
 > **📖 See [MCP Tools](docs/mcp-tools.md)** for complete tool definitions, parameters, and workflow examples.
 
 ## Technical Stack
 
 - **Language**: C# / .NET 9+
 - **MCP Framework**: ModelContextProtocol NuGet package (official .NET implementation)
-- **Provider SDKs**: Microsoft.Graph, Google.Apis.Gmail/Calendar
+- **Provider SDKs**: Microsoft.Graph, Google.Apis.Gmail/Calendar/PeopleService
 - **AI Routing**: Configurable (Ollama, OpenAI, Anthropic, Azure OpenAI, custom)
 - **Authentication**: OAuth 2.0 with MSAL (Microsoft) and GoogleWebAuthorizationBroker
 - **Observability**: OpenTelemetry with multiple exporters
@@ -152,7 +160,7 @@ graph TD
       "configuration": {
         "tenantId": "...",
         "clientId": "...",
-        "scopes": ["Mail.Read", "Mail.Send", "Calendars.ReadWrite"]
+        "scopes": ["Mail.Read", "Mail.Send", "Calendars.ReadWrite", "Contacts.ReadWrite"]
       }
     }
   ],

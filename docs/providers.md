@@ -66,18 +66,19 @@ public class M365ProviderService : IM365ProviderService
 ### Operations
 - Email: Read, send, search
 - Calendar: CRUD operations
-- Contacts: Read (future)
+- Contacts: CRUD operations
 
 ### Validation Status
 ✅ Fully validated through M365DirectAccess spike
 
 ## IGoogleProviderService
 
-Direct Google Workspace API integration for Gmail and Calendar.
+Direct Google Workspace API integration for Gmail, Calendar, and Contacts.
 
 ### SDK & Dependencies
 - **Google.Apis.Gmail.v1** - Gmail API client
 - **Google.Apis.Calendar.v3** - Calendar API client
+- **Google.Apis.PeopleService.v1** - People (Contacts) API client
 - **Google.Apis.Auth** - OAuth 2.0 authentication
 
 ### Account Management
@@ -130,6 +131,7 @@ public class GoogleProviderService : IGoogleProviderService
 ### Operations
 - Gmail: Read, send, search
 - Calendar: CRUD operations
+- Contacts: CRUD operations (via People API)
 
 ### Validation Status
 ✅ Fully validated through GoogleWorkspace spike
@@ -185,6 +187,7 @@ public class OutlookComProviderService : IOutlookComProviderService
 ### Operations
 - Email: Read, send, search
 - Calendar: CRUD operations
+- Contacts: CRUD operations
 
 ### Validation Status
 ✅ Validated through OutlookComPersonal spike

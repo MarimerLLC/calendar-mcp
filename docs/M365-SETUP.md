@@ -80,6 +80,7 @@ After creation, note these values (you'll need them for the CLI):
    - `Mail.ReadWrite` - Move, delete, and manage user mail
    - `Mail.Send` - Send mail as user
    - `Calendars.ReadWrite` - Full access to user calendars
+   - `Contacts.ReadWrite` - Read and manage user contacts
    - `Files.Read` *(optional)* - Read files from OneDrive/SharePoint (only needed if using JSON calendar accounts that reference M365-hosted files)
 6. Click **Add permissions**
 7. If your organization requires it, click **Grant admin consent** (requires admin privileges)
@@ -388,12 +389,12 @@ Users will need the **Client ID** to configure their installation.
 | `Mail.ReadWrite` | Move, delete, and manage user's emails |
 | `Mail.Send` | Send emails on behalf of user |
 | `Calendars.ReadWrite` | Read user's calendar and manage events |
+| `Contacts.ReadWrite` | Read and manage user's contacts |
 
 **Optional Permissions** (based on requirements):
 | Permission | Use Case |
 |------------|----------|
 | `Files.Read` | Read files from OneDrive/SharePoint (needed for JSON calendar accounts that reference M365-hosted files) |
-| `Contacts.Read` | Access user's contacts for email suggestions |
 | `User.Read` | Read basic user profile information |
 
 6. Click **Add permissions**
@@ -515,11 +516,12 @@ Enable audit logging:
 
 Only grant permissions needed for current functionality:
 
-**Current phase (Phase 1):**
+**Current permissions:**
 - `Mail.Read` - ✅ Required
 - `Mail.ReadWrite` - ✅ Required (move, delete, mark read/unread)
-- `Calendars.ReadWrite` - ✅ Required for read-only calendar (ReadWrite needed for MCP standard)
-- `Mail.Send` - ⚠️ Optional (future feature, can be granted later)
+- `Mail.Send` - ✅ Required
+- `Calendars.ReadWrite` - ✅ Required
+- `Contacts.ReadWrite` - ✅ Required
 
 **Future phases:**
 - Grant additional permissions only when features are implemented
@@ -677,7 +679,7 @@ var scopes = new[]
     "Mail.ReadWrite",
     "Mail.Send",
     "Calendars.ReadWrite",
-    "Contacts.Read"  // Add additional scopes as needed
+    "Contacts.ReadWrite"  // Add additional scopes as needed
 };
 ```
 

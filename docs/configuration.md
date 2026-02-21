@@ -133,7 +133,7 @@ set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
   "configuration": {
     "tenantId": "tenant1-id",
     "clientId": "shared-multi-tenant-client-id",
-    "scopes": ["Mail.Read", "Mail.Send", "Calendars.ReadWrite"]
+    "scopes": ["Mail.Read", "Mail.Send", "Calendars.ReadWrite", "Contacts.ReadWrite"]
   }
 }
 ```
@@ -146,7 +146,7 @@ set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
   "configuration": {
     "tenantId": "tenant1-id",
     "clientId": "tenant1-specific-client-id",
-    "scopes": ["Mail.Read", "Mail.Send", "Calendars.ReadWrite"]
+    "scopes": ["Mail.Read", "Mail.Send", "Calendars.ReadWrite", "Contacts.ReadWrite"]
   }
 }
 ```
@@ -178,7 +178,8 @@ set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
     "scopes": [
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.send",
-      "https://www.googleapis.com/auth/calendar"
+      "https://www.googleapis.com/auth/calendar",
+      "https://www.googleapis.com/auth/contacts"
     ]
   }
 }
@@ -196,7 +197,8 @@ set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
     "scopes": [
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.send",
-      "https://www.googleapis.com/auth/calendar"
+      "https://www.googleapis.com/auth/calendar",
+      "https://www.googleapis.com/auth/contacts"
     ]
   }
 }
