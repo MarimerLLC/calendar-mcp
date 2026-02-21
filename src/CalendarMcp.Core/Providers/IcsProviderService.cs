@@ -316,6 +316,46 @@ public class IcsProviderService : IIcsProviderService
 
     #endregion
 
+    #region Contact Operations (Not Supported)
+
+    public Task<IEnumerable<Contact>> GetContactsAsync(
+        string accountId, int count = 50,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(Enumerable.Empty<Contact>());
+
+    public Task<IEnumerable<Contact>> SearchContactsAsync(
+        string accountId, string query, int count = 50,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(Enumerable.Empty<Contact>());
+
+    public Task<Contact?> GetContactDetailsAsync(
+        string accountId, string contactId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<Contact?>(null);
+
+    public Task<string> CreateContactAsync(
+        string accountId, string displayName,
+        string? givenName = null, string? surname = null,
+        List<string>? emailAddresses = null, List<string>? phoneNumbers = null,
+        string? jobTitle = null, string? companyName = null, string? notes = null,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("ICS provider does not support contacts.");
+
+    public Task UpdateContactAsync(
+        string accountId, string contactId,
+        string? displayName = null, string? givenName = null, string? surname = null,
+        List<string>? emailAddresses = null, List<string>? phoneNumbers = null,
+        string? jobTitle = null, string? companyName = null, string? notes = null,
+        string? etag = null, CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("ICS provider does not support contacts.");
+
+    public Task DeleteContactAsync(
+        string accountId, string contactId,
+        CancellationToken cancellationToken = default)
+        => throw new NotSupportedException("ICS provider does not support contacts.");
+
+    #endregion
+
     #region ICS-to-CalendarEvent Mapping
 
     private CalendarEvent? MapToCalendarEvent(

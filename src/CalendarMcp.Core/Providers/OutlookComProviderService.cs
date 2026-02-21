@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
 using Microsoft.Graph.Me.SendMail;
+using GraphContact = Microsoft.Graph.Models.Contact;
 
 namespace CalendarMcp.Core.Providers;
 
@@ -1078,4 +1079,353 @@ public class OutlookComProviderService : IOutlookComProviderService
             throw;
         }
     }
+
+    #region Contact Operations
+
+    public async Task<IEnumerable<Models.Contact>> GetContactsAsync(
+        string accountId,
+        int count = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            return Enumerable.Empty<Models.Contact>();
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var contacts = await graphClient.Me.Contacts.GetAsync(config =>
+            {
+                config.QueryParameters.Top = count;
+                config.QueryParameters.Orderby = ["displayName"];
+                config.QueryParameters.Select = ["id", "displayName", "givenName", "surname", "emailAddresses", "mobilePhone", "businessPhones", "homePhones", "jobTitle", "companyName", "department", "homeAddress", "businessAddress", "otherAddress", "birthday", "personalNotes", "createdDateTime", "lastModifiedDateTime"];
+            }, cancellationToken);
+
+            var result = new List<Models.Contact>();
+            if (contacts?.Value != null)
+            {
+                foreach (var contact in contacts.Value)
+                {
+                    result.Add(MapGraphContact(contact, accountId));
+                }
+            }
+
+            _logger.LogInformation("Retrieved {Count} contacts from Outlook.com account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching contacts from Outlook.com account {AccountId}", accountId);
+            return Enumerable.Empty<Models.Contact>();
+        }
+    }
+
+    public async Task<IEnumerable<Models.Contact>> SearchContactsAsync(
+        string accountId,
+        string query,
+        int count = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            return Enumerable.Empty<Models.Contact>();
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var contacts = await graphClient.Me.Contacts.GetAsync(config =>
+            {
+                config.QueryParameters.Top = count;
+                config.QueryParameters.Filter = $"startswith(displayName,'{query}') or startswith(givenName,'{query}') or startswith(surname,'{query}')";
+                config.QueryParameters.Orderby = ["displayName"];
+                config.QueryParameters.Select = ["id", "displayName", "givenName", "surname", "emailAddresses", "mobilePhone", "businessPhones", "homePhones", "jobTitle", "companyName", "department", "homeAddress", "businessAddress", "otherAddress", "birthday", "personalNotes", "createdDateTime", "lastModifiedDateTime"];
+            }, cancellationToken);
+
+            var result = new List<Models.Contact>();
+            if (contacts?.Value != null)
+            {
+                foreach (var contact in contacts.Value)
+                {
+                    result.Add(MapGraphContact(contact, accountId));
+                }
+            }
+
+            _logger.LogInformation("Search returned {Count} contacts from Outlook.com account {AccountId} for query '{Query}'",
+                result.Count, accountId, query);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching contacts from Outlook.com account {AccountId} with query '{Query}'", accountId, query);
+            return Enumerable.Empty<Models.Contact>();
+        }
+    }
+
+    public async Task<Models.Contact?> GetContactDetailsAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var contact = await graphClient.Me.Contacts[contactId].GetAsync(cancellationToken: cancellationToken);
+
+            if (contact == null)
+            {
+                return null;
+            }
+
+            var result = MapGraphContact(contact, accountId);
+            _logger.LogInformation("Retrieved contact details for {ContactId} from Outlook.com account {AccountId}", contactId, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting contact details for {ContactId} from Outlook.com account {AccountId}", contactId, accountId);
+            return null;
+        }
+    }
+
+    public async Task<string> CreateContactAsync(
+        string accountId,
+        string displayName,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            throw new InvalidOperationException($"Cannot create contact: No authentication token for account {accountId}");
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var newContact = new GraphContact
+            {
+                DisplayName = displayName,
+                GivenName = givenName,
+                Surname = surname,
+                JobTitle = jobTitle,
+                CompanyName = companyName,
+                PersonalNotes = notes
+            };
+
+            if (emailAddresses != null && emailAddresses.Count > 0)
+            {
+                newContact.EmailAddresses = emailAddresses.Select(e => new Microsoft.Graph.Models.EmailAddress
+                {
+                    Address = e.Trim()
+                }).ToList();
+            }
+
+            if (phoneNumbers != null && phoneNumbers.Count > 0)
+            {
+                newContact.MobilePhone = phoneNumbers.First();
+                if (phoneNumbers.Count > 1)
+                {
+                    newContact.BusinessPhones = phoneNumbers.Skip(1).ToList();
+                }
+            }
+
+            var created = await graphClient.Me.Contacts.PostAsync(newContact, cancellationToken: cancellationToken);
+            var contactId = created?.Id ?? string.Empty;
+
+            _logger.LogInformation("Created contact {ContactId} in Outlook.com account {AccountId}", contactId, accountId);
+            return contactId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating contact in Outlook.com account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task UpdateContactAsync(
+        string accountId,
+        string contactId,
+        string? displayName = null,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        string? etag = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            throw new InvalidOperationException($"Cannot update contact: No authentication token for account {accountId}");
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var contactUpdate = new GraphContact();
+
+            if (!string.IsNullOrEmpty(displayName))
+                contactUpdate.DisplayName = displayName;
+            if (!string.IsNullOrEmpty(givenName))
+                contactUpdate.GivenName = givenName;
+            if (!string.IsNullOrEmpty(surname))
+                contactUpdate.Surname = surname;
+            if (!string.IsNullOrEmpty(jobTitle))
+                contactUpdate.JobTitle = jobTitle;
+            if (!string.IsNullOrEmpty(companyName))
+                contactUpdate.CompanyName = companyName;
+            if (!string.IsNullOrEmpty(notes))
+                contactUpdate.PersonalNotes = notes;
+
+            if (emailAddresses != null)
+            {
+                contactUpdate.EmailAddresses = emailAddresses.Select(e => new Microsoft.Graph.Models.EmailAddress
+                {
+                    Address = e.Trim()
+                }).ToList();
+            }
+
+            if (phoneNumbers != null)
+            {
+                contactUpdate.MobilePhone = phoneNumbers.FirstOrDefault();
+                contactUpdate.BusinessPhones = phoneNumbers.Skip(1).ToList();
+            }
+
+            await graphClient.Me.Contacts[contactId].PatchAsync(contactUpdate, cancellationToken: cancellationToken);
+
+            _logger.LogInformation("Updated contact {ContactId} in Outlook.com account {AccountId}", contactId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating contact {ContactId} in Outlook.com account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    public async Task DeleteContactAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            throw new InvalidOperationException($"Cannot delete contact: No authentication token for account {accountId}");
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            await graphClient.Me.Contacts[contactId].DeleteAsync(cancellationToken: cancellationToken);
+
+            _logger.LogInformation("Deleted contact {ContactId} from Outlook.com account {AccountId}", contactId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting contact {ContactId} from Outlook.com account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    private static Models.Contact MapGraphContact(GraphContact contact, string accountId)
+    {
+        var emails = contact.EmailAddresses?.Select(e => new ContactEmail
+        {
+            Address = e.Address ?? string.Empty,
+            Label = "work"
+        }).ToList() ?? new List<ContactEmail>();
+
+        var phones = new List<ContactPhone>();
+        if (!string.IsNullOrEmpty(contact.MobilePhone))
+        {
+            phones.Add(new ContactPhone { Number = contact.MobilePhone, Label = "mobile" });
+        }
+        if (contact.BusinessPhones != null)
+        {
+            phones.AddRange(contact.BusinessPhones.Select(p => new ContactPhone { Number = p, Label = "work" }));
+        }
+        if (contact.HomePhones != null)
+        {
+            phones.AddRange(contact.HomePhones.Select(p => new ContactPhone { Number = p, Label = "home" }));
+        }
+
+        var addresses = new List<ContactAddress>();
+        if (contact.HomeAddress != null)
+        {
+            addresses.Add(MapGraphAddress(contact.HomeAddress, "home"));
+        }
+        if (contact.BusinessAddress != null)
+        {
+            addresses.Add(MapGraphAddress(contact.BusinessAddress, "business"));
+        }
+        if (contact.OtherAddress != null)
+        {
+            addresses.Add(MapGraphAddress(contact.OtherAddress, "other"));
+        }
+
+        return new Models.Contact
+        {
+            Id = contact.Id ?? string.Empty,
+            AccountId = accountId,
+            DisplayName = contact.DisplayName ?? string.Empty,
+            GivenName = contact.GivenName ?? string.Empty,
+            Surname = contact.Surname ?? string.Empty,
+            EmailAddresses = emails,
+            PhoneNumbers = phones,
+            JobTitle = contact.JobTitle ?? string.Empty,
+            CompanyName = contact.CompanyName ?? string.Empty,
+            Department = contact.Department ?? string.Empty,
+            Addresses = addresses,
+            Birthday = contact.Birthday?.DateTime,
+            Notes = contact.PersonalNotes ?? string.Empty,
+            CreatedDateTime = contact.CreatedDateTime?.DateTime,
+            LastModifiedDateTime = contact.LastModifiedDateTime?.DateTime
+        };
+    }
+
+    private static ContactAddress MapGraphAddress(PhysicalAddress address, string label)
+    {
+        return new ContactAddress
+        {
+            Street = address.Street ?? string.Empty,
+            City = address.City ?? string.Empty,
+            State = address.State ?? string.Empty,
+            PostalCode = address.PostalCode ?? string.Empty,
+            Country = address.CountryOrRegion ?? string.Empty,
+            Label = label
+        };
+    }
+
+    #endregion
 }
