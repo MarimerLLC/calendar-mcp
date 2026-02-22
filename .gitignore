@@ -494,3 +494,7 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 .claude/settings.local.json
+
+# Nix build outputs
+result
+result-*
