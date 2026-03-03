@@ -13,6 +13,21 @@ public class GetCalendarEventsToolTests
 {
     private static readonly DateTime Start = new(2025, 1, 1);
     private static readonly DateTime End = new(2025, 1, 31);
+    private const string TestTimeZone = "America/Chicago";
+
+    [TestMethod]
+    public async Task GetCalendarEvents_InvalidTimeZone_ReturnsError()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents("Invalid/Zone", Start, End);
+        var doc = JsonDocument.Parse(result);
+
+        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("Invalid IANA timezone"));
+    }
 
     [TestMethod]
     public async Task GetCalendarEvents_AccountNotFound_ReturnsError()
@@ -25,7 +40,7 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(Start, End, "nonexistent");
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "nonexistent");
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
@@ -33,12 +48,14 @@ public class GetCalendarEventsToolTests
     }
 
     [TestMethod]
-    public async Task GetCalendarEvents_SpecificAccount_ReturnsEvents()
+    public async Task GetCalendarEvents_SpecificAccount_ReturnsEventsWithTimezone()
     {
         var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
         var events = new List<CalendarEvent>
         {
-            TestData.CreateEvent(id: "ev1", accountId: "acc-1", subject: "Meeting")
+            TestData.CreateEvent(id: "ev1", accountId: "acc-1", subject: "Meeting",
+                start: new DateTime(2025, 1, 10, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 10, 16, 0, 0, DateTimeKind.Utc))
         };
 
         var regExp = new IAccountRegistryCreateExpectations();
@@ -58,12 +75,26 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(Start, End, "acc-1");
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-1");
         var doc = JsonDocument.Parse(result);
         var eventsArray = doc.RootElement.GetProperty("events");
 
         Assert.AreEqual(1, eventsArray.GetArrayLength());
         Assert.AreEqual("ev1", eventsArray[0].GetProperty("id").GetString());
+        Assert.AreEqual(TestTimeZone, doc.RootElement.GetProperty("timezone").GetString());
+
+        // Verify UTC and local time fields are present
+        Assert.IsTrue(eventsArray[0].TryGetProperty("start_utc", out _));
+        Assert.IsTrue(eventsArray[0].TryGetProperty("start_local", out _));
+        Assert.IsTrue(eventsArray[0].TryGetProperty("end_utc", out _));
+        Assert.IsTrue(eventsArray[0].TryGetProperty("end_local", out _));
+
+        // Verify UTC times end with Z
+        Assert.IsTrue(eventsArray[0].GetProperty("start_utc").GetString()!.EndsWith("Z"));
+        Assert.IsTrue(eventsArray[0].GetProperty("end_utc").GetString()!.EndsWith("Z"));
+
+        // Verify local times don't end with Z
+        Assert.IsFalse(eventsArray[0].GetProperty("start_local").GetString()!.EndsWith("Z"));
 
         regExp.Verify();
         factExp.Verify();
@@ -104,13 +135,14 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(Start, End);
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End);
         var doc = JsonDocument.Parse(result);
         var eventsArray = doc.RootElement.GetProperty("events");
 
         Assert.AreEqual(2, eventsArray.GetArrayLength());
         Assert.AreEqual("ev1", eventsArray[0].GetProperty("id").GetString());
         Assert.AreEqual("ev2", eventsArray[1].GetProperty("id").GetString());
+        Assert.AreEqual(TestTimeZone, doc.RootElement.GetProperty("timezone").GetString());
 
         regExp.Verify();
         factExp.Verify();
@@ -129,7 +161,7 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(Start, End);
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End);
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual("No accounts found", doc.RootElement.GetProperty("error").GetString());
