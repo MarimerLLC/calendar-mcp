@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using CalendarMcp.Auth;
 using CalendarMcp.Core.Configuration;
 using CalendarMcp.HttpServer.Admin;
@@ -5,6 +6,7 @@ using CalendarMcp.HttpServer.BlazorAdmin;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
+using ModelContextProtocol;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using Scalar.AspNetCore;
@@ -147,7 +149,22 @@ public class Program
             .WithTools<CalendarMcp.Core.Tools.DeleteEventTool>()
             .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
             .WithTools<CalendarMcp.Core.Tools.GetUnsubscribeInfoTool>()
-            .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>();
+            .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>()
+            .AddCallToolFilter((next) => async (request, cancellationToken) =>
+            {
+                try
+                {
+                    return await next(request, cancellationToken);
+                }
+                catch (ArgumentException ex) when (ex.Message.Contains("missing a value for the required parameter"))
+                {
+                    var match = Regex.Match(ex.Message, @"required parameter '([^']+)'");
+                    var paramName = match.Success ? match.Groups[1].Value : "a required parameter";
+                    throw new McpException(
+                        $"Required parameter '{paramName}' was not provided to '{request.Params?.Name}'. " +
+                        $"Check the tool's input schema and retry the call including all required parameters.");
+                }
+            });
 
         var app = builder.Build();
 

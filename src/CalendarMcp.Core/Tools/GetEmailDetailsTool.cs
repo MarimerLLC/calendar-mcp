@@ -15,10 +15,10 @@ public sealed class GetEmailDetailsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetEmailDetailsTool> logger)
 {
-    [McpServerTool, Description("Get full email content including body and attachments for a specific email")]
+    [McpServerTool, Description("Get full email content including body and attachments for a specific email. Both accountId and emailId are required — obtain them from the accountId and id fields returned by get_emails or search_emails.")]
     public async Task<string> GetEmailDetails(
-        [Description("Account ID that owns the email. Obtain from the accountId field returned by get_emails or search_emails.")] string accountId,
-        [Description("Email message ID. Obtain from the id field returned by get_emails or search_emails.")] string emailId)
+        [Description("Required. Account ID that owns the email. Obtain from the accountId field returned by get_emails or search_emails.")] string accountId,
+        [Description("Required. Email message ID. Obtain from the id field returned by get_emails or search_emails.")] string emailId)
     {
         logger.LogInformation("Getting email details: accountId={AccountId}, emailId={EmailId}",
             accountId, emailId);
