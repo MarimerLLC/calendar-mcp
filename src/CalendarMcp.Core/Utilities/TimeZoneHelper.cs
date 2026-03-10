@@ -26,15 +26,23 @@ public static class TimeZoneHelper
 
     /// <summary>
     /// Tries to find a TimeZoneInfo by IANA timezone ID. Returns null if invalid.
+    /// Strips surrounding single quotes or backticks that LLMs sometimes echo from schema examples.
     /// </summary>
     public static TimeZoneInfo? TryGetTimeZone(string? timeZoneId)
     {
         if (string.IsNullOrWhiteSpace(timeZoneId))
             return null;
 
+        var id = timeZoneId.Trim();
+
+        // Strip surrounding single quotes ('America/Chicago') or backticks (`America/Chicago`)
+        // that LLMs may echo verbatim from schema description examples.
+        if (id.Length >= 2 && id[0] == id[^1] && (id[0] == '\'' || id[0] == '`'))
+            id = id[1..^1].Trim();
+
         try
         {
-            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            return TimeZoneInfo.FindSystemTimeZoneById(id);
         }
         catch (TimeZoneNotFoundException)
         {

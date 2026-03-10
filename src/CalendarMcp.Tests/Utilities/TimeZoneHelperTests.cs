@@ -67,4 +67,28 @@ public class TimeZoneHelperTests
         var tz = TimeZoneHelper.TryGetTimeZone("");
         Assert.IsNull(tz);
     }
+
+    [TestMethod]
+    public void TryGetTimeZone_SingleQuotedId_ReturnsTimeZoneInfo()
+    {
+        // LLMs sometimes echo schema examples verbatim, producing 'America/Chicago'
+        var tz = TimeZoneHelper.TryGetTimeZone("'America/Chicago'");
+        Assert.IsNotNull(tz);
+        Assert.AreEqual("America/Chicago", tz.Id);
+    }
+
+    [TestMethod]
+    public void TryGetTimeZone_BacktickQuotedId_ReturnsTimeZoneInfo()
+    {
+        var tz = TimeZoneHelper.TryGetTimeZone("`America/Chicago`");
+        Assert.IsNotNull(tz);
+        Assert.AreEqual("America/Chicago", tz.Id);
+    }
+
+    [TestMethod]
+    public void TryGetTimeZone_MismatchedQuotes_ReturnsNull()
+    {
+        var tz = TimeZoneHelper.TryGetTimeZone("'America/Chicago`");
+        Assert.IsNull(tz);
+    }
 }

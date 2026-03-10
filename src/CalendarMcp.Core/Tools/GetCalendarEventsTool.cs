@@ -19,9 +19,9 @@ public sealed class GetCalendarEventsTool(
 {
     [McpServerTool, Description("Get calendar events for a date range from one or all accounts. The timeZone parameter is required. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
     public async Task<string> GetCalendarEvents(
-        [Description("IANA timezone name for displaying event times (e.g. 'America/Chicago', 'America/New_York', 'Europe/London', 'Asia/Tokyo'). All event times are returned in both UTC and this local timezone. Required.")] string timeZone,
-        [Description("Start of the date range (ISO 8601 format, e.g. '2026-02-20'). Defaults to today.")] DateTime? startDate = null,
-        [Description("End of the date range (ISO 8601 format, e.g. '2026-02-27'). Defaults to 7 days after startDate.")] DateTime? endDate = null,
+        [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone. Required.")] string timeZone,
+        [Description("Start of the date range (ISO 8601 format, e.g. `2026-02-20`). Defaults to today.")] DateTime? startDate = null,
+        [Description("End of the date range (ISO 8601 format, e.g. `2026-02-27`). Defaults to 7 days after startDate.")] DateTime? endDate = null,
         [Description("Account ID to query, or omit to query all accounts. Obtain from list_accounts.")] string? accountId = null,
         [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars.")] string? calendarId = null,
         [Description("Maximum number of events to return per account (default 50)")] int count = 50)

@@ -19,7 +19,7 @@ public sealed class GetCalendarEventDetailsTool(
 {
     [McpServerTool, Description("Get full details for a single calendar event including attendee responses, free/busy status, recurrence pattern, and online meeting link. Use this after get_calendar_events to fetch richer data for a specific event.")]
     public async Task<string> GetCalendarEventDetails(
-        [Description("IANA timezone name for displaying event times (e.g. 'America/Chicago', 'America/New_York', 'Europe/London', 'Asia/Tokyo'). All event times are returned in both UTC and this local timezone.")] string timeZone,
+        [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone.")] string timeZone,
         [Description("Account ID from get_calendar_events")] string accountId,
         [Description("Calendar ID from get_calendar_events, or 'primary' for the default calendar")] string calendarId,
         [Description("Event ID from get_calendar_events")] string eventId)
