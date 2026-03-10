@@ -550,8 +550,8 @@ public class GoogleProviderService : IGoogleProviderService
             var targetCalendarId = calendarId ?? "primary";
 
             var request = service.Events.List(targetCalendarId);
-            request.TimeMinDateTimeOffset = new DateTimeOffset(start);
-            request.TimeMaxDateTimeOffset = new DateTimeOffset(end);
+            request.TimeMinDateTimeOffset = new DateTimeOffset(start, TimeSpan.Zero);
+            request.TimeMaxDateTimeOffset = new DateTimeOffset(end, TimeSpan.Zero);
             request.MaxResults = count;
             request.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
             request.SingleEvents = true;
@@ -696,12 +696,12 @@ public class GoogleProviderService : IGoogleProviderService
                 Location = location,
                 Start = new EventDateTime
                 {
-                    DateTimeDateTimeOffset = new DateTimeOffset(start),
+                    DateTimeRaw = start.ToString("yyyy-MM-ddTHH:mm:ss"),
                     TimeZone = timeZone ?? "UTC"
                 },
                 End = new EventDateTime
                 {
-                    DateTimeDateTimeOffset = new DateTimeOffset(end),
+                    DateTimeRaw = end.ToString("yyyy-MM-ddTHH:mm:ss"),
                     TimeZone = timeZone ?? "UTC"
                 }
             };
@@ -728,14 +728,15 @@ public class GoogleProviderService : IGoogleProviderService
     }
 
     public async Task UpdateEventAsync(
-        string accountId, 
-        string calendarId, 
-        string eventId, 
-        string? subject = null, 
-        DateTime? start = null, 
-        DateTime? end = null, 
-        string? location = null, 
-        List<string>? attendees = null, 
+        string accountId,
+        string calendarId,
+        string eventId,
+        string? subject = null,
+        DateTime? start = null,
+        DateTime? end = null,
+        string? location = null,
+        List<string>? attendees = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -764,16 +765,16 @@ public class GoogleProviderService : IGoogleProviderService
             {
                 existingEvent.Start = new EventDateTime
                 {
-                    DateTimeDateTimeOffset = new DateTimeOffset(start.Value),
-                    TimeZone = TimeZoneInfo.Local.Id
+                    DateTimeRaw = start.Value.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = timeZone ?? "UTC"
                 };
             }
             if (end.HasValue)
             {
                 existingEvent.End = new EventDateTime
                 {
-                    DateTimeDateTimeOffset = new DateTimeOffset(end.Value),
-                    TimeZone = TimeZoneInfo.Local.Id
+                    DateTimeRaw = end.Value.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    TimeZone = timeZone ?? "UTC"
                 };
             }
             if (attendees != null)

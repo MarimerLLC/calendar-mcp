@@ -637,8 +637,8 @@ public class M365ProviderService : IM365ProviderService
                 AccountId = accountId,
                 CalendarId = calendarId ?? "primary",
                 Subject = evt.Subject ?? string.Empty,
-                Start = DateTime.TryParse(evt.Start?.DateTime, out var startDt) ? startDt : DateTime.MinValue,
-                End = DateTime.TryParse(evt.End?.DateTime, out var endDt) ? endDt : DateTime.MinValue,
+                Start = ParseM365DateTime(evt.Start),
+                End = ParseM365DateTime(evt.End),
                 Location = evt.Location?.DisplayName ?? string.Empty,
                 Body = evt.Body?.Content ?? string.Empty,
                 BodyFormat = evt.Body?.ContentType == BodyType.Html ? "html" : "text",
@@ -912,14 +912,15 @@ public class M365ProviderService : IM365ProviderService
     }
 
     public async Task UpdateEventAsync(
-        string accountId, 
-        string calendarId, 
-        string eventId, 
-        string? subject = null, 
-        DateTime? start = null, 
-        DateTime? end = null, 
-        string? location = null, 
-        List<string>? attendees = null, 
+        string accountId,
+        string calendarId,
+        string eventId,
+        string? subject = null,
+        DateTime? start = null,
+        DateTime? end = null,
+        string? location = null,
+        List<string>? attendees = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
@@ -945,7 +946,7 @@ public class M365ProviderService : IM365ProviderService
                 eventUpdate.Start = new DateTimeTimeZone
                 {
                     DateTime = start.Value.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = TimeZoneInfo.Local.Id
+                    TimeZone = timeZone ?? "UTC"
                 };
             }
 
@@ -954,7 +955,7 @@ public class M365ProviderService : IM365ProviderService
                 eventUpdate.End = new DateTimeTimeZone
                 {
                     DateTime = end.Value.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = TimeZoneInfo.Local.Id
+                    TimeZone = timeZone ?? "UTC"
                 };
             }
 

@@ -357,7 +357,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         string accountId, string calendarId, string eventId,
         string? subject = null, DateTime? start = null, DateTime? end = null,
         string? location = null, List<string>? attendees = null,
-        CancellationToken cancellationToken = default)
+        string? timeZone = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("JSON calendar provider is read-only.");
 
     public Task DeleteEventAsync(
@@ -488,16 +488,16 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         // Parse categories
         var categories = entry.Categories ?? new List<string>();
 
-        // Parse dates
+        // Parse dates — use RoundtripKind to honour any UTC/offset info embedded in the string
         DateTime? createdDateTime = null;
         if (!string.IsNullOrEmpty(entry.CreatedDateTime) &&
-            DateTime.TryParse(entry.CreatedDateTime, out var created))
-            createdDateTime = created.ToUniversalTime();
+            DateTime.TryParse(entry.CreatedDateTime, null, System.Globalization.DateTimeStyles.RoundtripKind, out var created))
+            createdDateTime = created.Kind == DateTimeKind.Unspecified ? created : created.ToUniversalTime();
 
         DateTime? lastModifiedDateTime = null;
         if (!string.IsNullOrEmpty(entry.LastModifiedDateTime) &&
-            DateTime.TryParse(entry.LastModifiedDateTime, out var modified))
-            lastModifiedDateTime = modified.ToUniversalTime();
+            DateTime.TryParse(entry.LastModifiedDateTime, null, System.Globalization.DateTimeStyles.RoundtripKind, out var modified))
+            lastModifiedDateTime = modified.Kind == DateTimeKind.Unspecified ? modified : modified.ToUniversalTime();
 
         // Detect online meeting URL from body or webLink
         string? onlineMeetingUrl = null;
