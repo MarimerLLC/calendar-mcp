@@ -38,6 +38,10 @@ spec:
                 secretKeyRef:
                   name: calendar-mcp-secrets
                   key: admin-token
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://alloy.loki.svc.cluster.local:4317"
+            - name: OTEL_SERVICE_NAME
+              value: "calendar-mcp"
           volumeMounts:
             - name: data
               mountPath: /app/data
