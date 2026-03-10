@@ -93,6 +93,7 @@ public interface IProviderService
         DateTime? end = null,
         string? location = null,
         List<string>? attendees = null,
+        string? timeZone = null,
         CancellationToken cancellationToken = default);
     
     Task DeleteEventAsync(

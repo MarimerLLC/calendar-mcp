@@ -301,7 +301,7 @@ public class IcsProviderService : IIcsProviderService
         string accountId, string calendarId, string eventId,
         string? subject = null, DateTime? start = null, DateTime? end = null,
         string? location = null, List<string>? attendees = null,
-        CancellationToken cancellationToken = default)
+        string? timeZone = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider is read-only.");
 
     public Task DeleteEventAsync(

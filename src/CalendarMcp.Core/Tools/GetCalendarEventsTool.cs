@@ -35,7 +35,7 @@ public sealed class GetCalendarEventsTool(
             });
         }
 
-        var resolvedStart = startDate ?? DateTime.Today;
+        var resolvedStart = startDate ?? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;
         var resolvedEnd = endDate ?? resolvedStart.AddDays(7);
 
         logger.LogInformation("Getting calendar events: startDate={StartDate}, endDate={EndDate}, accountId={AccountId}, count={Count}, timeZone={TimeZone}",
