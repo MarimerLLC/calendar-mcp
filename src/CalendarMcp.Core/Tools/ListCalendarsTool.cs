@@ -26,7 +26,7 @@ public sealed class ListCalendarsTool(
         {
             // Determine which accounts to query
             var accounts = string.IsNullOrEmpty(accountId)
-                ? await accountRegistry.GetAllAccountsAsync()
+                ? accountRegistry.GetEnabledAccounts()
                 : new[] { await accountRegistry.GetAccountAsync(accountId) }.Where(a => a != null).Cast<AccountInfo>();
 
             var validAccounts = accounts.ToList();
