@@ -1,3 +1,4 @@
+using CalendarMcp.Core.Prompts;
 using CalendarMcp.Core.Providers;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
@@ -69,6 +70,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<CreateContactTool>();
         services.AddSingleton<UpdateContactTool>();
         services.AddSingleton<DeleteContactTool>();
+
+        // Register MCP prompts
+        services.AddSingleton<CalendarPrompts>();
+        services.AddSingleton<EmailPrompts>();
+        services.AddSingleton<ContactPrompts>();
 
         return services;
     }

@@ -134,6 +134,9 @@ public class Program
                     .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetUnsubscribeInfoTool>()
                     .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>()
+                    .WithPrompts<CalendarMcp.Core.Prompts.CalendarPrompts>()
+                    .WithPrompts<CalendarMcp.Core.Prompts.EmailPrompts>()
+                    .WithPrompts<CalendarMcp.Core.Prompts.ContactPrompts>()
                     .WithStdioServerTransport();
             });
 
