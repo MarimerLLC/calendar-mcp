@@ -15,7 +15,8 @@ public static class GoogleScopes
         "https://www.googleapis.com/auth/gmail.compose",
         "https://www.googleapis.com/auth/gmail.modify",
         "https://www.googleapis.com/auth/calendar.readonly",
-        "https://www.googleapis.com/auth/calendar.events"
+        "https://www.googleapis.com/auth/calendar.events",
+        "https://www.googleapis.com/auth/contacts"
     ];
 
     /// <summary>
@@ -41,7 +42,8 @@ public static class M365Scopes
         "Mail.Read",
         "Mail.Send",
         "Mail.ReadWrite",
-        "Calendars.ReadWrite"
+        "Calendars.ReadWrite",
+        "Contacts.ReadWrite"
     ];
 
     /// <summary>
@@ -53,6 +55,7 @@ public static class M365Scopes
         "Mail.Send",
         "Mail.ReadWrite",
         "Calendars.ReadWrite",
+        "Contacts.ReadWrite",
         "Files.Read"
     ];
 }
@@ -70,7 +73,8 @@ public static class OutlookComScopes
         "Mail.Read",
         "Mail.Send",
         "Mail.ReadWrite",
-        "Calendars.ReadWrite"
+        "Calendars.ReadWrite",
+        "Contacts.ReadWrite"
     ];
 
     /// <summary>
@@ -82,6 +86,7 @@ public static class OutlookComScopes
         "Mail.Send",
         "Mail.ReadWrite",
         "Calendars.ReadWrite",
+        "Contacts.ReadWrite",
         "Files.Read"
     ];
 }
