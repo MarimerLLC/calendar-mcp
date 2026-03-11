@@ -113,8 +113,8 @@ public class GetCalendarEventsToolTests
             start: new DateTime(2025, 1, 20), end: new DateTime(2025, 1, 20, 1, 0, 0));
 
         var regExp = new IAccountRegistryCreateExpectations();
-        regExp.Setups.GetAllAccountsAsync()
-            .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([acc1, acc2]));
+        regExp.Setups.GetEnabledAccounts()
+            .ReturnValue([acc1, acc2]);
 
         var prov1Exp = new IProviderServiceCreateExpectations();
         prov1Exp.Setups.GetCalendarEventsAsync(
@@ -154,8 +154,8 @@ public class GetCalendarEventsToolTests
     public async Task GetCalendarEvents_NoAccounts_ReturnsError()
     {
         var regExp = new IAccountRegistryCreateExpectations();
-        regExp.Setups.GetAllAccountsAsync()
-            .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([]));
+        regExp.Setups.GetEnabledAccounts()
+            .ReturnValue([]);
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),

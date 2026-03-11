@@ -21,7 +21,7 @@ public sealed class GetCalendarEventsTool(
     public async Task<string> GetCalendarEvents(
         [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone. Required.")] string timeZone,
         [Description("Start of the date range (ISO 8601 format, e.g. `2026-02-20`). Defaults to today.")] DateTime? startDate = null,
-        [Description("End of the date range (ISO 8601 format, e.g. `2026-02-27`). Defaults to 7 days after startDate.")] DateTime? endDate = null,
+        [Description("End of the date range, inclusive (ISO 8601 format, e.g. `2026-02-27`). Defaults to 7 days after startDate.")] DateTime? endDate = null,
         [Description("Account ID to query, or omit to query all accounts. Obtain from list_accounts.")] string? accountId = null,
         [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars.")] string? calendarId = null,
         [Description("Maximum number of events to return per account (default 50)")] int count = 50)
@@ -36,7 +36,7 @@ public sealed class GetCalendarEventsTool(
         }
 
         var resolvedStart = startDate ?? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;
-        var resolvedEnd = endDate ?? resolvedStart.AddDays(7);
+        var resolvedEnd = endDate.HasValue ? endDate.Value.Date.AddDays(1) : resolvedStart.AddDays(7);
 
         logger.LogInformation("Getting calendar events: startDate={StartDate}, endDate={EndDate}, accountId={AccountId}, count={Count}, timeZone={TimeZone}",
             resolvedStart, resolvedEnd, accountId, count, timeZone);
@@ -45,7 +45,7 @@ public sealed class GetCalendarEventsTool(
         {
             // Determine which accounts to query
             var accounts = string.IsNullOrEmpty(accountId)
-                ? await accountRegistry.GetAllAccountsAsync()
+                ? accountRegistry.GetEnabledAccounts()
                 : new[] { await accountRegistry.GetAccountAsync(accountId) }.Where(a => a != null).Cast<AccountInfo>();
 
             var validAccounts = accounts.ToList();

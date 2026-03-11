@@ -66,8 +66,8 @@ public class ListCalendarsToolTests
         var calendars = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-1", accountId: "acc-1") };
 
         var regExp = new IAccountRegistryCreateExpectations();
-        regExp.Setups.GetAllAccountsAsync()
-            .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([acc1]));
+        regExp.Setups.GetEnabledAccounts()
+            .ReturnValue([acc1]);
 
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
