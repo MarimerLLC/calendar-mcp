@@ -150,21 +150,25 @@ public class Program
             .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
             .WithTools<CalendarMcp.Core.Tools.GetUnsubscribeInfoTool>()
             .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>()
-            .AddCallToolFilter((next) => async (request, cancellationToken) =>
-            {
-                try
+            .WithPrompts<CalendarMcp.Core.Prompts.CalendarPrompts>()
+            .WithPrompts<CalendarMcp.Core.Prompts.EmailPrompts>()
+            .WithPrompts<CalendarMcp.Core.Prompts.ContactPrompts>()
+            .WithRequestFilters(filters => filters.AddCallToolFilter(
+                (next) => async (request, cancellationToken) =>
                 {
-                    return await next(request, cancellationToken);
-                }
-                catch (ArgumentException ex) when (ex.Message.Contains("missing a value for the required parameter"))
-                {
-                    var match = Regex.Match(ex.Message, @"required parameter '([^']+)'");
-                    var paramName = match.Success ? match.Groups[1].Value : "a required parameter";
-                    throw new McpException(
-                        $"Required parameter '{paramName}' was not provided to '{request.Params?.Name}'. " +
-                        $"Check the tool's input schema and retry the call including all required parameters.");
-                }
-            });
+                    try
+                    {
+                        return await next(request, cancellationToken);
+                    }
+                    catch (ArgumentException ex) when (ex.Message.Contains("missing a value for the required parameter"))
+                    {
+                        var match = Regex.Match(ex.Message, @"required parameter '([^']+)'");
+                        var paramName = match.Success ? match.Groups[1].Value : "a required parameter";
+                        throw new McpException(
+                            $"Required parameter '{paramName}' was not provided to '{request.Params?.Name}'. " +
+                            $"Check the tool's input schema and retry the call including all required parameters.");
+                    }
+                }));
 
         var app = builder.Build();
 
