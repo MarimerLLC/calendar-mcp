@@ -9,6 +9,25 @@ using Microsoft.Extensions.Logging;
 namespace CalendarMcp.Core.Providers;
 
 /// <summary>
+/// Deserializes a JSON file that is either a direct array or a Graph API response wrapper
+/// containing a "value" array property.
+/// </summary>
+file static class JsonFileHelper
+{
+    internal static List<T> DeserializeWithValueWrapper<T>(string content, JsonSerializerOptions options)
+    {
+        var doc = JsonDocument.Parse(content);
+        if (doc.RootElement.ValueKind == JsonValueKind.Array)
+            return JsonSerializer.Deserialize<List<T>>(content, options) ?? [];
+
+        if (doc.RootElement.TryGetProperty("value", out var valueElement))
+            return JsonSerializer.Deserialize<List<T>>(valueElement.GetRawText(), options) ?? [];
+
+        throw new InvalidOperationException("JSON must be a direct array or an object with a 'value' array property.");
+    }
+}
+
+/// <summary>
 /// JSON calendar file provider service for read-only calendar access via exported JSON files.
 /// Supports local file paths and OneDrive via Microsoft Graph API.
 /// </summary>
@@ -19,6 +38,8 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
     private readonly IM365AuthenticationService _authService;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ConcurrentDictionary<string, CachedJsonData> _cache = new();
+    private readonly ConcurrentDictionary<string, CachedContactsData> _contactsCache = new();
+    private readonly ConcurrentDictionary<string, CachedEmailsData> _emailsCache = new();
 
     private const string DefaultCalendarId = "json-calendar";
     private const int DefaultCacheTtlMinutes = 15;
@@ -94,62 +115,69 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
     private async Task<string> LoadJsonContentAsync(AccountInfo account, CancellationToken cancellationToken)
     {
+        var content = await LoadFileBySourceAsync(account, "filePath", "oneDrivePath", cancellationToken);
+        return content ?? throw new InvalidOperationException(
+            $"Account '{account.Id}' is missing the calendar file path in providerConfig. " +
+            "Add 'filePath' (local) or 'oneDrivePath' (OneDrive) to providerConfig.");
+    }
+
+    /// <summary>
+    /// Loads file content using the account's source (local or OneDrive), looking up the path
+    /// under <paramref name="localPathKey"/> or <paramref name="oneDrivePathKey"/> respectively.
+    /// Returns null when the relevant path key is absent or empty (meaning this data type is not configured).
+    /// </summary>
+    private async Task<string?> LoadFileBySourceAsync(
+        AccountInfo account, string localPathKey, string oneDrivePathKey, CancellationToken cancellationToken)
+    {
         var source = account.ProviderConfig.GetValueOrDefault("source", "local").ToLowerInvariant();
 
-        return source switch
+        if (source == "local")
         {
-            "local" => await LoadFromLocalFileAsync(account),
-            "onedrive" => await LoadFromOneDriveAsync(account, cancellationToken),
-            _ => throw new InvalidOperationException($"Unknown JSON calendar source '{source}' for account '{account.Id}'. Expected 'local' or 'onedrive'.")
-        };
+            if (!account.ProviderConfig.TryGetValue(localPathKey, out var localPath) || string.IsNullOrEmpty(localPath))
+                return null;
+
+            if (!File.Exists(localPath))
+                throw new FileNotFoundException(
+                    $"JSON file not found at '{localPath}' for account '{account.Id}'. " +
+                    "Ensure the file exists and the path is correct. If using cloud sync (OneDrive, Dropbox), ensure the file has synced.");
+
+            return await File.ReadAllTextAsync(localPath, cancellationToken);
+        }
+
+        if (source == "onedrive")
+        {
+            if (!account.ProviderConfig.TryGetValue(oneDrivePathKey, out var oneDrivePath) || string.IsNullOrEmpty(oneDrivePath))
+                return null;
+
+            return await FetchFromOneDriveAsync(account, oneDrivePath, cancellationToken);
+        }
+
+        throw new InvalidOperationException(
+            $"Unknown JSON source '{source}' for account '{account.Id}'. Expected 'local' or 'onedrive'.");
     }
 
-    private async Task<string> LoadFromLocalFileAsync(AccountInfo account)
+    /// <summary>
+    /// Fetches a file from OneDrive via Microsoft Graph using the account's stored credentials.
+    /// </summary>
+    private async Task<string> FetchFromOneDriveAsync(
+        AccountInfo account, string oneDrivePath, CancellationToken cancellationToken)
     {
-        if (!account.ProviderConfig.TryGetValue("filePath", out var filePath) &&
-            !account.ProviderConfig.TryGetValue("FilePath", out filePath))
-        {
-            throw new InvalidOperationException(
-                $"Account '{account.Id}' is missing 'filePath' in providerConfig. Add the full path to the JSON calendar file.");
-        }
-
-        if (!File.Exists(filePath))
-        {
-            throw new FileNotFoundException(
-                $"JSON calendar file not found at '{filePath}' for account '{account.Id}'. " +
-                "Ensure the file exists and the path is correct. If using cloud sync (OneDrive, Dropbox), ensure the file has synced.");
-        }
-
-        return await File.ReadAllTextAsync(filePath);
-    }
-
-    private async Task<string> LoadFromOneDriveAsync(AccountInfo account, CancellationToken cancellationToken)
-    {
-        if (!account.ProviderConfig.TryGetValue("oneDrivePath", out var oneDrivePath) &&
-            !account.ProviderConfig.TryGetValue("OneDrivePath", out oneDrivePath))
-        {
-            throw new InvalidOperationException(
-                $"Account '{account.Id}' is missing 'oneDrivePath' in providerConfig.");
-        }
-
         // Resolve credentials - either from referenced account or own config
         string? clientId = null;
         string? tenantId = null;
         var authAccountId = account.Id;
+        string? refAccountId = null;
         var isReusedCredentials = false;
 
-        if (account.ProviderConfig.TryGetValue("authAccountId", out var refAccountId) ||
+        if (account.ProviderConfig.TryGetValue("authAccountId", out refAccountId) ||
             account.ProviderConfig.TryGetValue("AuthAccountId", out refAccountId))
         {
-            // Reuse credentials from another account
             isReusedCredentials = true;
             var refAccount = await _accountRegistry.GetAccountAsync(refAccountId);
             if (refAccount == null)
-            {
                 throw new InvalidOperationException(
                     $"Account '{account.Id}' references auth account '{refAccountId}' which was not found. " +
                     "Check the 'authAccountId' in providerConfig.");
-            }
 
             refAccount.ProviderConfig.TryGetValue("clientId", out clientId);
             refAccount.ProviderConfig.TryGetValue("tenantId", out tenantId);
@@ -162,13 +190,11 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         }
 
         if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(tenantId))
-        {
             throw new InvalidOperationException(
                 $"Missing clientId or tenantId for OneDrive access on account '{account.Id}'. " +
                 (isReusedCredentials
                     ? $"The referenced auth account '{refAccountId}' does not have clientId/tenantId configured."
                     : "Add clientId and tenantId to providerConfig, or set authAccountId to reuse another account's credentials."));
-        }
 
         var token = await _authService.GetTokenSilentlyAsync(
             tenantId, clientId, OneDriveScopes, authAccountId, cancellationToken);
@@ -177,20 +203,16 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         {
             var hint = isReusedCredentials
                 ? $"The reused account '{refAccountId}' may not have the 'Files.Read' permission consented. " +
-                  $"Run 'calendar-mcp-cli reauth {refAccountId}' to re-authenticate with Files.Read scope, " +
-                  "or ensure the app registration includes Files.Read in its API permissions."
+                  $"Run 'calendar-mcp-cli reauth {refAccountId}' to re-authenticate with Files.Read scope."
                 : $"Run 'calendar-mcp-cli reauth {authAccountId}' to authenticate.";
-
             throw new InvalidOperationException(
                 $"Failed to get OneDrive access token for account '{account.Id}'. {hint}");
         }
 
-        // Use Graph REST API directly: GET /me/drive/root:{path}:/content
         var httpClient = _httpClientFactory.CreateClient("JsonProvider");
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var requestUrl = $"https://graph.microsoft.com/v1.0/me/drive/root:{oneDrivePath}:/content";
-
         var response = await httpClient.GetAsync(requestUrl, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
@@ -202,7 +224,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
                 (response.StatusCode == System.Net.HttpStatusCode.Unauthorized
                     ? "The access token may lack 'Files.Read' permission. Re-authenticate with the correct scope."
                     : response.StatusCode == System.Net.HttpStatusCode.NotFound
-                        ? "File not found. Check that the oneDrivePath is correct."
+                        ? "File not found. Check that the path is correct."
                         : $"Response: {errorBody}"));
         }
 
@@ -303,44 +325,152 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
     #endregion
 
-    #region Email Operations (Not Supported)
+    #region Emails JSON Loading
 
-    public Task<IEnumerable<EmailMessage>> GetEmailsAsync(
+    private async Task<List<JsonEmailEntry>> GetEmailsJsonDataAsync(string accountId, CancellationToken cancellationToken)
+    {
+        var account = await _accountRegistry.GetAccountAsync(accountId);
+        if (account == null)
+            return [];
+
+        var cacheTtl = GetCacheTtl(account);
+
+        if (_emailsCache.TryGetValue(accountId, out var cached) &&
+            DateTime.UtcNow - cached.FetchedAt < TimeSpan.FromMinutes(cacheTtl))
+        {
+            _logger.LogDebug("Using cached email data for {AccountId}", accountId);
+            return cached.Entries;
+        }
+
+        try
+        {
+            var content = await LoadFileBySourceAsync(
+                account, "emailsFilePath", "emailsOneDrivePath", cancellationToken);
+
+            if (content == null)
+                return [];
+
+            var entries = JsonFileHelper.DeserializeWithValueWrapper<JsonEmailEntry>(content, JsonOptions);
+            _emailsCache[accountId] = new CachedEmailsData(entries, DateTime.UtcNow);
+            _logger.LogInformation("Loaded and cached emails for {AccountId} ({Count} messages)", accountId, entries.Count);
+            return entries;
+        }
+        catch (Exception ex)
+        {
+            if (_emailsCache.TryGetValue(accountId, out var stale))
+            {
+                _logger.LogWarning(ex, "Failed to load emails for {AccountId}, using stale cache", accountId);
+                return stale.Entries;
+            }
+            _logger.LogError(ex, "Failed to load emails for {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    #endregion
+
+    #region Email Operations
+
+    public async Task<IEnumerable<EmailMessage>> GetEmailsAsync(
         string accountId, int count = 20, bool unreadOnly = false,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(Enumerable.Empty<EmailMessage>());
+    {
+        var entries = await GetEmailsJsonDataAsync(accountId, cancellationToken);
+        var filtered = unreadOnly ? entries.Where(e => e.IsRead != true) : entries;
+        return filtered
+            .OrderByDescending(e => e.ReceivedDateTime)
+            .Take(count)
+            .Select(e => MapToEmailMessage(e, accountId));
+    }
 
-    public Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
+    public async Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
         string accountId, string query, int count = 20,
         DateTime? fromDate = null, DateTime? toDate = null,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(Enumerable.Empty<EmailMessage>());
+    {
+        var entries = await GetEmailsJsonDataAsync(accountId, cancellationToken);
+        var q = query.Trim();
 
-    public Task<EmailMessage?> GetEmailDetailsAsync(
+        var filtered = entries.Where(e =>
+            ContainsIgnoreCase(e.Subject, q) ||
+            ContainsIgnoreCase(e.From?.EmailAddress?.Address, q) ||
+            ContainsIgnoreCase(e.From?.EmailAddress?.Name, q) ||
+            ContainsIgnoreCase(e.Body?.Content, q) ||
+            ContainsIgnoreCase(e.BodyPreview, q) ||
+            (e.ToRecipients?.Any(r => ContainsIgnoreCase(r.EmailAddress?.Address, q)) ?? false));
+
+        if (fromDate.HasValue)
+            filtered = filtered.Where(e => ParseUtcDateTime(e.ReceivedDateTime) >= fromDate.Value);
+        if (toDate.HasValue)
+            filtered = filtered.Where(e => ParseUtcDateTime(e.ReceivedDateTime) <= toDate.Value);
+
+        return filtered
+            .OrderByDescending(e => e.ReceivedDateTime)
+            .Take(count)
+            .Select(e => MapToEmailMessage(e, accountId));
+    }
+
+    public async Task<EmailMessage?> GetEmailDetailsAsync(
         string accountId, string emailId,
         CancellationToken cancellationToken = default)
-        => Task.FromResult<EmailMessage?>(null);
+    {
+        var entries = await GetEmailsJsonDataAsync(accountId, cancellationToken);
+        var entry = entries.FirstOrDefault(e => e.Id == emailId);
+        return entry == null ? null : MapToEmailMessage(entry, accountId);
+    }
 
     public Task<string> SendEmailAsync(
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
         CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("JSON calendar provider does not support sending emails.");
+        => throw new NotSupportedException("JSON file provider is read-only; emails cannot be sent.");
 
     public Task DeleteEmailAsync(
         string accountId, string emailId,
         CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("JSON calendar provider does not support deleting emails.");
+        => throw new NotSupportedException("JSON file provider is read-only; emails cannot be deleted.");
 
     public Task MarkEmailAsReadAsync(
         string accountId, string emailId, bool isRead,
         CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("JSON calendar provider does not support marking emails as read.");
+        => throw new NotSupportedException("JSON file provider is read-only; emails cannot be marked as read.");
 
     public Task MoveEmailAsync(
         string accountId, string emailId, string destinationFolder,
         CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("JSON calendar provider does not support moving emails.");
+        => throw new NotSupportedException("JSON file provider is read-only; emails cannot be moved.");
+
+    #endregion
+
+    #region Email Mapping
+
+    private static EmailMessage MapToEmailMessage(JsonEmailEntry e, string accountId)
+    {
+        var body = e.Body?.Content ?? e.BodyPreview ?? string.Empty;
+        var bodyFormat = e.Body?.ContentType?.ToLowerInvariant() == "html" ? "html" : "text";
+
+        return new EmailMessage
+        {
+            Id = e.Id ?? Guid.NewGuid().ToString(),
+            AccountId = accountId,
+            Subject = e.Subject ?? string.Empty,
+            From = e.From?.EmailAddress?.Address ?? string.Empty,
+            FromName = e.From?.EmailAddress?.Name ?? string.Empty,
+            To = (e.ToRecipients ?? [])
+                .Select(r => r.EmailAddress?.Address ?? string.Empty)
+                .Where(a => !string.IsNullOrWhiteSpace(a))
+                .ToList(),
+            Cc = (e.CcRecipients ?? [])
+                .Select(r => r.EmailAddress?.Address ?? string.Empty)
+                .Where(a => !string.IsNullOrWhiteSpace(a))
+                .ToList(),
+            Body = body,
+            BodyFormat = bodyFormat,
+            ReceivedDateTime = ParseUtcDateTime(e.ReceivedDateTime) ?? DateTime.MinValue,
+            IsRead = e.IsRead ?? false,
+            HasAttachments = e.HasAttachments ?? false
+        };
+    }
 
     #endregion
 
@@ -372,22 +502,87 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
     #endregion
 
-    #region Contact Operations (Not Supported)
+    #region Contacts JSON Loading
 
-    public Task<IEnumerable<Contact>> GetContactsAsync(
+    private async Task<List<JsonContactEntry>> GetContactsJsonDataAsync(string accountId, CancellationToken cancellationToken)
+    {
+        var account = await _accountRegistry.GetAccountAsync(accountId);
+        if (account == null)
+            return [];
+
+        var cacheTtl = GetCacheTtl(account);
+
+        if (_contactsCache.TryGetValue(accountId, out var cached) &&
+            DateTime.UtcNow - cached.FetchedAt < TimeSpan.FromMinutes(cacheTtl))
+        {
+            _logger.LogDebug("Using cached contacts data for {AccountId}", accountId);
+            return cached.Entries;
+        }
+
+        try
+        {
+            var content = await LoadFileBySourceAsync(
+                account, "contactsFilePath", "contactsOneDrivePath", cancellationToken);
+
+            if (content == null)
+                return [];
+
+            var entries = JsonFileHelper.DeserializeWithValueWrapper<JsonContactEntry>(content, JsonOptions);
+            _contactsCache[accountId] = new CachedContactsData(entries, DateTime.UtcNow);
+            _logger.LogInformation("Loaded and cached contacts for {AccountId} ({Count} contacts)", accountId, entries.Count);
+            return entries;
+        }
+        catch (Exception ex)
+        {
+            if (_contactsCache.TryGetValue(accountId, out var stale))
+            {
+                _logger.LogWarning(ex, "Failed to load contacts for {AccountId}, using stale cache", accountId);
+                return stale.Entries;
+            }
+            _logger.LogError(ex, "Failed to load contacts for {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    #endregion
+
+    #region Contact Operations
+
+    public async Task<IEnumerable<Contact>> GetContactsAsync(
         string accountId, int count = 50,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(Enumerable.Empty<Contact>());
+    {
+        var entries = await GetContactsJsonDataAsync(accountId, cancellationToken);
+        return entries.Take(count).Select(e => MapToContact(e, accountId));
+    }
 
-    public Task<IEnumerable<Contact>> SearchContactsAsync(
+    public async Task<IEnumerable<Contact>> SearchContactsAsync(
         string accountId, string query, int count = 50,
         CancellationToken cancellationToken = default)
-        => Task.FromResult(Enumerable.Empty<Contact>());
+    {
+        var entries = await GetContactsJsonDataAsync(accountId, cancellationToken);
+        var q = query.Trim();
 
-    public Task<Contact?> GetContactDetailsAsync(
+        return entries
+            .Where(e =>
+                ContainsIgnoreCase(e.DisplayName, q) ||
+                ContainsIgnoreCase(e.GivenName, q) ||
+                ContainsIgnoreCase(e.Surname, q) ||
+                ContainsIgnoreCase(e.CompanyName, q) ||
+                ContainsIgnoreCase(e.JobTitle, q) ||
+                (e.EmailAddresses?.Any(em => ContainsIgnoreCase(em.Address, q)) ?? false))
+            .Take(count)
+            .Select(e => MapToContact(e, accountId));
+    }
+
+    public async Task<Contact?> GetContactDetailsAsync(
         string accountId, string contactId,
         CancellationToken cancellationToken = default)
-        => Task.FromResult<Contact?>(null);
+    {
+        var entries = await GetContactsJsonDataAsync(accountId, cancellationToken);
+        var entry = entries.FirstOrDefault(e => e.Id == contactId);
+        return entry == null ? null : MapToContact(entry, accountId);
+    }
 
     public Task<string> CreateContactAsync(
         string accountId, string displayName,
@@ -395,7 +590,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         List<string>? emailAddresses = null, List<string>? phoneNumbers = null,
         string? jobTitle = null, string? companyName = null, string? notes = null,
         CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("JSON calendar provider does not support contacts.");
+        => throw new NotSupportedException("JSON file provider is read-only; contacts cannot be created.");
 
     public Task UpdateContactAsync(
         string accountId, string contactId,
@@ -403,12 +598,76 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         List<string>? emailAddresses = null, List<string>? phoneNumbers = null,
         string? jobTitle = null, string? companyName = null, string? notes = null,
         string? etag = null, CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("JSON calendar provider does not support contacts.");
+        => throw new NotSupportedException("JSON file provider is read-only; contacts cannot be updated.");
 
     public Task DeleteContactAsync(
         string accountId, string contactId,
         CancellationToken cancellationToken = default)
-        => throw new NotSupportedException("JSON calendar provider does not support contacts.");
+        => throw new NotSupportedException("JSON file provider is read-only; contacts cannot be deleted.");
+
+    #endregion
+
+    #region Contact Mapping
+
+    private static Contact MapToContact(JsonContactEntry e, string accountId)
+    {
+        var phones = new List<ContactPhone>();
+        if (!string.IsNullOrWhiteSpace(e.MobilePhone))
+            phones.Add(new ContactPhone { Number = e.MobilePhone, Label = "mobile" });
+        foreach (var p in e.BusinessPhones ?? [])
+            if (!string.IsNullOrWhiteSpace(p)) phones.Add(new ContactPhone { Number = p, Label = "work" });
+        foreach (var p in e.HomePhones ?? [])
+            if (!string.IsNullOrWhiteSpace(p)) phones.Add(new ContactPhone { Number = p, Label = "home" });
+
+        var addresses = new List<ContactAddress>();
+        if (e.BusinessAddress is { } ba && !string.IsNullOrEmpty(ba.Street ?? ba.City))
+            addresses.Add(MapToAddress(ba, "business"));
+        if (e.HomeAddress is { } ha && !string.IsNullOrEmpty(ha.Street ?? ha.City))
+            addresses.Add(MapToAddress(ha, "home"));
+        if (e.OtherAddress is { } oa && !string.IsNullOrEmpty(oa.Street ?? oa.City))
+            addresses.Add(MapToAddress(oa, "other"));
+
+        DateTime? birthday = null;
+        if (!string.IsNullOrEmpty(e.Birthday) &&
+            DateTime.TryParse(e.Birthday, null, System.Globalization.DateTimeStyles.RoundtripKind, out var bday))
+            birthday = bday.Date;
+
+        DateTime? created = ParseUtcDateTime(e.CreatedDateTime);
+        DateTime? modified = ParseUtcDateTime(e.LastModifiedDateTime);
+
+        return new Contact
+        {
+            Id = e.Id ?? Guid.NewGuid().ToString(),
+            AccountId = accountId,
+            DisplayName = e.DisplayName ?? string.Empty,
+            GivenName = e.GivenName ?? string.Empty,
+            Surname = e.Surname ?? string.Empty,
+            EmailAddresses = (e.EmailAddresses ?? [])
+                .Where(em => !string.IsNullOrWhiteSpace(em.Address))
+                .Select(em => new ContactEmail { Address = em.Address!, Label = "other" })
+                .ToList(),
+            PhoneNumbers = phones,
+            JobTitle = e.JobTitle ?? string.Empty,
+            CompanyName = e.CompanyName ?? string.Empty,
+            Department = e.Department ?? string.Empty,
+            Addresses = addresses,
+            Birthday = birthday,
+            Notes = e.PersonalNotes ?? string.Empty,
+            Groups = e.Categories ?? [],
+            CreatedDateTime = created,
+            LastModifiedDateTime = modified
+        };
+    }
+
+    private static ContactAddress MapToAddress(JsonAddress a, string label) => new()
+    {
+        Street = a.Street ?? string.Empty,
+        City = a.City ?? string.Empty,
+        State = a.State ?? string.Empty,
+        PostalCode = a.PostalCode ?? string.Empty,
+        Country = a.CountryOrRegion ?? string.Empty,
+        Label = label
+    };
 
     #endregion
 
@@ -618,7 +877,20 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
     #endregion
 
+    private static bool ContainsIgnoreCase(string? source, string value)
+        => source != null && source.Contains(value, StringComparison.OrdinalIgnoreCase);
+
+    private static DateTime? ParseUtcDateTime(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return null;
+        if (DateTime.TryParse(value, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+            return dt.Kind == DateTimeKind.Unspecified ? dt : dt.ToUniversalTime();
+        return null;
+    }
+
     private sealed record CachedJsonData(List<JsonCalendarEntry> Entries, DateTime FetchedAt);
+    private sealed record CachedContactsData(List<JsonContactEntry> Entries, DateTime FetchedAt);
+    private sealed record CachedEmailsData(List<JsonEmailEntry> Entries, DateTime FetchedAt);
 }
 
 /// <summary>
@@ -694,4 +966,147 @@ internal class JsonCalendarEntry
 
     [JsonPropertyName("sensitivity")]
     public string? Sensitivity { get; set; }
+}
+
+/// <summary>
+/// Represents a contact entry from a Microsoft Graph / M365 JSON export.
+/// Supports both direct array exports and Graph API wrapper format ({"value":[...]}).
+/// </summary>
+internal class JsonContactEntry
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("displayName")]
+    public string? DisplayName { get; set; }
+
+    [JsonPropertyName("givenName")]
+    public string? GivenName { get; set; }
+
+    [JsonPropertyName("surname")]
+    public string? Surname { get; set; }
+
+    [JsonPropertyName("emailAddresses")]
+    public List<JsonEmailAddress>? EmailAddresses { get; set; }
+
+    [JsonPropertyName("mobilePhone")]
+    public string? MobilePhone { get; set; }
+
+    [JsonPropertyName("businessPhones")]
+    public List<string>? BusinessPhones { get; set; }
+
+    [JsonPropertyName("homePhones")]
+    public List<string>? HomePhones { get; set; }
+
+    [JsonPropertyName("jobTitle")]
+    public string? JobTitle { get; set; }
+
+    [JsonPropertyName("companyName")]
+    public string? CompanyName { get; set; }
+
+    [JsonPropertyName("department")]
+    public string? Department { get; set; }
+
+    [JsonPropertyName("businessAddress")]
+    public JsonAddress? BusinessAddress { get; set; }
+
+    [JsonPropertyName("homeAddress")]
+    public JsonAddress? HomeAddress { get; set; }
+
+    [JsonPropertyName("otherAddress")]
+    public JsonAddress? OtherAddress { get; set; }
+
+    [JsonPropertyName("birthday")]
+    public string? Birthday { get; set; }
+
+    [JsonPropertyName("personalNotes")]
+    public string? PersonalNotes { get; set; }
+
+    [JsonPropertyName("categories")]
+    public List<string>? Categories { get; set; }
+
+    [JsonPropertyName("createdDateTime")]
+    public string? CreatedDateTime { get; set; }
+
+    [JsonPropertyName("lastModifiedDateTime")]
+    public string? LastModifiedDateTime { get; set; }
+}
+
+internal class JsonEmailAddress
+{
+    [JsonPropertyName("address")]
+    public string? Address { get; set; }
+
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+}
+
+internal class JsonAddress
+{
+    [JsonPropertyName("street")]
+    public string? Street { get; set; }
+
+    [JsonPropertyName("city")]
+    public string? City { get; set; }
+
+    [JsonPropertyName("state")]
+    public string? State { get; set; }
+
+    [JsonPropertyName("postalCode")]
+    public string? PostalCode { get; set; }
+
+    [JsonPropertyName("countryOrRegion")]
+    public string? CountryOrRegion { get; set; }
+}
+
+/// <summary>
+/// Represents an email message from a Microsoft Graph / M365 JSON export.
+/// Supports both direct array exports and Graph API wrapper format ({"value":[...]}).
+/// </summary>
+internal class JsonEmailEntry
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("subject")]
+    public string? Subject { get; set; }
+
+    [JsonPropertyName("from")]
+    public JsonRecipient? From { get; set; }
+
+    [JsonPropertyName("toRecipients")]
+    public List<JsonRecipient>? ToRecipients { get; set; }
+
+    [JsonPropertyName("ccRecipients")]
+    public List<JsonRecipient>? CcRecipients { get; set; }
+
+    [JsonPropertyName("body")]
+    public JsonBody? Body { get; set; }
+
+    [JsonPropertyName("bodyPreview")]
+    public string? BodyPreview { get; set; }
+
+    [JsonPropertyName("receivedDateTime")]
+    public string? ReceivedDateTime { get; set; }
+
+    [JsonPropertyName("isRead")]
+    public bool? IsRead { get; set; }
+
+    [JsonPropertyName("hasAttachments")]
+    public bool? HasAttachments { get; set; }
+}
+
+internal class JsonRecipient
+{
+    [JsonPropertyName("emailAddress")]
+    public JsonEmailAddress? EmailAddress { get; set; }
+}
+
+internal class JsonBody
+{
+    [JsonPropertyName("content")]
+    public string? Content { get; set; }
+
+    [JsonPropertyName("contentType")]
+    public string? ContentType { get; set; }
 }

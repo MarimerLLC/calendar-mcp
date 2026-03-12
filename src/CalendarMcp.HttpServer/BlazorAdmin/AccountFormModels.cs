@@ -50,6 +50,10 @@ public class CreateAccountFormModel : AccountFormBase
     public string OneDrivePath { get; set; } = "";
     public string AuthAccountId { get; set; } = "";
     public int JsonCacheTtlMinutes { get; set; } = 15;
+    /// <summary>Local path or OneDrive path for contacts, depending on JsonSource.</summary>
+    public string ContactsPath { get; set; } = "";
+    /// <summary>Local path or OneDrive path for emails, depending on JsonSource.</summary>
+    public string EmailsPath { get; set; } = "";
 
     public AccountInfo ToAccountInfo()
     {
@@ -99,6 +103,10 @@ public class CreateAccountFormModel : AccountFormBase
         if (JsonSource == "local")
         {
             config["filePath"] = FilePath;
+            if (!string.IsNullOrWhiteSpace(ContactsPath))
+                config["contactsFilePath"] = ContactsPath;
+            if (!string.IsNullOrWhiteSpace(EmailsPath))
+                config["emailsFilePath"] = EmailsPath;
         }
         else
         {
@@ -109,6 +117,10 @@ public class CreateAccountFormModel : AccountFormBase
                 config["clientId"] = ClientId;
             if (!string.IsNullOrWhiteSpace(TenantId))
                 config["tenantId"] = TenantId;
+            if (!string.IsNullOrWhiteSpace(ContactsPath))
+                config["contactsOneDrivePath"] = ContactsPath;
+            if (!string.IsNullOrWhiteSpace(EmailsPath))
+                config["emailsOneDrivePath"] = EmailsPath;
         }
 
         config["cacheTtlMinutes"] = JsonCacheTtlMinutes.ToString();
@@ -141,6 +153,10 @@ public class EditAccountFormModel : AccountFormBase
     public string OneDrivePath { get; set; } = "";
     public string AuthAccountId { get; set; } = "";
     public int JsonCacheTtlMinutes { get; set; } = 15;
+    /// <summary>Local path or OneDrive path for contacts, depending on JsonSource.</summary>
+    public string ContactsPath { get; set; } = "";
+    /// <summary>Local path or OneDrive path for emails, depending on JsonSource.</summary>
+    public string EmailsPath { get; set; } = "";
 
     public static EditAccountFormModel FromAccountInfo(AccountInfo account)
     {
@@ -179,6 +195,13 @@ public class EditAccountFormModel : AccountFormBase
                 model.AuthAccountId = GetConfigValue(config, "authAccountId");
                 model.ClientId = GetConfigValue(config, "clientId");
                 model.TenantId = GetConfigValue(config, "tenantId");
+                // Load contacts/emails path from whichever key matches the source
+                model.ContactsPath = model.JsonSource == "onedrive"
+                    ? GetConfigValue(config, "contactsOneDrivePath")
+                    : GetConfigValue(config, "contactsFilePath");
+                model.EmailsPath = model.JsonSource == "onedrive"
+                    ? GetConfigValue(config, "emailsOneDrivePath")
+                    : GetConfigValue(config, "emailsFilePath");
                 if (int.TryParse(GetConfigValue(config, "cacheTtlMinutes"), out var jsonTtl))
                     model.JsonCacheTtlMinutes = jsonTtl;
                 break;
@@ -234,6 +257,10 @@ public class EditAccountFormModel : AccountFormBase
         if (JsonSource == "local")
         {
             config["filePath"] = FilePath;
+            if (!string.IsNullOrWhiteSpace(ContactsPath))
+                config["contactsFilePath"] = ContactsPath;
+            if (!string.IsNullOrWhiteSpace(EmailsPath))
+                config["emailsFilePath"] = EmailsPath;
         }
         else
         {
@@ -244,6 +271,10 @@ public class EditAccountFormModel : AccountFormBase
                 config["clientId"] = ClientId;
             if (!string.IsNullOrWhiteSpace(TenantId))
                 config["tenantId"] = TenantId;
+            if (!string.IsNullOrWhiteSpace(ContactsPath))
+                config["contactsOneDrivePath"] = ContactsPath;
+            if (!string.IsNullOrWhiteSpace(EmailsPath))
+                config["emailsOneDrivePath"] = EmailsPath;
         }
 
         config["cacheTtlMinutes"] = JsonCacheTtlMinutes.ToString();

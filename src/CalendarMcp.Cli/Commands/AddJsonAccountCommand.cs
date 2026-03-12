@@ -247,6 +247,76 @@ public class AddJsonAccountCommand : AsyncCommand<AddJsonAccountCommand.Settings
             }
         }
 
+        // Optional contacts JSON file
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[dim]Optionally specify a contacts JSON file exported from M365/Outlook (Microsoft Graph format).[/]");
+        var addContacts = AnsiConsole.Confirm("[yellow]Add a contacts JSON file?[/]", defaultValue: false);
+        if (addContacts)
+        {
+            var contactsPath = AnsiConsole.Prompt(
+                new TextPrompt<string>("[green]Contacts File Path[/] (full path to the contacts JSON file):")
+                    .ValidationErrorMessage("[red]File path is required[/]")
+                    .Validate(p => !string.IsNullOrWhiteSpace(p)));
+
+            providerConfig["contactsFilePath"] = contactsPath;
+
+            if (File.Exists(contactsPath))
+            {
+                try
+                {
+                    var content = await File.ReadAllTextAsync(contactsPath);
+                    var entries = JsonSerializer.Deserialize<List<JsonElement>>(content)
+                        ?? JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(content)?
+                            .GetValueOrDefault("value").EnumerateArray().Cast<JsonElement>().ToList();
+                    AnsiConsole.MarkupLine($"[green]  Contacts file looks valid.[/]");
+                }
+                catch
+                {
+                    AnsiConsole.MarkupLine("[yellow]  Warning: Could not validate contacts JSON file. It may still work at runtime.[/]");
+                }
+            }
+            else
+            {
+                AnsiConsole.MarkupLine($"[yellow]  Note: File not found at {contactsPath}. It may be created later.[/]");
+            }
+        }
+
+        // Optional emails JSON file
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[dim]Optionally specify an emails JSON file exported from M365/Outlook (Microsoft Graph format).[/]");
+        var addEmails = AnsiConsole.Confirm("[yellow]Add an emails JSON file?[/]", defaultValue: false);
+        if (addEmails)
+        {
+            var emailsPath = AnsiConsole.Prompt(
+                new TextPrompt<string>("[green]Emails File Path[/] (full path to the emails JSON file):")
+                    .ValidationErrorMessage("[red]File path is required[/]")
+                    .Validate(p => !string.IsNullOrWhiteSpace(p)));
+
+            providerConfig["emailsFilePath"] = emailsPath;
+
+            if (File.Exists(emailsPath))
+            {
+                try
+                {
+                    var content = await File.ReadAllTextAsync(emailsPath);
+                    var entries = JsonSerializer.Deserialize<List<JsonElement>>(content)
+                        ?? JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(content)?
+                            .GetValueOrDefault("value").EnumerateArray().Cast<JsonElement>().ToList();
+                    AnsiConsole.MarkupLine($"[green]  Emails file looks valid.[/]");
+                }
+                catch
+                {
+                    AnsiConsole.MarkupLine("[yellow]  Warning: Could not validate emails JSON file. It may still work at runtime.[/]");
+                }
+            }
+            else
+            {
+                AnsiConsole.MarkupLine($"[yellow]  Note: File not found at {emailsPath}. It may be created later.[/]");
+            }
+        }
+
+        AnsiConsole.WriteLine();
+
         var cacheTtlMinutes = AnsiConsole.Prompt(
             new TextPrompt<int>("[green]Cache TTL[/] (minutes, default 15):")
                 .DefaultValue(15)
@@ -353,6 +423,18 @@ public class AddJsonAccountCommand : AsyncCommand<AddJsonAccountCommand.Settings
                     table.AddRow("Auth Account", providerConfig["authAccountId"]);
                 else
                     table.AddRow("Client ID", providerConfig.GetValueOrDefault("clientId", ""));
+            }
+
+            if (providerConfig.TryGetValue("contactsFilePath", out var cfp))
+            {
+                var cfpDisplay = cfp.Length > 60 ? cfp[..57] + "..." : cfp;
+                table.AddRow("Contacts File", cfpDisplay);
+            }
+
+            if (providerConfig.TryGetValue("emailsFilePath", out var efp))
+            {
+                var efpDisplay = efp.Length > 60 ? efp[..57] + "..." : efp;
+                table.AddRow("Emails File", efpDisplay);
             }
 
             table.AddRow("Cache TTL", $"{cacheTtlMinutes} minutes");
