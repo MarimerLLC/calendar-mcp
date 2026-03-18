@@ -1072,15 +1072,19 @@ internal class JsonEmailEntry
     public string? Subject { get; set; }
 
     [JsonPropertyName("from")]
+    [JsonConverter(typeof(JsonRecipientConverter))]
     public JsonRecipient? From { get; set; }
 
     [JsonPropertyName("toRecipients")]
+    [JsonConverter(typeof(JsonRecipientListConverter))]
     public List<JsonRecipient>? ToRecipients { get; set; }
 
     [JsonPropertyName("ccRecipients")]
+    [JsonConverter(typeof(JsonRecipientListConverter))]
     public List<JsonRecipient>? CcRecipients { get; set; }
 
     [JsonPropertyName("body")]
+    [JsonConverter(typeof(JsonBodyConverter))]
     public JsonBody? Body { get; set; }
 
     [JsonPropertyName("bodyPreview")]
@@ -1109,4 +1113,107 @@ internal class JsonBody
 
     [JsonPropertyName("contentType")]
     public string? ContentType { get; set; }
+}
+
+/// <summary>
+/// Handles both string ("body": "text") and object ("body": {"content":"...","contentType":"..."}) formats.
+/// </summary>
+internal class JsonBodyConverter : JsonConverter<JsonBody?>
+{
+    public override JsonBody? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+
+        if (reader.TokenType == JsonTokenType.String)
+            return new JsonBody { Content = reader.GetString(), ContentType = "text" };
+
+        if (reader.TokenType == JsonTokenType.StartObject)
+            return JsonSerializer.Deserialize<JsonBody>(ref reader);
+
+        reader.Skip();
+        return null;
+    }
+
+    public override void Write(Utf8JsonWriter writer, JsonBody? value, JsonSerializerOptions options)
+        => JsonSerializer.Serialize(writer, value, options);
+}
+
+/// <summary>
+/// Handles recipient lists that may contain strings, objects, or be a single string.
+/// Supports: ["a@b.com"], [{"emailAddress":{"address":"a@b.com"}}], "a@b.com", or mixed arrays.
+/// </summary>
+internal class JsonRecipientListConverter : JsonConverter<List<JsonRecipient>?>
+{
+    public override List<JsonRecipient>? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var value = reader.GetString();
+            return string.IsNullOrEmpty(value) ? [] :
+                [new JsonRecipient { EmailAddress = new JsonEmailAddress { Address = value, Name = value } }];
+        }
+
+        if (reader.TokenType == JsonTokenType.StartArray)
+        {
+            var list = new List<JsonRecipient>();
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+            {
+                if (reader.TokenType == JsonTokenType.String)
+                {
+                    var addr = reader.GetString();
+                    list.Add(new JsonRecipient { EmailAddress = new JsonEmailAddress { Address = addr, Name = addr } });
+                }
+                else if (reader.TokenType == JsonTokenType.StartObject)
+                {
+                    var recipient = JsonSerializer.Deserialize<JsonRecipient>(ref reader);
+                    if (recipient != null) list.Add(recipient);
+                }
+                else
+                {
+                    reader.Skip();
+                }
+            }
+            return list;
+        }
+
+        reader.Skip();
+        return null;
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<JsonRecipient>? value, JsonSerializerOptions options)
+        => JsonSerializer.Serialize(writer, value, options);
+}
+
+/// <summary>
+/// Handles both string ("from": "email@example.com") and object ("from": {"emailAddress":{"address":"..."}}) formats.
+/// </summary>
+internal class JsonRecipientConverter : JsonConverter<JsonRecipient?>
+{
+    public override JsonRecipient? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+            return null;
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var value = reader.GetString();
+            return new JsonRecipient
+            {
+                EmailAddress = new JsonEmailAddress { Address = value, Name = value }
+            };
+        }
+
+        if (reader.TokenType == JsonTokenType.StartObject)
+            return JsonSerializer.Deserialize<JsonRecipient>(ref reader);
+
+        reader.Skip();
+        return null;
+    }
+
+    public override void Write(Utf8JsonWriter writer, JsonRecipient? value, JsonSerializerOptions options)
+        => JsonSerializer.Serialize(writer, value, options);
 }
