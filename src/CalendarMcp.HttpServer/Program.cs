@@ -29,23 +29,20 @@ public class Program
 
         var otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
 
-        // If no OTLP endpoint, use Serilog for file + console logging
-        if (string.IsNullOrEmpty(otlpEndpoint))
-        {
-            Log.Logger = new LoggerConfiguration()
-                .MinimumLevel.Information()
-                .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
-                .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
-                .Enrich.FromLogContext()
-                .WriteTo.Console(
-                    outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-                .WriteTo.File(
-                    path: Path.Combine(logDir, "calendar-mcp-http-.log"),
-                    rollingInterval: RollingInterval.Day,
-                    retainedFileCountLimit: 7,
-                    outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
-                .CreateLogger();
-        }
+        // Always configure Serilog for file logging
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+            .MinimumLevel.Override("Microsoft.AspNetCore", LogEventLevel.Warning)
+            .Enrich.FromLogContext()
+            .WriteTo.Console(
+                outputTemplate: "{Timestamp:HH:mm:ss.fff} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .WriteTo.File(
+                path: Path.Combine(logDir, "calendar-mcp-http-.log"),
+                rollingInterval: RollingInterval.Day,
+                retainedFileCountLimit: 7,
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
+            .CreateLogger();
 
         Log.Information("Calendar MCP HTTP Server starting. Config directory: {ConfigDir}", configDir);
 
@@ -78,10 +75,10 @@ public class Program
         // Add environment variables (can override file settings)
         builder.Configuration.AddEnvironmentVariables("CALENDAR_MCP_");
 
-        // Configure logging
+        // Configure logging - always use Serilog, add OTEL if endpoint is available
+        builder.Host.UseSerilog();
         if (!string.IsNullOrEmpty(otlpEndpoint))
         {
-            builder.Logging.ClearProviders();
             builder.Logging.AddOpenTelemetry(options =>
             {
                 options.SetResourceBuilder(ResourceBuilder.CreateDefault()
@@ -90,10 +87,6 @@ public class Program
                 options.IncludeFormattedMessage = true;
                 options.IncludeScopes = true;
             });
-        }
-        else
-        {
-            builder.Host.UseSerilog();
         }
 
         // Configure Calendar MCP settings
