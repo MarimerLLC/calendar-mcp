@@ -102,31 +102,127 @@ public class GetCalendarEventsToolTests
     }
 
     [TestMethod]
-    public async Task GetCalendarEvents_AllAccounts_ReturnsEventsSortedByStart()
+    public async Task GetCalendarEvents_NullAccountId_ReturnsValidationError()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null);
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual("accountId is required", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_EmptyAccountId_ReturnsValidationError()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual("accountId is required", doc.RootElement.GetProperty("error").GetString());
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_NullAccountIdWithCalendarId_SingleMatch_ResolvesAccount()
+    {
+        var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var calendars = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-work", accountId: "acc-1") };
+        var events = new List<CalendarEvent>
+        {
+            TestData.CreateEvent(id: "ev1", accountId: "acc-1", subject: "Meeting",
+                start: new DateTime(2025, 1, 10, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 10, 16, 0, 0, DateTimeKind.Utc))
+        };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([acc1]);
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(acc1));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>(calendars));
+        provExp.Setups.GetCalendarEventsAsync(
+            "acc-1", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events));
+
+        var provInstance = provExp.Instance();
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        // GetProvider is called twice: once for calendar lookup, once for fetching events
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provInstance).ExpectedCallCount(2);
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null, "cal-work");
+        var doc = JsonDocument.Parse(result);
+        var eventsArray = doc.RootElement.GetProperty("events");
+
+        Assert.AreEqual(1, eventsArray.GetArrayLength());
+        Assert.AreEqual("ev1", eventsArray[0].GetProperty("id").GetString());
+        Assert.AreEqual(TestTimeZone, doc.RootElement.GetProperty("timezone").GetString());
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_NullAccountIdWithCalendarId_NoMatch_ReturnsError()
+    {
+        var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var calendars = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-other", accountId: "acc-1") };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([acc1]);
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>(calendars));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null, "cal-missing");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("No calendar found with id 'cal-missing'"));
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_NullAccountIdWithCalendarId_AmbiguousCalendarId_ReturnsError()
     {
         var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
         var acc2 = TestData.CreateAccount(id: "acc-2", provider: "google");
-
-        var earlyEvent = TestData.CreateEvent(id: "ev1", accountId: "acc-1",
-            start: new DateTime(2025, 1, 10), end: new DateTime(2025, 1, 10, 1, 0, 0));
-        var lateEvent = TestData.CreateEvent(id: "ev2", accountId: "acc-2",
-            start: new DateTime(2025, 1, 20), end: new DateTime(2025, 1, 20, 1, 0, 0));
+        var calendars1 = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-shared", accountId: "acc-1") };
+        var calendars2 = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-shared", accountId: "acc-2") };
 
         var regExp = new IAccountRegistryCreateExpectations();
-        regExp.Setups.GetEnabledAccounts()
-            .ReturnValue([acc1, acc2]);
+        regExp.Setups.GetEnabledAccounts().ReturnValue([acc1, acc2]);
 
         var prov1Exp = new IProviderServiceCreateExpectations();
-        prov1Exp.Setups.GetCalendarEventsAsync(
-            "acc-1", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
-            Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>([earlyEvent]));
+        prov1Exp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>(calendars1));
 
         var prov2Exp = new IProviderServiceCreateExpectations();
-        prov2Exp.Setups.GetCalendarEventsAsync(
-            "acc-2", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
-            Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>([lateEvent]));
+        prov2Exp.Setups.ListCalendarsAsync("acc-2", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>(calendars2));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
         factExp.Setups.GetProvider("microsoft365").ReturnValue(prov1Exp.Instance());
@@ -135,36 +231,14 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End);
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null, "cal-shared");
         var doc = JsonDocument.Parse(result);
-        var eventsArray = doc.RootElement.GetProperty("events");
 
-        Assert.AreEqual(2, eventsArray.GetArrayLength());
-        Assert.AreEqual("ev1", eventsArray[0].GetProperty("id").GetString());
-        Assert.AreEqual("ev2", eventsArray[1].GetProperty("id").GetString());
-        Assert.AreEqual(TestTimeZone, doc.RootElement.GetProperty("timezone").GetString());
+        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("exists in multiple accounts"));
 
         regExp.Verify();
         factExp.Verify();
         prov1Exp.Verify();
         prov2Exp.Verify();
-    }
-
-    [TestMethod]
-    public async Task GetCalendarEvents_NoAccounts_ReturnsError()
-    {
-        var regExp = new IAccountRegistryCreateExpectations();
-        regExp.Setups.GetEnabledAccounts()
-            .ReturnValue([]);
-
-        var factExp = new IProviderServiceFactoryCreateExpectations();
-        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<GetCalendarEventsTool>.Instance);
-
-        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End);
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("No accounts found", doc.RootElement.GetProperty("error").GetString());
-        regExp.Verify();
     }
 }
