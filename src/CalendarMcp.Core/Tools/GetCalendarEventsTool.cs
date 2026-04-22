@@ -17,13 +17,13 @@ public sealed class GetCalendarEventsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetCalendarEventsTool> logger)
 {
-    [McpServerTool, Description("Get calendar events for a date range from a specific account. The timeZone and accountId parameters are required. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
+    [McpServerTool, Description("Get calendar events for a date range from a specific account. The timeZone parameter is required. The accountId parameter is required unless calendarId uniquely identifies a calendar across all accounts, in which case the account is resolved automatically. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
     public async Task<string> GetCalendarEvents(
         [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone. Required.")] string timeZone,
         [Description("Start of the date range (ISO 8601 format, e.g. `2026-02-20`). Defaults to today.")] DateTime? startDate = null,
         [Description("End of the date range, inclusive (ISO 8601 format, e.g. `2026-02-27`). Defaults to 7 days after startDate.")] DateTime? endDate = null,
-        [Description("Account ID to query. Required. Obtain from list_accounts.")] string? accountId = null,
-        [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars.")] string? calendarId = null,
+        [Description("Account ID to query. Obtain from list_accounts. Required unless calendarId uniquely identifies a single account.")] string? accountId = null,
+        [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars. If accountId is omitted, calendarId is used to identify the account automatically when it exists in exactly one account.")] string? calendarId = null,
         [Description("Maximum number of events to return per account (default 50)")] int count = 50)
     {
         var tz = TimeZoneHelper.TryGetTimeZone(timeZone);
@@ -37,10 +37,64 @@ public sealed class GetCalendarEventsTool(
 
         if (string.IsNullOrEmpty(accountId))
         {
-            return JsonSerializer.Serialize(new
+            if (string.IsNullOrEmpty(calendarId))
             {
-                error = "accountId is required"
-            });
+                return JsonSerializer.Serialize(new
+                {
+                    error = "accountId is required"
+                });
+            }
+
+            // calendarId provided but no accountId — try to resolve the account automatically
+            try
+            {
+                var allAccounts = accountRegistry.GetEnabledAccounts().ToList();
+                var lookupTasks = allAccounts.Select(async acc =>
+                {
+                    try
+                    {
+                        var prov = providerFactory.GetProvider(acc.Provider);
+                        var cals = await prov.ListCalendarsAsync(acc.Id, CancellationToken.None);
+                        return cals.Any(c => c.Id == calendarId) ? acc.Id : null;
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Error listing calendars for account {AccountId} during calendar lookup", acc.Id);
+                        return null;
+                    }
+                });
+
+                var lookupResults = await Task.WhenAll(lookupTasks);
+                var matchingAccountIds = lookupResults.OfType<string>().ToList();
+
+                if (matchingAccountIds.Count == 0)
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        error = $"No calendar found with id '{calendarId}'. Provide accountId to specify which account to query."
+                    });
+                }
+
+                if (matchingAccountIds.Count > 1)
+                {
+                    return JsonSerializer.Serialize(new
+                    {
+                        error = $"calendarId '{calendarId}' exists in multiple accounts; provide accountId to specify which account to query."
+                    });
+                }
+
+                accountId = matchingAccountIds[0];
+                logger.LogInformation("Resolved accountId={AccountId} from calendarId={CalendarId}", accountId, calendarId);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error resolving accountId from calendarId {CalendarId}", calendarId);
+                return JsonSerializer.Serialize(new
+                {
+                    error = "Failed to resolve account from calendarId",
+                    message = ex.Message
+                });
+            }
         }
 
         var resolvedStart = startDate ?? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;
