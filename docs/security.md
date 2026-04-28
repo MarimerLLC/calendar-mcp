@@ -131,11 +131,30 @@ export CALENDAR_MCP_Accounts__0__Configuration__ClientSecret="GOCSPX-..."
 # - HashiCorp Vault
 ```
 
+### Password Encryption At Rest (IMAP Accounts)
+
+The IMAP/SMTP provider stores its `password` field encrypted via ASP.NET DataProtection. Values written by the admin UI or any future CLI command land in `appsettings.json` as a string starting with the `ENC:` prefix followed by the protected blob.
+
+**Key persistence**:
+- Keys are persisted to `<data-dir>/keys/` (e.g. `/app/data/keys/` in k8s, `%LOCALAPPDATA%\CalendarMcp\keys\` locally).
+- The same data directory holds `appsettings.json`, so backup/restore of the data volume covers both — but lose the keystore and you lose the ability to decrypt previously-stored passwords.
+- All hosts (`HttpServer`, `StdioServer`, anything else calling `AddCalendarMcpCore`) share the same keystore and can encrypt or decrypt values written by another host.
+
+**Threat model**:
+- ✅ Protects against config-volume-only leaks (someone reads `appsettings.json` but not the keystore).
+- ✅ Reduces the chance an accidental log dump, screenshot, or chat paste contains a usable password.
+- ✅ Stops naive `grep` for the password value.
+- ❌ Does **not** protect against full-data-directory compromise — the keystore is right next to the encrypted data. This is intentional: a separate KMS or HSM would be a different feature.
+
+**Compatibility**:
+- A stored value without the `ENC:` prefix is treated as plaintext and returned as-is. This means manually-edited entries continue to work, and a future migration that re-saves them through the UI will encrypt them.
+
 ### File Permissions
 
 **appsettings.json**:
 - Contains account metadata (IDs, domains, priorities)
-- Does NOT contain secrets or tokens
+- IMAP passwords stored encrypted (with `ENC:` prefix) — see above
+- Other secrets and tokens are not stored here
 - Can be committed to source control (with secrets externalized)
 
 **Recommended permissions**:

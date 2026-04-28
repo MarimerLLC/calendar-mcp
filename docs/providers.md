@@ -192,6 +192,50 @@ public class OutlookComProviderService : IOutlookComProviderService
 ### Validation Status
 ✅ Validated through OutlookComPersonal spike
 
+## IImapProviderService
+
+Direct IMAP/SMTP integration via [MailKit](https://github.com/jstedfast/MailKit) for any mailbox that speaks the standard protocols. **Email-only** — calendar and contact methods throw `NotSupportedException`. Designed for unattended bot mailboxes where OAuth's 7-day refresh-token expiry on consumer accounts is a non-starter.
+
+### SDK & Dependencies
+- **MailKit** (v4.x) — IMAP/SMTP client + MIME parser
+
+### Account Management
+- **One provider service instance manages multiple IMAP accounts** with strict per-account credential isolation.
+- Each `ImapClient` / `SmtpClient` is opened, used, and disposed per call. No connection pooling in the initial implementation.
+
+### Configuration
+
+Provider id: `imap` (alias `imap-smtp`).
+
+| Key            | Required | Default              | Notes                                                                                  |
+|----------------|----------|----------------------|----------------------------------------------------------------------------------------|
+| `imapHost`     | yes      | `imap.gmail.com`     | Form pre-fills the default; user can override for any host.                            |
+| `imapPort`     | no       | `993`                |                                                                                        |
+| `smtpHost`     | yes      | `smtp.gmail.com`     |                                                                                        |
+| `smtpPort`     | no       | `587`                | STARTTLS on 587, implicit TLS on 465 — `SecureSocketOptions.Auto` picks per port.      |
+| `username`     | yes      | —                    | Typically the email address.                                                           |
+| `password`     | yes      | —                    | App password / IMAP password. Stored encrypted via ASP.NET DataProtection.             |
+| `inboxFolder`  | no       | `INBOX`              | Default folder for `GetEmailsAsync`.                                                   |
+| `sentFolder`   | no       | `[Gmail]/Sent Mail`  | After SMTP send, the message is APPENDed here.                                         |
+| `trashFolder`  | no       | `[Gmail]/Trash`      | `DeleteEmailAsync` moves to this folder rather than expunging.                         |
+
+Defaults are Gmail-tuned but **not** hard-coded in the provider — every value can be overridden per account, so the provider works for Fastmail, Apple iCloud, custom servers, etc.
+
+### Email ID format
+
+IMAP messages are identified by `(folder, UIDVALIDITY, UID)`. The provider encodes IDs as `folder/uidvalidity/uid` (e.g. `INBOX/1234567890/4567`). Folder names containing literal slashes (Gmail's `[Gmail]/Trash` etc.) are preserved — parsing splits on the trailing two slashes only.
+
+### Capabilities
+- Email: read, search, send, delete, mark read/unread, move (full read/write)
+- Calendar / Contacts: throw `NotSupportedException`
+
+### Authentication
+- Username + password / app password — see `docs/IMAP-SETUP.md` for the Gmail walkthrough.
+- Password is encrypted at rest using ASP.NET DataProtection — see `docs/security.md`.
+
+### Validation Status
+🆕 New in this release. Validated end-to-end against Gmail using an app password.
+
 ## Provider Service Factory
 
 Resolves the correct provider service based on account type.

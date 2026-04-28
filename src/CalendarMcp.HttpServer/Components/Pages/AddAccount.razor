@@ -3,9 +3,11 @@
 @attribute [Authorize]
 @using CalendarMcp.Auth
 @using CalendarMcp.Core.Models
+@using CalendarMcp.Core.Security
 @using CalendarMcp.HttpServer.BlazorAdmin
 @inject IAccountConfigurationService ConfigService
 @inject NavigationManager Navigation
+@inject PasswordProtector PasswordProtector
 
 <h1 class="mb-4">
     <i class="bi bi-plus-circle me-2"></i>Add Account
@@ -105,6 +107,59 @@ else
                         <InputText class="form-control" type="password" @bind-Value="_model.ClientSecret" placeholder="Google Cloud client secret" />
                     </div>
                 </div>
+                break;
+
+            case "imap":
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Username</label>
+                        <InputText class="form-control" @bind-Value="_model.Username" placeholder="user@example.com" />
+                        <div class="form-text">Typically the email address.</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Password</label>
+                        <InputText class="form-control" type="password" @bind-Value="_model.Password"
+                                   placeholder="App password (encrypted at rest)" />
+                        <div class="form-text">For Gmail, use an <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener">app password</a>. Stored encrypted via ASP.NET DataProtection.</div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">IMAP Host</label>
+                        <InputText class="form-control" @bind-Value="_model.ImapHost" />
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label class="form-label">IMAP Port</label>
+                        <InputNumber class="form-control" @bind-Value="_model.ImapPort" />
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">SMTP Host</label>
+                        <InputText class="form-control" @bind-Value="_model.SmtpHost" />
+                    </div>
+                    <div class="col-md-1 mb-3">
+                        <label class="form-label">Port</label>
+                        <InputNumber class="form-control" @bind-Value="_model.SmtpPort" />
+                    </div>
+                </div>
+                <details class="mb-3">
+                    <summary class="text-muted small mb-2">Advanced — folder names</summary>
+                    <div class="row mt-2">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Inbox</label>
+                            <InputText class="form-control" @bind-Value="_model.InboxFolder" />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Sent</label>
+                            <InputText class="form-control" @bind-Value="_model.SentFolder" />
+                            <div class="form-text">Sent messages are APPENDed here.</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Trash</label>
+                            <InputText class="form-control" @bind-Value="_model.TrashFolder" />
+                            <div class="form-text">Deletes move messages here rather than expunging.</div>
+                        </div>
+                    </div>
+                </details>
                 break;
 
             case "ics":
@@ -287,6 +342,7 @@ else
         {
             "outlook.com" => "outlook.com, hotmail.com, live.com",
             "google" => "gmail.com",
+            "imap" => "gmail.com",
             _ => ""
         };
 
@@ -310,7 +366,7 @@ else
 
         try
         {
-            var accountInfo = _model.ToAccountInfo();
+            var accountInfo = _model.ToAccountInfo(PasswordProtector);
 
             // Server-side validation
             var (idValid, idError) = AccountValidation.ValidateAccountId(accountInfo.Id);
@@ -340,7 +396,7 @@ else
         provider is "microsoft365" or "outlook.com" or "google";
 
     private static bool HasEmailSupport(string provider) =>
-        provider is "microsoft365" or "outlook.com" or "google";
+        provider is "microsoft365" or "outlook.com" or "google" or "imap";
 
     private static string GetProviderDisplayName(string provider) => provider switch
     {
@@ -349,6 +405,7 @@ else
         "google" => "Google",
         "ics" => "ICS Feed",
         "json" => "JSON File",
+        "imap" => "IMAP/SMTP",
         _ => provider
     };
 
@@ -357,6 +414,7 @@ else
         "microsoft365" => "company.com",
         "outlook.com" => "outlook.com, hotmail.com, live.com",
         "google" => "gmail.com",
+        "imap" => "gmail.com",
         _ => "optional"
     };
 }

@@ -216,6 +216,34 @@ public class AccountValidationTests
     }
 
     [TestMethod]
+    public void ValidateProviderConfig_Imap_RequiresHostsAndCredentials()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["imapHost"] = "imap.example.com",
+            ["smtpHost"] = "smtp.example.com",
+            ["username"] = "user@example.com",
+            ["password"] = "ENC:..."
+        };
+        var (isValid, _) = AccountValidation.ValidateProviderConfig("imap", config);
+        Assert.IsTrue(isValid);
+    }
+
+    [TestMethod]
+    public void ValidateProviderConfig_Imap_MissingPassword_Fails()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["imapHost"] = "imap.example.com",
+            ["smtpHost"] = "smtp.example.com",
+            ["username"] = "user@example.com"
+        };
+        var (isValid, error) = AccountValidation.ValidateProviderConfig("imap", config);
+        Assert.IsFalse(isValid);
+        Assert.IsTrue(error?.Contains("password", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
     public void ValidateProviderConfig_CaseInsensitiveKeys()
     {
         var config = new Dictionary<string, string>

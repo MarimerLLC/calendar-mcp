@@ -232,6 +232,17 @@ Tool execution:
 ✅ No shared authentication state between accounts
 ```
 
+## IMAP/SMTP Authentication
+
+The `imap` provider does not use OAuth. Each account stores a username and a password (typically an app password from the mail provider) directly in its `ProviderConfig`. The password is encrypted at rest using ASP.NET DataProtection — the persisted value carries an `ENC:` prefix and is unprotected on demand by the provider.
+
+This is the right choice when:
+
+- You need an unattended bot mailbox on a consumer Gmail account, where OAuth refresh tokens expire weekly while the app sits in Testing publishing status.
+- You want to attach a non-Microsoft, non-Google mailbox (Fastmail, Apple iCloud, custom IMAP server, etc.) without writing a new provider.
+
+Setup walkthrough including the Gmail-specific app-password steps lives in [`IMAP-SETUP.md`](IMAP-SETUP.md). For the encryption-at-rest details and threat model, see [`security.md`](security.md#password-encryption-at-rest-imap-accounts).
+
 ## Security Best Practices
 
 1. **Credential Storage**: System-level encryption (DPAPI, Keychain)

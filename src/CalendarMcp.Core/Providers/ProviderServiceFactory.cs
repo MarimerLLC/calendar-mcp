@@ -13,6 +13,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
     private readonly IOutlookComProviderService _outlookProvider;
     private readonly IIcsProviderService _icsProvider;
     private readonly IJsonCalendarProviderService _jsonProvider;
+    private readonly IImapProviderService _imapProvider;
     private readonly ILogger<ProviderServiceFactory> _logger;
 
     public ProviderServiceFactory(
@@ -21,6 +22,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
         IOutlookComProviderService outlookProvider,
         IIcsProviderService icsProvider,
         IJsonCalendarProviderService jsonProvider,
+        IImapProviderService imapProvider,
         ILogger<ProviderServiceFactory> logger)
     {
         _m365Provider = m365Provider;
@@ -28,6 +30,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
         _outlookProvider = outlookProvider;
         _icsProvider = icsProvider;
         _jsonProvider = jsonProvider;
+        _imapProvider = imapProvider;
         _logger = logger;
     }
 
@@ -40,6 +43,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
             "outlook.com" or "outlook" or "hotmail" => _outlookProvider,
             "ics" or "icalendar" => _icsProvider,
             "json" or "json-calendar" => _jsonProvider,
+            "imap" or "imap-smtp" => _imapProvider,
             _ => throw new ArgumentException($"Unknown account type: {accountType}", nameof(accountType))
         };
 

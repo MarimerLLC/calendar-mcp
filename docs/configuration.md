@@ -239,6 +239,46 @@ set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
 
 **Note**: Outlook.com uses 'common' tenant automatically (no tenantId needed).
 
+### IMAP/SMTP Accounts
+
+```json
+{
+  "Id": "rockbot-imap",
+  "DisplayName": "Rockbot Mailbox",
+  "Provider": "imap",
+  "Domains": ["gmail.com"],
+  "ProviderConfig": {
+    "imapHost": "imap.gmail.com",
+    "imapPort": "993",
+    "smtpHost": "smtp.gmail.com",
+    "smtpPort": "587",
+    "username": "rockbot@gmail.com",
+    "password": "ENC:CfDJ8...",
+    "inboxFolder": "INBOX",
+    "sentFolder": "[Gmail]/Sent Mail",
+    "trashFolder": "[Gmail]/Trash"
+  }
+}
+```
+
+**Required ProviderConfig keys**: `imapHost`, `smtpHost`, `username`, `password`.
+
+**Defaults** (Gmail-tuned but fully overridable for any IMAP host):
+
+| Key            | Default              |
+|----------------|----------------------|
+| `imapPort`     | `993`                |
+| `smtpPort`     | `587` (STARTTLS)     |
+| `inboxFolder`  | `INBOX`              |
+| `sentFolder`   | `[Gmail]/Sent Mail`  |
+| `trashFolder`  | `[Gmail]/Trash`      |
+
+**Password storage**: `password` is encrypted at rest via ASP.NET DataProtection — values written by the admin UI or CLI are stored with an `ENC:` prefix and the keystore lives under the data directory (see `docs/security.md`). Plaintext values without the prefix are still readable, so manually-edited entries continue to work.
+
+**Capabilities**: Email-only (read/write). Calendar and contact tools fail with a clear `NotSupportedException` for IMAP accounts; pick a different account for those operations.
+
+For setup walkthrough including Gmail app passwords, see `docs/IMAP-SETUP.md`.
+
 ## Router Configuration
 
 ### Ollama (Local)

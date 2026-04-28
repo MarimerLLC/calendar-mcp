@@ -1,6 +1,6 @@
 # Calendar & Email MCP Server
 
-A Model Context Protocol (MCP) server that gives AI assistants access to email, calendar, and contact data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, ICS feeds, and JSON calendar files.
+A Model Context Protocol (MCP) server that gives AI assistants access to email, calendar, and contact data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, IMAP/SMTP mailboxes, ICS feeds, and JSON calendar files.
 
 ## Overview
 
@@ -13,6 +13,7 @@ Calendar-MCP aggregates email, calendar, and contact information from multiple p
 | Microsoft 365 | Yes | Yes | Yes | OAuth 2.0 (MSAL) |
 | Outlook.com | Yes | Yes | Yes | OAuth 2.0 (MSAL) |
 | Google Workspace / Gmail | Yes | Yes | Yes | OAuth 2.0 |
+| IMAP/SMTP | Yes | -- | -- | Username + app password (encrypted at rest) |
 | ICS Calendar Feeds | -- | Read-only | -- | None (public URLs) |
 | JSON Calendar Files | -- | Read-only | -- | None (local files) |
 

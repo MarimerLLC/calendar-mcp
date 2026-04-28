@@ -78,6 +78,16 @@ public static class ConfigurationPaths
     }
 
     /// <summary>
+    /// Gets the directory used by ASP.NET DataProtection to persist its key ring.
+    /// Lives under the data directory so it follows the existing CALENDAR_MCP_CONFIG override
+    /// and is preserved by the same volume mount that holds appsettings.json.
+    /// </summary>
+    public static string GetDataProtectionKeysDirectory()
+    {
+        return Path.Combine(GetDataDirectory(), "keys");
+    }
+
+    /// <summary>
     /// Ensures the data directory exists.
     /// </summary>
     public static void EnsureDataDirectoryExists()
