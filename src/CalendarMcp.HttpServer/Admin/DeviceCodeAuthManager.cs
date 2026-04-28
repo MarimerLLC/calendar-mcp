@@ -123,8 +123,7 @@ public class DeviceCodeAuthManager
         {
             if (a.Provider is not ("json" or "json-calendar"))
                 return false;
-            if (!a.ProviderConfig.TryGetValue("authAccountId", out var authId) &&
-                !a.ProviderConfig.TryGetValue("AuthAccountId", out authId))
+            if (!a.ProviderConfig.TryGetValue("authAccountId", out var authId))
                 return false;
             return authId == account.Id;
         });

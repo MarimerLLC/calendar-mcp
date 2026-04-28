@@ -42,11 +42,8 @@ public class OutlookComProviderService : IOutlookComProviderService
             return null;
         }
 
-        // Try both camelCase and PascalCase for config keys
-        if (!account.ProviderConfig.TryGetValue("tenantId", out var tenantId))
-            account.ProviderConfig.TryGetValue("TenantId", out tenantId);
-        if (!account.ProviderConfig.TryGetValue("clientId", out var clientId))
-            account.ProviderConfig.TryGetValue("ClientId", out clientId);
+        account.ProviderConfig.TryGetValue("tenantId", out var tenantId);
+        account.ProviderConfig.TryGetValue("clientId", out var clientId);
 
         if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId))
         {

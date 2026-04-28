@@ -169,8 +169,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         string? refAccountId = null;
         var isReusedCredentials = false;
 
-        if (account.ProviderConfig.TryGetValue("authAccountId", out refAccountId) ||
-            account.ProviderConfig.TryGetValue("AuthAccountId", out refAccountId))
+        if (account.ProviderConfig.TryGetValue("authAccountId", out refAccountId))
         {
             isReusedCredentials = true;
             var refAccount = await _accountRegistry.GetAccountAsync(refAccountId);
@@ -233,8 +232,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
     private static int GetCacheTtl(AccountInfo account)
     {
-        if (account.ProviderConfig.TryGetValue("cacheTtlMinutes", out var ttlStr) ||
-            account.ProviderConfig.TryGetValue("CacheTtlMinutes", out ttlStr))
+        if (account.ProviderConfig.TryGetValue("cacheTtlMinutes", out var ttlStr))
         {
             if (int.TryParse(ttlStr, out var ttl) && ttl > 0)
                 return ttl;

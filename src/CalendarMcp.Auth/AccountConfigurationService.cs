@@ -331,7 +331,7 @@ public sealed class AccountConfigurationService : IAccountConfigurationService
         var dictObj = obj[pascalName]?.AsObject() ?? obj[camelName]?.AsObject();
         if (dictObj is null) return [];
 
-        var result = new Dictionary<string, string>();
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var prop in dictObj)
         {
             if (prop.Value is not null)

@@ -36,7 +36,20 @@ public class AccountInfo
     public int Priority { get; init; } = 0;
     
     /// <summary>
-    /// Provider-specific configuration (tenant ID, client ID, etc.)
+    /// Provider-specific configuration (tenant ID, client ID, etc.).
+    /// Keys are compared case-insensitively so callers can use either camelCase
+    /// or PascalCase without coordination.
     /// </summary>
-    public Dictionary<string, string> ProviderConfig { get; init; } = new();
+    public Dictionary<string, string> ProviderConfig
+    {
+        get => _providerConfig;
+        init => _providerConfig = NormalizeComparer(value);
+    }
+
+    private Dictionary<string, string> _providerConfig = new(StringComparer.OrdinalIgnoreCase);
+
+    private static Dictionary<string, string> NormalizeComparer(Dictionary<string, string> source) =>
+        ReferenceEquals(source.Comparer, StringComparer.OrdinalIgnoreCase)
+            ? source
+            : new Dictionary<string, string>(source, StringComparer.OrdinalIgnoreCase);
 }

@@ -7,6 +7,9 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy project files for layer caching
+# Directory.Build.props lives at the repo root and is auto-imported by MSBuild
+# from the parent of each .csproj, so we drop it next to the projects in /src.
+COPY Directory.Build.props ./
 COPY src/CalendarMcp.Core/CalendarMcp.Core.csproj CalendarMcp.Core/
 COPY src/CalendarMcp.Auth/CalendarMcp.Auth.csproj CalendarMcp.Auth/
 COPY src/CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj CalendarMcp.HttpServer/
