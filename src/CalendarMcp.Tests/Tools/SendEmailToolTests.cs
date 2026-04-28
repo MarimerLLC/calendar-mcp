@@ -32,7 +32,7 @@ public class SendEmailToolTests
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail("to@example.com", "Subject", "Body", "acc-1");
+        var result = await tool.SendEmail(new List<string> { "to@example.com" }, "Subject", "Body", "acc-1");
         var doc = JsonDocument.Parse(result);
 
         Assert.IsTrue(doc.RootElement.GetProperty("success").GetBoolean());
@@ -54,7 +54,7 @@ public class SendEmailToolTests
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail("to@example.com", "Subject", "Body", "nonexistent");
+        var result = await tool.SendEmail(new List<string> { "to@example.com" }, "Subject", "Body", "nonexistent");
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
@@ -72,10 +72,25 @@ public class SendEmailToolTests
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail("to@unknown.com", "Subject", "Body");
+        var result = await tool.SendEmail(new List<string> { "to@unknown.com" }, "Subject", "Body");
         var doc = JsonDocument.Parse(result);
 
         Assert.IsTrue(doc.RootElement.TryGetProperty("error", out _));
         regExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task SendEmail_EmptyToList_ReturnsError()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<SendEmailTool>.Instance);
+
+        var result = await tool.SendEmail([], "Subject", "Body", "acc-1");
+        var doc = JsonDocument.Parse(result);
+
+        var error = doc.RootElement.GetProperty("error").GetString();
+        Assert.IsTrue(error?.Contains("recipient", StringComparison.OrdinalIgnoreCase) ?? false);
     }
 }

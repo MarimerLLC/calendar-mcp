@@ -15,9 +15,9 @@ public sealed class SendEmailTool(
     IProviderServiceFactory providerFactory,
     ILogger<SendEmailTool> logger)
 {
-    [McpServerTool, Description("Send an email. If accountId is omitted, smart routing selects the account whose domains match the recipient's email domain; if no match, the first configured account is used. Provide accountId explicitly to guarantee which account sends the message.")]
+    [McpServerTool, Description("Send an email. If accountId is omitted, smart routing selects the account whose domains match the first recipient's email domain; if no match, the first configured account is used. Provide accountId explicitly to guarantee which account sends the message.")]
     public async Task<string> SendEmail(
-        [Description("Recipient email address")] string to,
+        [Description("Recipient email address(es). Supply as a JSON array of strings, e.g. [\"alice@example.com\"] or [\"alice@example.com\",\"bob@example.com\"].")] List<string> to,
         [Description("Email subject line")] string subject,
         [Description("Email body content. Use HTML when bodyFormat is 'html' (the default).")] string body,
         [Description("Account ID to send from. Omit to use smart routing (matches recipient domain to account domains, then falls back to first account). Obtain from list_accounts.")] string? accountId = null,
@@ -26,9 +26,19 @@ public sealed class SendEmailTool(
     {
         // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
         body = StripCdataWrapper(body);
-        
+
+        if (to is null || to.Count == 0)
+        {
+            return JsonSerializer.Serialize(new
+            {
+                error = "At least one recipient address is required in the 'to' field."
+            });
+        }
+
+        var toJoined = string.Join(", ", to);
+
         logger.LogInformation("Sending email: to={To}, subject={Subject}, accountId={AccountId}",
-            to, subject, accountId);
+            toJoined, subject, accountId);
 
         try
         {
@@ -49,8 +59,8 @@ public sealed class SendEmailTool(
             }
             else
             {
-                // Smart routing: extract domain from recipient
-                var recipientDomain = to.Split('@').LastOrDefault();
+                // Smart routing: extract domain from the first recipient
+                var recipientDomain = to[0].Split('@').LastOrDefault();
                 if (!string.IsNullOrEmpty(recipientDomain))
                 {
                     var matchingAccounts = accountRegistry.GetAccountsByDomain(recipientDomain).ToList();
@@ -89,7 +99,7 @@ public sealed class SendEmailTool(
             // Send email
             var provider = providerFactory.GetProvider(account.Provider);
             var messageId = await provider.SendEmailAsync(
-                account.Id, to, subject, body, bodyFormat, cc, CancellationToken.None);
+                account.Id, toJoined, subject, body, bodyFormat, cc, CancellationToken.None);
 
             var result = new
             {
@@ -98,7 +108,7 @@ public sealed class SendEmailTool(
                 accountUsed = account.Id
             };
 
-            logger.LogInformation("Sent email from account {AccountId} to {To}", account.Id, to);
+            logger.LogInformation("Sent email from account {AccountId} to {To}", account.Id, toJoined);
 
             return JsonSerializer.Serialize(result, new JsonSerializerOptions
             {
@@ -111,7 +121,9 @@ public sealed class SendEmailTool(
             return JsonSerializer.Serialize(new
             {
                 error = "Failed to send email",
-                message = ex.Message
+                errorType = ex.GetType().Name,
+                message = ex.Message,
+                inner = ex.InnerException?.Message
             });
         }
     }
