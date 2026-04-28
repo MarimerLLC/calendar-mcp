@@ -48,8 +48,7 @@ public class IcsProviderService : IIcsProviderService
             return null;
         }
 
-        if (!account.ProviderConfig.TryGetValue("icsUrl", out var icsUrl) &&
-            !account.ProviderConfig.TryGetValue("IcsUrl", out icsUrl))
+        if (!account.ProviderConfig.TryGetValue("icsUrl", out var icsUrl))
         {
             _logger.LogError("Account {AccountId} missing icsUrl in ProviderConfig", accountId);
             return null;
@@ -98,8 +97,7 @@ public class IcsProviderService : IIcsProviderService
 
     private static int GetCacheTtl(AccountInfo account)
     {
-        if (account.ProviderConfig.TryGetValue("cacheTtlMinutes", out var ttlStr) ||
-            account.ProviderConfig.TryGetValue("CacheTtlMinutes", out ttlStr))
+        if (account.ProviderConfig.TryGetValue("cacheTtlMinutes", out var ttlStr))
         {
             if (int.TryParse(ttlStr, out var ttl) && ttl > 0)
                 return ttl;

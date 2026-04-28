@@ -108,14 +108,14 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
                 return 1;
             }
 
-            var providerConfig = providerConfigElem.Deserialize<Dictionary<string, string>>()
-                ?? new Dictionary<string, string>();
+            var providerConfig = new Dictionary<string, string>(
+                providerConfigElem.Deserialize<Dictionary<string, string>>() ?? new(),
+                StringComparer.OrdinalIgnoreCase);
 
             // For JSON accounts with authAccountId, redirect to reauth the referenced account
             if (provider is "json" or "json-calendar")
             {
-                if (providerConfig.TryGetValue("authAccountId", out var authAcctId) ||
-                    providerConfig.TryGetValue("AuthAccountId", out authAcctId))
+                if (providerConfig.TryGetValue("authAccountId", out var authAcctId))
                 {
                     AnsiConsole.MarkupLine($"[yellow]JSON account '{settings.AccountId}' uses credentials from account '{authAcctId}'.[/]");
                     AnsiConsole.MarkupLine($"[yellow]Reauthenticating '{authAcctId}' instead (with Files.Read scope)...[/]");
@@ -139,7 +139,9 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
                         return 1;
                     }
 
-                    var refProviderConfig = refPcElem.Deserialize<Dictionary<string, string>>() ?? new();
+                    var refProviderConfig = new Dictionary<string, string>(
+                        refPcElem.Deserialize<Dictionary<string, string>>() ?? new(),
+                        StringComparer.OrdinalIgnoreCase);
                     string? refProvider = null;
                     if (refAccount.TryGetValue("Provider", out var refProvElem) || refAccount.TryGetValue("provider", out refProvElem))
                         refProvider = refProvElem.GetString();
@@ -197,11 +199,8 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
     private async Task<int> ReauthenticateMicrosoftAccountAsync(string accountId, Dictionary<string, string> providerConfig, string provider,
         List<Dictionary<string, JsonElement>>? allAccounts = null)
     {
-        // Try both PascalCase and camelCase for config keys
-        if (!providerConfig.TryGetValue("TenantId", out var tenantId))
-            providerConfig.TryGetValue("tenantId", out tenantId);
-        if (!providerConfig.TryGetValue("ClientId", out var clientId))
-            providerConfig.TryGetValue("clientId", out clientId);
+        providerConfig.TryGetValue("tenantId", out var tenantId);
+        providerConfig.TryGetValue("clientId", out var clientId);
 
         if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId))
         {
@@ -302,10 +301,8 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
 
     private async Task<int> ReauthenticateJsonOneDriveAccountAsync(string accountId, Dictionary<string, string> providerConfig)
     {
-        if (!providerConfig.TryGetValue("TenantId", out var tenantId))
-            providerConfig.TryGetValue("tenantId", out tenantId);
-        if (!providerConfig.TryGetValue("ClientId", out var clientId))
-            providerConfig.TryGetValue("clientId", out clientId);
+        providerConfig.TryGetValue("tenantId", out var tenantId);
+        providerConfig.TryGetValue("clientId", out var clientId);
 
         if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId))
         {
@@ -350,11 +347,8 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
 
     private async Task<int> ReauthenticateGoogleAccountAsync(string accountId, Dictionary<string, string> providerConfig)
     {
-        // Try both PascalCase and camelCase for config keys
-        if (!providerConfig.TryGetValue("ClientId", out var clientId))
-            providerConfig.TryGetValue("clientId", out clientId);
-        if (!providerConfig.TryGetValue("ClientSecret", out var clientSecret))
-            providerConfig.TryGetValue("clientSecret", out clientSecret);
+        providerConfig.TryGetValue("clientId", out var clientId);
+        providerConfig.TryGetValue("clientSecret", out var clientSecret);
 
         if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
         {
