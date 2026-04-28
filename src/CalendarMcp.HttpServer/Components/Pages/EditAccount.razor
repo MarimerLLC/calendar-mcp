@@ -3,9 +3,11 @@
 @attribute [Authorize]
 @using CalendarMcp.Auth
 @using CalendarMcp.Core.Models
+@using CalendarMcp.Core.Security
 @using CalendarMcp.HttpServer.BlazorAdmin
 @inject IAccountConfigurationService ConfigService
 @inject NavigationManager Navigation
+@inject PasswordProtector PasswordProtector
 
 <h1 class="mb-4">
     <i class="bi bi-pencil me-2"></i>Edit Account
@@ -194,6 +196,55 @@ else if (_model is not null)
                     <InputNumber class="form-control" @bind-Value="_model.JsonCacheTtlMinutes" />
                 </div>
                 break;
+
+            case "imap":
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Username</label>
+                        <InputText class="form-control" @bind-Value="_model.Username" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">Password</label>
+                        <InputText class="form-control" type="password" @bind-Value="_model.Password" />
+                        <div class="form-text">Stored encrypted via ASP.NET DataProtection.</div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">IMAP Host</label>
+                        <InputText class="form-control" @bind-Value="_model.ImapHost" />
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label class="form-label">IMAP Port</label>
+                        <InputNumber class="form-control" @bind-Value="_model.ImapPort" />
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">SMTP Host</label>
+                        <InputText class="form-control" @bind-Value="_model.SmtpHost" />
+                    </div>
+                    <div class="col-md-1 mb-3">
+                        <label class="form-label">Port</label>
+                        <InputNumber class="form-control" @bind-Value="_model.SmtpPort" />
+                    </div>
+                </div>
+                <details class="mb-3">
+                    <summary class="text-muted small mb-2">Advanced — folder names</summary>
+                    <div class="row mt-2">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Inbox</label>
+                            <InputText class="form-control" @bind-Value="_model.InboxFolder" />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Sent</label>
+                            <InputText class="form-control" @bind-Value="_model.SentFolder" />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Trash</label>
+                            <InputText class="form-control" @bind-Value="_model.TrashFolder" />
+                        </div>
+                    </div>
+                </details>
+                break;
         }
 
         <div class="row">
@@ -270,7 +321,7 @@ else if (_model is not null)
             }
             else
             {
-                _model = EditAccountFormModel.FromAccountInfo(account);
+                _model = EditAccountFormModel.FromAccountInfo(account, PasswordProtector);
                 await LoadMicrosoftAccountsAsync();
             }
         }
@@ -309,7 +360,7 @@ else if (_model is not null)
 
         try
         {
-            var accountInfo = _model.ToAccountInfo();
+            var accountInfo = _model.ToAccountInfo(PasswordProtector);
 
             var (cfgValid, cfgError) = AccountValidation.ValidateProviderConfig(accountInfo.Provider, accountInfo.ProviderConfig);
             if (!cfgValid) { _error = cfgError; return; }

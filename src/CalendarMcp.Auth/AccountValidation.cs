@@ -71,7 +71,7 @@ public static partial class AccountValidation
     /// <summary>Known provider types.</summary>
     public static readonly IReadOnlySet<string> KnownProviders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "microsoft365", "outlook.com", "google", "ics", "json"
+        "microsoft365", "outlook.com", "google", "ics", "json", "imap"
     };
 
     /// <summary>
@@ -117,6 +117,7 @@ public static partial class AccountValidation
             "google" => ValidateRequiredKeys(config, "ClientId", "ClientSecret"),
             "ics" => ValidateIcsConfig(config),
             "json" => ValidateJsonConfig(config),
+            "imap" => ValidateRequiredKeys(config, "imapHost", "smtpHost", "username", "password"),
             _ => (false, $"Unknown provider '{provider}'.")
         };
     }

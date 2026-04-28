@@ -13,7 +13,8 @@ public class ProviderServiceFactoryTests
         IGoogleProviderService? google = null,
         IOutlookComProviderService? outlook = null,
         IIcsProviderService? ics = null,
-        IJsonCalendarProviderService? json = null)
+        IJsonCalendarProviderService? json = null,
+        IImapProviderService? imap = null)
     {
         return new ProviderServiceFactory(
             m365 ?? new IM365ProviderServiceCreateExpectations().Instance(),
@@ -21,6 +22,7 @@ public class ProviderServiceFactoryTests
             outlook ?? new IOutlookComProviderServiceCreateExpectations().Instance(),
             ics ?? new IIcsProviderServiceCreateExpectations().Instance(),
             json ?? new IJsonCalendarProviderServiceCreateExpectations().Instance(),
+            imap ?? new IImapProviderServiceCreateExpectations().Instance(),
             NullLogger<ProviderServiceFactory>.Instance);
     }
 
@@ -94,6 +96,20 @@ public class ProviderServiceFactoryTests
         var provider = factory.GetProvider(alias);
 
         Assert.AreSame(json, provider);
+    }
+
+    [TestMethod]
+    [DataRow("imap")]
+    [DataRow("imap-smtp")]
+    public void GetProvider_ImapAliases_ReturnsImapProvider(string alias)
+    {
+        var imapExpectations = new IImapProviderServiceCreateExpectations();
+        var imap = imapExpectations.Instance();
+        var factory = CreateFactory(imap: imap);
+
+        var provider = factory.GetProvider(alias);
+
+        Assert.AreSame(imap, provider);
     }
 
     [TestMethod]

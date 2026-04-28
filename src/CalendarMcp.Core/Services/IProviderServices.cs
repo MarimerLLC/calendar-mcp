@@ -36,3 +36,11 @@ public interface IIcsProviderService : IProviderService
 public interface IJsonCalendarProviderService : IProviderService
 {
 }
+
+/// <summary>
+/// IMAP/SMTP provider service for any mailbox supporting standard IMAP and SMTP.
+/// Email-only — calendar and contact methods throw NotSupportedException.
+/// </summary>
+public interface IImapProviderService : IProviderService
+{
+}

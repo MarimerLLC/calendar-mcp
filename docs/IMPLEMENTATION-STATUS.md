@@ -62,11 +62,13 @@ src/
 - **IProviderServiceFactory**: Factory for resolving providers by account type
 - **IAccountRegistry**: Account configuration and lookup
 
-### ✅ Provider Implementations (Stubs)
-All three providers implemented as stubs with logging:
+### ✅ Provider Implementations
 - **M365ProviderService**: Microsoft 365 / Outlook organizational accounts
-- **GoogleProviderService**: Google Workspace / Gmail accounts  
+- **GoogleProviderService**: Google Workspace / Gmail accounts
 - **OutlookComProviderService**: Outlook.com personal Microsoft accounts
+- **IcsProviderService**: Read-only ICS feed calendar provider
+- **JsonCalendarProviderService**: Local or OneDrive JSON file calendar provider
+- **ImapProviderService**: IMAP/SMTP mailbox provider (email-only). Password encrypted at rest via ASP.NET DataProtection.
 - **ProviderServiceFactory**: Routes requests to correct provider
 - **AccountRegistry**: Loads and manages account configuration
 

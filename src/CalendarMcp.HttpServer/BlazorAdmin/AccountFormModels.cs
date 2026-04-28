@@ -1,5 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using CalendarMcp.Core.Models;
+using CalendarMcp.Core.Providers;
+using CalendarMcp.Core.Security;
 
 namespace CalendarMcp.HttpServer.BlazorAdmin;
 
@@ -55,9 +57,20 @@ public class CreateAccountFormModel : AccountFormBase
     /// <summary>Local path or OneDrive path for emails, depending on JsonSource.</summary>
     public string EmailsPath { get; set; } = "";
 
-    public AccountInfo ToAccountInfo()
+    // IMAP/SMTP. Defaults are Gmail-tuned but every value is overridable.
+    public string ImapHost { get; set; } = ImapProviderService.DefaultImapHost;
+    public int ImapPort { get; set; } = ImapProviderService.DefaultImapPort;
+    public string SmtpHost { get; set; } = ImapProviderService.DefaultSmtpHost;
+    public int SmtpPort { get; set; } = ImapProviderService.DefaultSmtpPort;
+    public string Username { get; set; } = "";
+    public string Password { get; set; } = "";
+    public string InboxFolder { get; set; } = ImapProviderService.DefaultInbox;
+    public string SentFolder { get; set; } = ImapProviderService.DefaultSent;
+    public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
+
+    public AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null)
     {
-        var providerConfig = BuildProviderConfig();
+        var providerConfig = BuildProviderConfig(passwordProtector);
         return new AccountInfo
         {
             Id = Id,
@@ -70,7 +83,7 @@ public class CreateAccountFormModel : AccountFormBase
         };
     }
 
-    private Dictionary<string, string> BuildProviderConfig() => Provider.ToLowerInvariant() switch
+    private Dictionary<string, string> BuildProviderConfig(PasswordProtector? passwordProtector) => Provider.ToLowerInvariant() switch
     {
         "microsoft365" => new()
         {
@@ -93,8 +106,29 @@ public class CreateAccountFormModel : AccountFormBase
             ["CacheTtlMinutes"] = CacheTtlMinutes.ToString()
         },
         "json" => BuildJsonProviderConfig(),
+        "imap" => BuildImapProviderConfig(passwordProtector),
         _ => []
     };
+
+    private Dictionary<string, string> BuildImapProviderConfig(PasswordProtector? passwordProtector)
+    {
+        var encryptedPassword = passwordProtector is not null
+            ? passwordProtector.Protect(Password)
+            : Password;
+
+        return new Dictionary<string, string>
+        {
+            ["imapHost"] = ImapHost,
+            ["imapPort"] = ImapPort.ToString(),
+            ["smtpHost"] = SmtpHost,
+            ["smtpPort"] = SmtpPort.ToString(),
+            ["username"] = Username,
+            ["password"] = encryptedPassword,
+            ["inboxFolder"] = InboxFolder,
+            ["sentFolder"] = SentFolder,
+            ["trashFolder"] = TrashFolder
+        };
+    }
 
     private Dictionary<string, string> BuildJsonProviderConfig()
     {
@@ -158,7 +192,22 @@ public class EditAccountFormModel : AccountFormBase
     /// <summary>Local path or OneDrive path for emails, depending on JsonSource.</summary>
     public string EmailsPath { get; set; } = "";
 
-    public static EditAccountFormModel FromAccountInfo(AccountInfo account)
+    // IMAP/SMTP
+    public string ImapHost { get; set; } = ImapProviderService.DefaultImapHost;
+    public int ImapPort { get; set; } = ImapProviderService.DefaultImapPort;
+    public string SmtpHost { get; set; } = ImapProviderService.DefaultSmtpHost;
+    public int SmtpPort { get; set; } = ImapProviderService.DefaultSmtpPort;
+    public string Username { get; set; } = "";
+    /// <summary>
+    /// Password as shown in the form. On load, decrypted via PasswordProtector.
+    /// On save, re-encrypted before being persisted.
+    /// </summary>
+    public string Password { get; set; } = "";
+    public string InboxFolder { get; set; } = ImapProviderService.DefaultInbox;
+    public string SentFolder { get; set; } = ImapProviderService.DefaultSent;
+    public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
+
+    public static EditAccountFormModel FromAccountInfo(AccountInfo account, PasswordProtector? passwordProtector = null)
     {
         var model = new EditAccountFormModel
         {
@@ -205,12 +254,29 @@ public class EditAccountFormModel : AccountFormBase
                 if (int.TryParse(GetConfigValue(config, "cacheTtlMinutes"), out var jsonTtl))
                     model.JsonCacheTtlMinutes = jsonTtl;
                 break;
+            case "imap":
+                model.ImapHost = GetConfigValue(config, "imapHost");
+                if (int.TryParse(GetConfigValue(config, "imapPort"), out var imapPort)) model.ImapPort = imapPort;
+                model.SmtpHost = GetConfigValue(config, "smtpHost");
+                if (int.TryParse(GetConfigValue(config, "smtpPort"), out var smtpPort)) model.SmtpPort = smtpPort;
+                model.Username = GetConfigValue(config, "username");
+                var storedPassword = GetConfigValue(config, "password");
+                model.Password = passwordProtector is not null
+                    ? passwordProtector.Unprotect(storedPassword)
+                    : storedPassword;
+                model.InboxFolder = GetConfigValue(config, "inboxFolder");
+                if (string.IsNullOrEmpty(model.InboxFolder)) model.InboxFolder = ImapProviderService.DefaultInbox;
+                model.SentFolder = GetConfigValue(config, "sentFolder");
+                if (string.IsNullOrEmpty(model.SentFolder)) model.SentFolder = ImapProviderService.DefaultSent;
+                model.TrashFolder = GetConfigValue(config, "trashFolder");
+                if (string.IsNullOrEmpty(model.TrashFolder)) model.TrashFolder = ImapProviderService.DefaultTrash;
+                break;
         }
 
         return model;
     }
 
-    public AccountInfo ToAccountInfo()
+    public AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null)
     {
         return new AccountInfo
         {
@@ -220,11 +286,11 @@ public class EditAccountFormModel : AccountFormBase
             Domains = ParseDomains(),
             Enabled = Enabled,
             Priority = Priority,
-            ProviderConfig = BuildProviderConfig()
+            ProviderConfig = BuildProviderConfig(passwordProtector)
         };
     }
 
-    private Dictionary<string, string> BuildProviderConfig() => Provider.ToLowerInvariant() switch
+    private Dictionary<string, string> BuildProviderConfig(PasswordProtector? passwordProtector) => Provider.ToLowerInvariant() switch
     {
         "microsoft365" => new()
         {
@@ -247,8 +313,29 @@ public class EditAccountFormModel : AccountFormBase
             ["CacheTtlMinutes"] = CacheTtlMinutes.ToString()
         },
         "json" => BuildJsonProviderConfig(),
+        "imap" => BuildImapProviderConfig(passwordProtector),
         _ => []
     };
+
+    private Dictionary<string, string> BuildImapProviderConfig(PasswordProtector? passwordProtector)
+    {
+        var encryptedPassword = passwordProtector is not null
+            ? passwordProtector.Protect(Password)
+            : Password;
+
+        return new Dictionary<string, string>
+        {
+            ["imapHost"] = ImapHost,
+            ["imapPort"] = ImapPort.ToString(),
+            ["smtpHost"] = SmtpHost,
+            ["smtpPort"] = SmtpPort.ToString(),
+            ["username"] = Username,
+            ["password"] = encryptedPassword,
+            ["inboxFolder"] = InboxFolder,
+            ["sentFolder"] = SentFolder,
+            ["trashFolder"] = TrashFolder
+        };
+    }
 
     private Dictionary<string, string> BuildJsonProviderConfig()
     {

@@ -79,6 +79,9 @@ public sealed class ListAccountsTool(
             "ics" or "icalendar" => [
                 new { name = "calendar", readOnly = true }
             ],
+            "imap" or "imap-smtp" => [
+                new { name = "email", readOnly = false }
+            ],
             "json" or "json-calendar" => GetJsonCapabilities(account),
             _ => [
                 new { name = "calendar", readOnly = false }

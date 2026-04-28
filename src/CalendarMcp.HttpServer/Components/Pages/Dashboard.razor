@@ -62,6 +62,7 @@ else
                 <AccountCard Account="item.Account"
                              IsAuthenticated="item.IsAuthenticated"
                              AuthRequired="item.AuthRequired"
+                             HasInteractiveAuth="item.HasInteractiveAuth"
                              AuthDelegateAccountId="@item.AuthDelegateAccountId"
                              FlowStatus="@item.FlowStatus"
                              OnLogout="HandleLogout" />
@@ -101,6 +102,7 @@ else
                     Account = account,
                     IsAuthenticated = isAuth,
                     AuthRequired = authRequired,
+                    HasInteractiveAuth = HasInteractiveAuthFlow(account.Provider),
                     AuthDelegateAccountId = AccountValidation.GetAuthDelegateAccountId(account),
                     FlowStatus = flowStatus.Status != "not_found" ? flowStatus.Status : null
                 });
@@ -162,9 +164,22 @@ else
                 => File.Exists(ConfigurationPaths.GetMsalCachePath(account.Id)),
             "google" or "gmail" or "google workspace"
                 => File.Exists(GetGoogleTokenFilePath(account.Id)),
+            // IMAP/SMTP carries its credential (the password) directly in providerConfig —
+            // there's no separate token cache. The account is "authenticated" iff the
+            // password is populated; no Authenticate button is needed.
+            "imap" or "imap-smtp"
+                => account.ProviderConfig.TryGetValue("password", out var pw) && !string.IsNullOrWhiteSpace(pw),
             _ => false
         };
     }
+
+    private static bool HasInteractiveAuthFlow(string provider) => provider.ToLowerInvariant() switch
+    {
+        "microsoft365" or "m365" or "outlook" or "outlook.com" or "hotmail" => true,
+        "google" or "gmail" or "google workspace" => true,
+        // IMAP credentials live in the account config; no separate sign-in.
+        _ => false
+    };
 
     private static string GetGoogleTokenFilePath(string accountId)
     {
@@ -177,6 +192,7 @@ else
         public required AccountInfo Account { get; init; }
         public bool IsAuthenticated { get; init; }
         public bool AuthRequired { get; init; } = true;
+        public bool HasInteractiveAuth { get; init; } = true;
         public string? AuthDelegateAccountId { get; init; }
         public string? FlowStatus { get; init; }
     }

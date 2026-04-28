@@ -27,7 +27,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IOutlookComProviderService, OutlookComProviderService>();
         services.AddSingleton<IIcsProviderService, IcsProviderService>();
         services.AddSingleton<IJsonCalendarProviderService, JsonCalendarProviderService>();
+        services.AddSingleton<IImapProviderService, ImapProviderService>();
         services.AddSingleton<IProviderServiceFactory, ProviderServiceFactory>();
+
+        // DataProtection + PasswordProtector for at-rest encryption of provider passwords
+        services.AddCalendarMcpDataProtection();
 
         // Register HttpClient for ICS provider
         services.AddHttpClient("IcsProvider");

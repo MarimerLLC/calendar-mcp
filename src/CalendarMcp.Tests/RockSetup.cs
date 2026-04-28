@@ -9,3 +9,4 @@ using Rocks;
 [assembly: Rock(typeof(IOutlookComProviderService), BuildType.Create)]
 [assembly: Rock(typeof(IIcsProviderService), BuildType.Create)]
 [assembly: Rock(typeof(IJsonCalendarProviderService), BuildType.Create)]
+[assembly: Rock(typeof(IImapProviderService), BuildType.Create)]
