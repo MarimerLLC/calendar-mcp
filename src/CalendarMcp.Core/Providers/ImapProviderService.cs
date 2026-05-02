@@ -274,6 +274,7 @@ public class ImapProviderService : IImapProviderService
     public async Task<string> SendEmailAsync(
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
+        IReadOnlyList<EmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
     {
         var cfg = await ResolveConfigAsync(accountId);
@@ -288,10 +289,27 @@ public class ImapProviderService : IImapProviderService
                 message.Cc.Add(MailboxAddress.Parse(addr));
         }
         message.Subject = subject;
-        message.Body = new TextPart(bodyFormat?.Equals("text", StringComparison.OrdinalIgnoreCase) == true
-            ? TextFormat.Plain
-            : TextFormat.Html)
-        { Text = body };
+
+        if (attachments is { Count: > 0 })
+        {
+            var builder = new BodyBuilder();
+            if (bodyFormat?.Equals("text", StringComparison.OrdinalIgnoreCase) == true)
+                builder.TextBody = body;
+            else
+                builder.HtmlBody = body;
+
+            foreach (var att in attachments)
+                MimeAttachmentBuilder.Add(builder, att);
+
+            message.Body = builder.ToMessageBody();
+        }
+        else
+        {
+            message.Body = new TextPart(bodyFormat?.Equals("text", StringComparison.OrdinalIgnoreCase) == true
+                ? TextFormat.Plain
+                : TextFormat.Html)
+            { Text = body };
+        }
 
         using (var smtp = await OpenSmtpAsync(cfg, cancellationToken))
         {

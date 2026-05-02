@@ -266,6 +266,7 @@ public class IcsProviderService : IIcsProviderService
     public Task<string> SendEmailAsync(
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
+        IReadOnlyList<EmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider does not support sending emails.");
 

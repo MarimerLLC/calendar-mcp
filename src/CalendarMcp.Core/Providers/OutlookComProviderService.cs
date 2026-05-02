@@ -274,12 +274,13 @@ public class OutlookComProviderService : IOutlookComProviderService
     }
 
     public async Task<string> SendEmailAsync(
-        string accountId, 
-        string to, 
-        string subject, 
-        string body, 
-        string bodyFormat = "html", 
-        List<string>? cc = null, 
+        string accountId,
+        string to,
+        string subject,
+        string body,
+        string bodyFormat = "html",
+        List<string>? cc = null,
+        IReadOnlyList<EmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
@@ -327,6 +328,11 @@ public class OutlookComProviderService : IOutlookComProviderService
                     .ToList();
             }
 
+            if (attachments is { Count: > 0 })
+            {
+                message.Attachments = GraphAttachmentBuilder.Build(attachments);
+            }
+
             await graphClient.Me.SendMail.PostAsync(new SendMailPostRequestBody
             {
                 Message = message,
@@ -334,7 +340,7 @@ public class OutlookComProviderService : IOutlookComProviderService
             }, cancellationToken: cancellationToken);
 
             _logger.LogInformation("Email sent successfully from Outlook.com account {AccountId} to {To}", accountId, to);
-            
+
             return $"sent-{DateTime.UtcNow:yyyyMMddHHmmss}";
         }
         catch (Exception ex)

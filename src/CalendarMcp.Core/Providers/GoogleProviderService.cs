@@ -10,6 +10,8 @@ using Google.Apis.PeopleService.v1.Data;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
+using MimeKit;
+using MimeKit.Text;
 using System.Text;
 using Person = Google.Apis.PeopleService.v1.Data.Person;
 using Event = Google.Apis.Calendar.v3.Data.Event;
@@ -273,12 +275,13 @@ public class GoogleProviderService : IGoogleProviderService
     }
 
     public async Task<string> SendEmailAsync(
-        string accountId, 
-        string to, 
-        string subject, 
-        string body, 
-        string bodyFormat = "html", 
-        List<string>? cc = null, 
+        string accountId,
+        string to,
+        string subject,
+        string body,
+        string bodyFormat = "html",
+        List<string>? cc = null,
+        IReadOnlyList<EmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -291,31 +294,49 @@ public class GoogleProviderService : IGoogleProviderService
         {
             var service = CreateGmailService(credential);
 
-            // Create the email message in RFC 2822 format
-            var messageBuilder = new StringBuilder();
-            messageBuilder.AppendLine($"To: {to}");
-            if (cc != null && cc.Count > 0)
+            var mime = new MimeMessage();
+            foreach (var addr in to.Split(',', ';'))
             {
-                messageBuilder.AppendLine($"Cc: {string.Join(",", cc)}");
+                var trimmed = addr.Trim();
+                if (trimmed.Length > 0)
+                    mime.To.Add(MailboxAddress.Parse(trimmed));
             }
-            messageBuilder.AppendLine($"Subject: {subject}");
-            
-            if (bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase))
+            if (cc is { Count: > 0 })
             {
-                messageBuilder.AppendLine("Content-Type: text/html; charset=utf-8");
+                foreach (var addr in cc)
+                {
+                    var trimmed = addr.Trim();
+                    if (trimmed.Length > 0)
+                        mime.Cc.Add(MailboxAddress.Parse(trimmed));
+                }
             }
-            else
-            {
-                messageBuilder.AppendLine("Content-Type: text/plain; charset=utf-8");
-            }
-            
-            messageBuilder.AppendLine();
-            messageBuilder.AppendLine(body);
+            mime.Subject = subject;
 
-            var rawMessage = Convert.ToBase64String(Encoding.UTF8.GetBytes(messageBuilder.ToString()))
-                .Replace('+', '-')
-                .Replace('/', '_')
-                .Replace("=", "");
+            var builder = new BodyBuilder();
+            if (bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase))
+                builder.HtmlBody = body;
+            else
+                builder.TextBody = body;
+
+            if (attachments is { Count: > 0 })
+            {
+                foreach (var att in attachments)
+                {
+                    MimeAttachmentBuilder.Add(builder, att);
+                }
+            }
+
+            mime.Body = builder.ToMessageBody();
+
+            string rawMessage;
+            using (var ms = new MemoryStream())
+            {
+                await mime.WriteToAsync(ms, cancellationToken);
+                rawMessage = Convert.ToBase64String(ms.ToArray())
+                    .Replace('+', '-')
+                    .Replace('/', '_')
+                    .Replace("=", "");
+            }
 
             var gmailMessage = new Message
             {
@@ -333,6 +354,7 @@ public class GoogleProviderService : IGoogleProviderService
             throw;
         }
     }
+
 
     public async Task DeleteEmailAsync(
         string accountId,

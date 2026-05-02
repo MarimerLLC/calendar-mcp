@@ -282,12 +282,13 @@ public class M365ProviderService : IM365ProviderService
     }
 
     public async Task<string> SendEmailAsync(
-        string accountId, 
-        string to, 
-        string subject, 
-        string body, 
-        string bodyFormat = "html", 
-        List<string>? cc = null, 
+        string accountId,
+        string to,
+        string subject,
+        string body,
+        string bodyFormat = "html",
+        List<string>? cc = null,
+        IReadOnlyList<EmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
@@ -335,6 +336,11 @@ public class M365ProviderService : IM365ProviderService
                     .ToList();
             }
 
+            if (attachments is { Count: > 0 })
+            {
+                message.Attachments = GraphAttachmentBuilder.Build(attachments);
+            }
+
             await graphClient.Me.SendMail.PostAsync(new SendMailPostRequestBody
             {
                 Message = message,
@@ -342,7 +348,7 @@ public class M365ProviderService : IM365ProviderService
             }, cancellationToken: cancellationToken);
 
             _logger.LogInformation("Email sent successfully from M365 account {AccountId} to {To}", accountId, to);
-            
+
             // SendMail doesn't return a message ID, so we return a confirmation
             return $"sent-{DateTime.UtcNow:yyyyMMddHHmmss}";
         }

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -15,14 +16,19 @@ public sealed class SendEmailTool(
     IProviderServiceFactory providerFactory,
     ILogger<SendEmailTool> logger)
 {
-    [McpServerTool, Description("Send an email. If accountId is omitted, smart routing selects the account whose domains match the first recipient's email domain; if no match, the first configured account is used. Provide accountId explicitly to guarantee which account sends the message.")]
+    // Total decoded attachment payload limit per message. Keeps the JSON tool
+    // call within agent limits and matches typical provider caps (~25 MB).
+    private const long MaxTotalAttachmentBytes = 25L * 1024 * 1024;
+
+    [McpServerTool, Description("Send an email, optionally with file attachments. If accountId is omitted, smart routing selects the account whose domains match the first recipient's email domain; if no match, the first configured account is used. Provide accountId explicitly to guarantee which account sends the message.")]
     public async Task<string> SendEmail(
         [Description("Recipient email address(es). Supply as a JSON array of strings, e.g. [\"alice@example.com\"] or [\"alice@example.com\",\"bob@example.com\"].")] List<string> to,
         [Description("Email subject line")] string subject,
         [Description("Email body content. Use HTML when bodyFormat is 'html' (the default).")] string body,
         [Description("Account ID to send from. Omit to use smart routing (matches recipient domain to account domains, then falls back to first account). Obtain from list_accounts.")] string? accountId = null,
         [Description("Body content format: 'html' (default) or 'text'")] string bodyFormat = "html",
-        [Description("CC recipient email addresses")] List<string>? cc = null)
+        [Description("CC recipient email addresses")] List<string>? cc = null,
+        [Description("Optional file attachments as a JSON array. Each item: {\"name\":\"report.pdf\",\"contentType\":\"application/pdf\",\"base64Content\":\"<base64-encoded bytes>\"}. contentType is optional. Total payload across all attachments must stay under 25 MB; Microsoft 365 and Outlook.com cap each attachment at 3 MB.")] List<EmailAttachment>? attachments = null)
     {
         // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
         body = StripCdataWrapper(body);
@@ -33,6 +39,15 @@ public sealed class SendEmailTool(
             {
                 error = "At least one recipient address is required in the 'to' field."
             });
+        }
+
+        if (attachments is { Count: > 0 })
+        {
+            var validationError = ValidateAttachments(attachments);
+            if (validationError != null)
+            {
+                return JsonSerializer.Serialize(new { error = validationError });
+            }
         }
 
         var toJoined = string.Join(", ", to);
@@ -99,7 +114,7 @@ public sealed class SendEmailTool(
             // Send email
             var provider = providerFactory.GetProvider(account.Provider);
             var messageId = await provider.SendEmailAsync(
-                account.Id, toJoined, subject, body, bodyFormat, cc, CancellationToken.None);
+                account.Id, toJoined, subject, body, bodyFormat, cc, attachments, CancellationToken.None);
 
             var result = new
             {
@@ -126,6 +141,34 @@ public sealed class SendEmailTool(
                 inner = ex.InnerException?.Message
             });
         }
+    }
+
+    private static string? ValidateAttachments(List<EmailAttachment> attachments)
+    {
+        long total = 0;
+        for (var i = 0; i < attachments.Count; i++)
+        {
+            var att = attachments[i];
+            if (string.IsNullOrWhiteSpace(att.Name))
+            {
+                return $"attachments[{i}].name is required.";
+            }
+            if (string.IsNullOrEmpty(att.Base64Content))
+            {
+                return $"attachments[{i}].base64Content is required for '{att.Name}'.";
+            }
+            // Cheap size estimate from the base64 string length, no allocation.
+            // Each 4 base64 chars decode to up to 3 bytes; this overestimates by
+            // up to 2 bytes per attachment, which is fine for the 25 MB cap.
+            var len = att.Base64Content.Length;
+            var estimatedBytes = (long)(len / 4) * 3;
+            total += estimatedBytes;
+            if (total > MaxTotalAttachmentBytes)
+            {
+                return $"Total attachment size exceeds {MaxTotalAttachmentBytes:N0} bytes.";
+            }
+        }
+        return null;
     }
 
     /// <summary>
