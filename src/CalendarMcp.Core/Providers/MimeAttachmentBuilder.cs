@@ -4,13 +4,13 @@ using MimeKit;
 namespace CalendarMcp.Core.Providers;
 
 /// <summary>
-/// Adds <see cref="EmailAttachment"/> entries to a MimeKit
+/// Adds <see cref="OutboundEmailAttachment"/> entries to a MimeKit
 /// <see cref="BodyBuilder"/>. Used by providers that compose outbound email
 /// as MIME (Gmail / IMAP-SMTP).
 /// </summary>
 internal static class MimeAttachmentBuilder
 {
-    public static void Add(BodyBuilder builder, EmailAttachment attachment)
+    public static void Add(BodyBuilder builder, OutboundEmailAttachment attachment)
     {
         if (string.IsNullOrWhiteSpace(attachment.Name))
             throw new ArgumentException("Attachment name is required.", nameof(attachment));

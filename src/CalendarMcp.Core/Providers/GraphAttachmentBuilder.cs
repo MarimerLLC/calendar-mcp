@@ -4,7 +4,7 @@ using Microsoft.Graph.Models;
 namespace CalendarMcp.Core.Providers;
 
 /// <summary>
-/// Converts <see cref="EmailAttachment"/> values into Microsoft Graph
+/// Converts <see cref="OutboundEmailAttachment"/> values into Microsoft Graph
 /// <see cref="FileAttachment"/> entries for inline use on the SendMail
 /// endpoint. Graph caps the SendMail request at ~4 MB total, so each
 /// attachment is rejected above 3 MB to leave headroom for the body and
@@ -15,7 +15,7 @@ internal static class GraphAttachmentBuilder
 {
     private const int MaxAttachmentBytes = 3 * 1024 * 1024;
 
-    public static List<Attachment> Build(IReadOnlyList<EmailAttachment> attachments)
+    public static List<Attachment> Build(IReadOnlyList<OutboundEmailAttachment> attachments)
     {
         var result = new List<Attachment>(attachments.Count);
         foreach (var att in attachments)

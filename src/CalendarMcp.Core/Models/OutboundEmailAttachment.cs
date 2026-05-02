@@ -3,11 +3,13 @@ using System.Text.Json.Serialization;
 namespace CalendarMcp.Core.Models;
 
 /// <summary>
-/// Represents a file to attach to an outbound email. The content is supplied
-/// as a base64-encoded string so the attachment can be transported through MCP
+/// A file to attach to an outbound email being sent. Distinct from
+/// <see cref="EmailAttachment"/>, which represents an attachment on a
+/// received message (metadata only). The content is supplied as a
+/// base64-encoded string so the attachment can be transported through MCP
 /// without filesystem access on the server.
 /// </summary>
-public sealed class EmailAttachment
+public sealed class OutboundEmailAttachment
 {
     [JsonPropertyName("name")]
     public string Name { get; set; } = "";

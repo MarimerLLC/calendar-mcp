@@ -11,10 +11,11 @@ using Google.Apis.Services;
 using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
 using MimeKit;
-using MimeKit.Text;
 using System.Text;
 using Person = Google.Apis.PeopleService.v1.Data.Person;
 using Event = Google.Apis.Calendar.v3.Data.Event;
+// Disambiguate from MimeKit.MessagePart, introduced by the MimeKit imports above.
+using MessagePart = Google.Apis.Gmail.v1.Data.MessagePart;
 
 namespace CalendarMcp.Core.Providers;
 
@@ -281,7 +282,7 @@ public class GoogleProviderService : IGoogleProviderService
         string body,
         string bodyFormat = "html",
         List<string>? cc = null,
-        IReadOnlyList<EmailAttachment>? attachments = null,
+        IReadOnlyList<OutboundEmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);

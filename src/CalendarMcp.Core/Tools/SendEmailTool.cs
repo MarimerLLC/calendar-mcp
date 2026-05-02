@@ -28,7 +28,7 @@ public sealed class SendEmailTool(
         [Description("Account ID to send from. Omit to use smart routing (matches recipient domain to account domains, then falls back to first account). Obtain from list_accounts.")] string? accountId = null,
         [Description("Body content format: 'html' (default) or 'text'")] string bodyFormat = "html",
         [Description("CC recipient email addresses")] List<string>? cc = null,
-        [Description("Optional file attachments as a JSON array. Each item: {\"name\":\"report.pdf\",\"contentType\":\"application/pdf\",\"base64Content\":\"<base64-encoded bytes>\"}. contentType is optional. Total payload across all attachments must stay under 25 MB; Microsoft 365 and Outlook.com cap each attachment at 3 MB.")] List<EmailAttachment>? attachments = null)
+        [Description("Optional file attachments as a JSON array. Each item: {\"name\":\"report.pdf\",\"contentType\":\"application/pdf\",\"base64Content\":\"<base64-encoded bytes>\"}. contentType is optional. Total payload across all attachments must stay under 25 MB; Microsoft 365 and Outlook.com cap each attachment at 3 MB.")] List<OutboundEmailAttachment>? attachments = null)
     {
         // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
         body = StripCdataWrapper(body);
@@ -143,7 +143,7 @@ public sealed class SendEmailTool(
         }
     }
 
-    private static string? ValidateAttachments(List<EmailAttachment> attachments)
+    private static string? ValidateAttachments(List<OutboundEmailAttachment> attachments)
     {
         long total = 0;
         for (var i = 0; i < attachments.Count; i++)

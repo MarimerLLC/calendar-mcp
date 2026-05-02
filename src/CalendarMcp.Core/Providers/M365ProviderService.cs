@@ -288,7 +288,7 @@ public class M365ProviderService : IM365ProviderService
         string body,
         string bodyFormat = "html",
         List<string>? cc = null,
-        IReadOnlyList<EmailAttachment>? attachments = null,
+        IReadOnlyList<OutboundEmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);

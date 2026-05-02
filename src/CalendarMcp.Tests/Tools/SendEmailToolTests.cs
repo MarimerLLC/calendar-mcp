@@ -23,7 +23,7 @@ public class SendEmailToolTests
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", "Body", Arg.Any<string>(),
-            Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<EmailAttachment>?>(),
+            Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
             Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult("msg-123"));
 
@@ -107,7 +107,7 @@ public class SendEmailToolTests
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", "Body", Arg.Any<string>(),
-            Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<EmailAttachment>?>(),
+            Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
             Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult("msg-123"));
 
@@ -117,7 +117,7 @@ public class SendEmailToolTests
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             NullLogger<SendEmailTool>.Instance);
 
-        var attachment = new EmailAttachment
+        var attachment = new OutboundEmailAttachment
         {
             Name = "hello.txt",
             ContentType = "text/plain",
@@ -126,7 +126,7 @@ public class SendEmailToolTests
 
         var result = await tool.SendEmail(
             new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<EmailAttachment> { attachment });
+            attachments: new List<OutboundEmailAttachment> { attachment });
 
         var doc = JsonDocument.Parse(result);
         Assert.IsTrue(doc.RootElement.GetProperty("success").GetBoolean());
@@ -146,7 +146,7 @@ public class SendEmailToolTests
 
         var result = await tool.SendEmail(
             new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<EmailAttachment>
+            attachments: new List<OutboundEmailAttachment>
             {
                 new() { Name = "", Base64Content = "aGVsbG8=" },
             });
@@ -166,7 +166,7 @@ public class SendEmailToolTests
 
         var result = await tool.SendEmail(
             new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<EmailAttachment>
+            attachments: new List<OutboundEmailAttachment>
             {
                 new() { Name = "x.txt", Base64Content = "" },
             });
@@ -188,7 +188,7 @@ public class SendEmailToolTests
         var bigBase64 = new string('A', 35 * 1024 * 1024);
         var result = await tool.SendEmail(
             new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<EmailAttachment>
+            attachments: new List<OutboundEmailAttachment>
             {
                 new() { Name = "a.bin", Base64Content = bigBase64 },
             });

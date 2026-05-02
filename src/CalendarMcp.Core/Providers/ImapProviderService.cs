@@ -274,7 +274,7 @@ public class ImapProviderService : IImapProviderService
     public async Task<string> SendEmailAsync(
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
-        IReadOnlyList<EmailAttachment>? attachments = null,
+        IReadOnlyList<OutboundEmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
     {
         var cfg = await ResolveConfigAsync(accountId);
