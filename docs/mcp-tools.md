@@ -209,7 +209,24 @@ Send email from specific account (requires explicit account selection or smart r
 - `body`: Email body content
 - `bodyFormat` (default: "html"): "html" or "text"
 - `cc` (optional): CC recipients
-- `attachments` (optional): Attachments to include
+- `attachments` (optional): File attachments. JSON array of objects:
+  ```json
+  [
+    {
+      "name": "report.pdf",
+      "contentType": "application/pdf",
+      "base64Content": "<base64-encoded file bytes>"
+    }
+  ]
+  ```
+  - `name` (required): file name as it should appear on the email
+  - `contentType` (optional): MIME type; sniffed by the provider if omitted
+  - `base64Content` (required): the file's bytes encoded as a single base64 string
+
+  Limits: total decoded payload across all attachments must stay under **25 MB**.
+  Microsoft 365 and Outlook.com additionally cap each individual attachment at
+  **3 MB** (the Graph SendMail endpoint limit). Larger files are rejected with a
+  clear error. ICS and JSON file providers are read-only and reject any send.
 
 **Returns**:
 ```json

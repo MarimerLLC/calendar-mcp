@@ -25,7 +25,7 @@ The server exposes these tools to AI assistants:
 - **get_emails** / **search_emails** — Read and search email across accounts
 - **get_email_details** — Get full email content
 - **get_contextual_email_summary** — AI-powered topic clustering and persona analysis
-- **send_email** — Send email with smart domain-based routing
+- **send_email** — Send email with smart domain-based routing; supports file attachments (base64-encoded, up to 25 MB total)
 - **list_calendars** / **get_calendar_events** — View calendars and events
 - **get_calendar_event_details** — Get full event details
 - **find_available_times** — Find free time across all calendars
