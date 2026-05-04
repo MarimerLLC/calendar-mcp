@@ -209,24 +209,68 @@ Send email from specific account (requires explicit account selection or smart r
 - `body`: Email body content
 - `bodyFormat` (default: "html"): "html" or "text"
 - `cc` (optional): CC recipients
-- `attachments` (optional): File attachments. JSON array of objects:
+- `attachments` (optional): File attachments. JSON array of objects. Each item
+  must use one of two shapes:
+
+  **Preferred — by ID (out-of-band upload):**
   ```json
-  [
-    {
-      "name": "report.pdf",
-      "contentType": "application/pdf",
-      "base64Content": "<base64-encoded file bytes>"
-    }
-  ]
+  [{ "attachmentId": "AbCdEf1234..." }]
+  ```
+  Upload the file to `POST /attachments` first (see [Attachment uploads](#attachment-uploads-http-mode)),
+  then pass the returned `attachmentId`. Avoids inflating the JSON tool call
+  with megabytes of base64. `name` and `contentType` from the upload are used
+  by default; pass them on the attachment object to override.
+
+  **Inline — by base64 (fallback):**
+  ```json
+  [{
+    "name": "report.pdf",
+    "contentType": "application/pdf",
+    "base64Content": "<base64-encoded file bytes>"
+  }]
   ```
   - `name` (required): file name as it should appear on the email
   - `contentType` (optional): MIME type; sniffed by the provider if omitted
   - `base64Content` (required): the file's bytes encoded as a single base64 string
 
-  Limits: total decoded payload across all attachments must stay under **25 MB**.
+  Use inline only for small files or when no out-of-band upload channel is
+  available (e.g. stdio MCP clients).
+
+  Limits: total decoded payload per message must stay under **25 MB**.
   Microsoft 365 and Outlook.com additionally cap each individual attachment at
-  **3 MB** (the Graph SendMail endpoint limit). Larger files are rejected with a
-  clear error. ICS and JSON file providers are read-only and reject any send.
+  **3 MB** (the Graph SendMail endpoint limit). Larger files are rejected with
+  a clear error. ICS and JSON file providers are read-only and reject any send.
+
+### Attachment uploads (HTTP mode)
+
+Available only on the HTTP server (`CalendarMcp.HttpServer`). Stdio clients
+must use `base64Content` inline.
+
+`POST /attachments` accepts `multipart/form-data` with exactly one `file`
+part and returns:
+
+```json
+{
+  "attachmentId": "AbCdEf1234...",
+  "name": "report.pdf",
+  "contentType": "application/pdf",
+  "size": 524288,
+  "expiresAt": "2026-05-03T15:42:00+00:00"
+}
+```
+
+Pass the returned `attachmentId` in a subsequent `send_email` call. Entries
+are **single-use** (the server consumes the bytes on send) and expire **15
+minutes** after upload. Per-upload limit: **10 MB**. Server-wide cap on the
+live attachment store: **100 MB**.
+
+Storage is in-process memory only — no disk, no PVC. Pod restart drops any
+unsent uploads; the agent should re-upload on retry.
+
+curl example:
+```sh
+curl -F file=@report.pdf https://calendar-mcp.tail920062.ts.net/attachments
+```
 
 **Returns**:
 ```json

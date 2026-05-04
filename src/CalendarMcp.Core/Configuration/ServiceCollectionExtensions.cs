@@ -47,6 +47,12 @@ public static class ServiceCollectionExtensions
         
         // Register account registry
         services.AddSingleton<IAccountRegistry, AccountRegistry>();
+
+        // Attachment store (in-memory; eviction sweeper is registered by the
+        // HTTP server only — stdio mode never uploads, so lazy expiry on
+        // consume is sufficient there).
+        services.AddOptions<AttachmentStoreOptions>();
+        services.AddSingleton<IAttachmentStore, InMemoryAttachmentStore>();
         
         // Register MCP tools (method-based pattern - just register the classes)
         services.AddSingleton<ListAccountsTool>();

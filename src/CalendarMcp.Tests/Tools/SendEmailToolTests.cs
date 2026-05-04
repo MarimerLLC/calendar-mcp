@@ -31,7 +31,7 @@ public class SendEmailToolTests
         factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
 
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail(new List<string> { "to@example.com" }, "Subject", "Body", "acc-1");
         var doc = JsonDocument.Parse(result);
@@ -53,7 +53,7 @@ public class SendEmailToolTests
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail(new List<string> { "to@example.com" }, "Subject", "Body", "nonexistent");
         var doc = JsonDocument.Parse(result);
@@ -71,7 +71,7 @@ public class SendEmailToolTests
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail(new List<string> { "to@unknown.com" }, "Subject", "Body");
         var doc = JsonDocument.Parse(result);
@@ -86,7 +86,7 @@ public class SendEmailToolTests
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail([], "Subject", "Body", "acc-1");
         var doc = JsonDocument.Parse(result);
@@ -115,7 +115,7 @@ public class SendEmailToolTests
         factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
 
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var attachment = new OutboundEmailAttachment
         {
@@ -142,7 +142,7 @@ public class SendEmailToolTests
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail(
             new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
@@ -162,7 +162,7 @@ public class SendEmailToolTests
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail(
             new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
@@ -182,7 +182,7 @@ public class SendEmailToolTests
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         // 35 MB of base64 chars decodes to ~26 MB, just over the 25 MB cap.
         var bigBase64 = new string('A', 35 * 1024 * 1024);

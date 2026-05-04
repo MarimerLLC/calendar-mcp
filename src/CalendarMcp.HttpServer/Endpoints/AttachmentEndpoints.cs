@@ -1,0 +1,97 @@
+using CalendarMcp.Core.Services;
+
+namespace CalendarMcp.HttpServer.Endpoints;
+
+public static class AttachmentEndpoints
+{
+    public static IEndpointRouteBuilder MapAttachmentEndpoints(this IEndpointRouteBuilder routes)
+    {
+        var group = routes.MapGroup("/attachments")
+            .WithTags("Attachments")
+            .DisableAntiforgery();
+
+        group.MapPost("/", UploadAsync)
+            .WithName("UploadAttachment")
+            .WithSummary("Upload a binary attachment for use in send_email.")
+            .Produces<UploadResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
+            .ProducesProblem(StatusCodes.Status507InsufficientStorage);
+
+        return routes;
+    }
+
+    private static async Task<IResult> UploadAsync(
+        HttpRequest request,
+        IAttachmentStore store,
+        ILogger<InMemoryAttachmentStore> logger,
+        CancellationToken cancellationToken)
+    {
+        if (!request.HasFormContentType)
+        {
+            return Results.Problem(
+                title: "Multipart form-data required",
+                detail: "POST a multipart/form-data body with exactly one file part.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        IFormCollection form;
+        try
+        {
+            form = await request.ReadFormAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Results.Problem(
+                title: "Invalid multipart body",
+                detail: ex.Message,
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        if (form.Files.Count != 1)
+        {
+            return Results.Problem(
+                title: "Exactly one file required",
+                detail: $"Got {form.Files.Count} file parts; expected 1.",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+
+        var file = form.Files[0];
+
+        // Read into memory; per-attachment cap is enforced by the store.
+        using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, cancellationToken);
+        var bytes = ms.ToArray();
+
+        var stored = store.Put(file.FileName, file.ContentType, bytes);
+        if (stored == null)
+        {
+            // Store rejected: either over per-attachment cap or global cap.
+            // We can't tell which without more API surface; report the more
+            // common one (per-attachment) when the file is itself oversized.
+            logger.LogWarning("Attachment upload rejected: name={Name}, size={Size}", file.FileName, bytes.Length);
+            if (bytes.Length > 10 * 1024 * 1024)
+            {
+                return Results.Problem(
+                    title: "Attachment too large",
+                    detail: "Each upload must be 10 MB or less.",
+                    statusCode: StatusCodes.Status413PayloadTooLarge);
+            }
+            return Results.Problem(
+                title: "Attachment store full",
+                detail: "Server attachment cache is at capacity. Try again in a few minutes.",
+                statusCode: StatusCodes.Status507InsufficientStorage);
+        }
+
+        return Results.Created(
+            $"/attachments/{stored.Id}",
+            new UploadResponse(stored.Id, stored.Name, stored.ContentType, bytes.Length, stored.ExpiresAt));
+    }
+
+    public sealed record UploadResponse(
+        string AttachmentId,
+        string Name,
+        string? ContentType,
+        long Size,
+        DateTimeOffset ExpiresAt);
+}
