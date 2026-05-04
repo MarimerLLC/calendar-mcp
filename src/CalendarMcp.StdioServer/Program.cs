@@ -117,6 +117,7 @@ public class Program
                     .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetEmailDetailsTool>()
+                    .WithTools<CalendarMcp.Core.Tools.GetEmailAttachmentTool>()
                     .WithTools<CalendarMcp.Core.Tools.SearchEmailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
                     .WithTools<CalendarMcp.Core.Tools.DeleteEmailTool>()

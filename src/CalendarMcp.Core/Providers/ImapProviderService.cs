@@ -271,6 +271,53 @@ public class ImapProviderService : IImapProviderService
         return MessageToEmail(message, folderName, uidValidity, uid, accountId, isRead);
     }
 
+    public async Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
+        string accountId, string emailId, string attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        // IMAP attachment ids are positional: "part-N".
+        if (!attachmentId.StartsWith("part-", StringComparison.Ordinal)
+            || !int.TryParse(attachmentId.AsSpan(5), out var index)
+            || index < 0)
+        {
+            _logger.LogWarning("Invalid IMAP attachment id {AttachmentId}", attachmentId);
+            return null;
+        }
+
+        var (folderName, uidValidity, uid) = ParseEmailId(emailId);
+        var cfg = await ResolveConfigAsync(accountId);
+
+        using var client = await OpenImapAsync(cfg, cancellationToken);
+        var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadOnly, cancellationToken);
+
+        if (folder.UidValidity != uidValidity)
+        {
+            _logger.LogWarning("UIDVALIDITY mismatch fetching attachment for {AccountId} {Folder}", accountId, folderName);
+            return null;
+        }
+
+        var message = await folder.GetMessageAsync(new UniqueId(uid), cancellationToken);
+        if (message is null) return null;
+
+        var parts = message.Attachments.OfType<MimePart>().ToList();
+        if (index >= parts.Count)
+        {
+            _logger.LogWarning("Attachment index {Index} out of range (have {Count})", index, parts.Count);
+            return null;
+        }
+
+        var part = parts[index];
+        using var ms = new MemoryStream();
+        await part.Content.DecodeToAsync(ms, cancellationToken);
+
+        return new EmailAttachmentContent
+        {
+            Name = part.FileName ?? "attachment",
+            ContentType = part.ContentType?.MimeType,
+            Bytes = ms.ToArray(),
+        };
+    }
+
     public async Task<string> SendEmailAsync(
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
@@ -492,13 +539,16 @@ public class ImapProviderService : IImapProviderService
         var from = m.From.Mailboxes.FirstOrDefault();
         var (body, format) = ExtractBody(m);
 
+        // IMAP has no native attachment IDs; use a positional synthetic id.
+        // Stable for the lifetime of the message structure on the server.
         var attachments = m.Attachments
             .OfType<MimePart>()
-            .Select(p => new EmailAttachment
+            .Select((p, i) => new EmailAttachment
             {
                 Name = p.FileName ?? "(unnamed)",
                 Size = p.Content?.Stream?.Length ?? 0,
-                ContentType = p.ContentType?.MimeType ?? "application/octet-stream"
+                ContentType = p.ContentType?.MimeType ?? "application/octet-stream",
+                AttachmentId = $"part-{i}",
             })
             .ToList();
 

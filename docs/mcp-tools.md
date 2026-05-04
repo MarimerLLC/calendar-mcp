@@ -171,7 +171,9 @@ Get a contextual, topic-grouped summary of emails across all accounts with perso
 - **Cross-Account Analysis**: Reveals which topics span multiple accounts
 
 #### `get_email_details`
-Get full email content including body and attachments.
+Get full email content including body and attachment metadata. Each
+attachment in the response includes an `attachmentId`; pass it to
+`get_email_attachment` to fetch the bytes.
 
 **Parameters**:
 - `accountId`: Specific account ID (required)
@@ -193,9 +195,50 @@ Get full email content including body and attachments.
     {
       "name": "report.pdf",
       "size": 524288,
-      "contentType": "application/pdf"
+      "contentType": "application/pdf",
+      "attachmentId": "AAMkAG..."
     }
   ]
+}
+```
+
+#### `get_email_attachment`
+Fetch the bytes of one inbound attachment. Two modes:
+
+- **`stash`** (default): server downloads from the upstream provider, drops
+  the bytes into the same store used by `POST /attachments`, returns an
+  `attachmentId` you can pass directly to `send_email`. Bytes never round
+  trip through the LLM. This is the right mode for forward / re-attach
+  flows.
+- **`inline`**: returns base64 bytes directly. Capped at **1 MB**; larger
+  attachments must use `stash`. Use only when the agent itself needs to
+  read the file content.
+
+**Parameters**:
+- `accountId` (required): Account that owns the email.
+- `emailId` (required): Email message ID, from `get_email_details`.
+- `attachmentId` (required): Provider-side ID, from the `attachments[]`
+  array on `get_email_details`.
+- `mode` (default: `"stash"`): `"stash"` or `"inline"`.
+
+**Returns** (stash mode):
+```json
+{
+  "attachmentId": "AbCdEf1234...",
+  "name": "report.pdf",
+  "contentType": "application/pdf",
+  "size": 524288,
+  "expiresAt": "2026-05-03T15:42:00+00:00"
+}
+```
+
+**Returns** (inline mode):
+```json
+{
+  "name": "report.pdf",
+  "contentType": "application/pdf",
+  "size": 524288,
+  "base64Content": "<base64>"
 }
 ```
 

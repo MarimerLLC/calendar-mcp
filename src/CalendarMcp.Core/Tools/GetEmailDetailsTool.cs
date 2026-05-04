@@ -79,7 +79,8 @@ public sealed class GetEmailDetailsTool(
                 {
                     name = a.Name,
                     size = a.Size,
-                    contentType = a.ContentType
+                    contentType = a.ContentType,
+                    attachmentId = a.AttachmentId,
                 })
             };
 

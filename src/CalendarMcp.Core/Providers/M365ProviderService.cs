@@ -254,6 +254,12 @@ public class M365ProviderService : IM365ProviderService
                 }
             }
 
+            var attachments = new List<EmailAttachment>();
+            if (message.HasAttachments == true)
+            {
+                attachments = await FetchAttachmentMetadataAsync(graphClient, emailId, cancellationToken);
+            }
+
             var result = new EmailMessage
             {
                 Id = message.Id ?? string.Empty,
@@ -268,6 +274,7 @@ public class M365ProviderService : IM365ProviderService
                 ReceivedDateTime = message.ReceivedDateTime?.DateTime ?? DateTime.MinValue,
                 IsRead = message.IsRead ?? false,
                 HasAttachments = message.HasAttachments ?? false,
+                Attachments = attachments,
                 UnsubscribeInfo = Utilities.UnsubscribeHeaderParser.Parse(listUnsubscribe, listUnsubscribePost)
             };
 
@@ -277,6 +284,76 @@ public class M365ProviderService : IM365ProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting email details for {EmailId} from M365 account {AccountId}", emailId, accountId);
+            return null;
+        }
+    }
+
+    private static async Task<List<EmailAttachment>> FetchAttachmentMetadataAsync(
+        GraphServiceClient graphClient,
+        string emailId,
+        CancellationToken cancellationToken)
+    {
+        // Metadata only — exclude contentBytes to keep this cheap.
+        var page = await graphClient.Me.Messages[emailId].Attachments.GetAsync(
+            config => config.QueryParameters.Select = ["id", "name", "contentType", "size"],
+            cancellationToken);
+
+        var result = new List<EmailAttachment>();
+        if (page?.Value == null) return result;
+        foreach (var att in page.Value)
+        {
+            // ItemAttachments (forwarded messages) and ReferenceAttachments
+            // (links) are reported here too; we only surface FileAttachments.
+            if (att is not FileAttachment)
+                continue;
+            result.Add(new EmailAttachment
+            {
+                Name = att.Name ?? "attachment",
+                Size = att.Size ?? 0,
+                ContentType = att.ContentType ?? "application/octet-stream",
+                AttachmentId = att.Id,
+            });
+        }
+        return result;
+    }
+
+    public async Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
+        string accountId,
+        string emailId,
+        string attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+        if (token == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var attachment = await graphClient.Me.Messages[emailId].Attachments[attachmentId]
+                .GetAsync(cancellationToken: cancellationToken);
+
+            if (attachment is not FileAttachment file || file.ContentBytes == null)
+            {
+                _logger.LogWarning("Attachment {AttachmentId} on {EmailId} is not a file attachment", attachmentId, emailId);
+                return null;
+            }
+
+            return new EmailAttachmentContent
+            {
+                Name = file.Name ?? "attachment",
+                ContentType = file.ContentType,
+                Bytes = file.ContentBytes,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching attachment {AttachmentId} on {EmailId} from M365 account {AccountId}",
+                attachmentId, emailId, accountId);
             return null;
         }
     }

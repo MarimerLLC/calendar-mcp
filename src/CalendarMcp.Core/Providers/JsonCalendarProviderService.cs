@@ -417,6 +417,11 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         return entry == null ? null : MapToEmailMessage(entry, accountId);
     }
 
+    public Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
+        string accountId, string emailId, string attachmentId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<EmailAttachmentContent?>(null);
+
     public Task<string> SendEmailAsync(
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,

@@ -58,6 +58,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ListAccountsTool>();
         services.AddSingleton<GetEmailsTool>();
         services.AddSingleton<GetEmailDetailsTool>();
+        services.AddSingleton<GetEmailAttachmentTool>();
         services.AddSingleton<SearchEmailsTool>();
         services.AddSingleton<SendEmailTool>();
         services.AddSingleton<DeleteEmailTool>();
