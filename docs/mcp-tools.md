@@ -203,7 +203,11 @@ attachment in the response includes an `attachmentId`; pass it to
 ```
 
 #### `get_email_attachment`
-Fetch the bytes of one inbound attachment. Two modes:
+Fetch the bytes of one inbound attachment. Two modes.
+
+> **Parameter name reminder**: the email parameter is `emailId`, not
+> `messageId`. Same convention as `get_email_details`,
+> `delete_email`, and friends.
 
 - **`stash`** (default): server downloads from the upstream provider, drops
   the bytes into the same store used by `POST /attachments`, returns an
@@ -313,6 +317,34 @@ unsent uploads; the agent should re-upload on retry.
 curl example:
 ```sh
 curl -F file=@report.pdf https://calendar-mcp.tail920062.ts.net/attachments
+```
+
+#### `GET /attachments/{attachmentId}`
+
+Reads the bytes of a stored attachment **without consuming it**. Returns
+raw bytes with `Content-Type` and `Content-Disposition` headers populated
+from the upload metadata. Useful when the agent has HTTP access and the
+attachment is too large for `get_email_attachment(mode="inline")`'s 1 MB
+cap.
+
+The entry stays in the store until `send_email` consumes it,
+`DELETE /attachments/{id}` removes it, or the 15 min TTL expires. Multiple
+GETs against the same ID are fine.
+
+Returns `404` if the ID is unknown, expired, or already consumed.
+
+```sh
+curl -OJ https://calendar-mcp.tail920062.ts.net/attachments/AbCdEf1234
+```
+
+#### `DELETE /attachments/{attachmentId}`
+
+Removes an attachment from the store before its TTL. Returns `204` on
+success, `404` if the entry was already gone. Polite cleanup for agents
+that uploaded an attachment they decided not to send.
+
+```sh
+curl -X DELETE https://calendar-mcp.tail920062.ts.net/attachments/AbCdEf1234
 ```
 
 **Returns**:

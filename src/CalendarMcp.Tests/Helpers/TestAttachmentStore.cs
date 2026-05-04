@@ -45,5 +45,15 @@ public sealed class TestAttachmentStore : IAttachmentStore
         return entry.ExpiresAt <= DateTimeOffset.UtcNow ? null : entry;
     }
 
+    public StoredAttachment? TryRead(string attachmentId)
+    {
+        if (!_entries.TryGetValue(attachmentId, out var entry))
+            return null;
+        return entry.ExpiresAt <= DateTimeOffset.UtcNow ? null : entry;
+    }
+
+    public bool TryDelete(string attachmentId)
+        => _entries.Remove(attachmentId);
+
     public void EvictExpired() { /* no-op for tests */ }
 }

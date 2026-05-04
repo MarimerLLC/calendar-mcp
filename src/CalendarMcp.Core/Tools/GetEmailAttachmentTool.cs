@@ -25,11 +25,11 @@ public sealed class GetEmailAttachmentTool(
     private const long InlineSizeLimitBytes = 1L * 1024 * 1024;
 
     [McpServerTool, Description(
-        "Fetch the bytes of one attachment on a received email. Use 'stash' mode (default) to put the bytes into the server's attachment store and get back an attachmentId you can immediately pass to send_email — bytes never round-trip through the agent. Use 'inline' mode only when the agent itself needs to read the content (e.g., to extract text from a PDF), and only for files under 1 MB. Required: accountId, emailId, attachmentId — get them from get_email_details.")]
+        "Fetch the bytes of one attachment on a received email. Required: accountId, emailId, attachmentId — get them from get_email_details. Modes: 'stash' (default) puts the bytes into the server's attachment store and returns an attachmentId you immediately pass to send_email; bytes never round-trip through the agent. 'inline' returns base64Content directly, capped at 1 MB; use when the agent itself needs to read the content (e.g., to extract text from a PDF). The stash attachmentId is consumed by send_email and is also readable via HTTP GET /attachments/{id} on the HTTP server (returns raw bytes; useful when the file exceeds the 1 MB inline cap and the agent has HTTP access). There is no MCP tool for downloading the stashed bytes — use the HTTP endpoint or just pass the ID to send_email.")]
     public async Task<string> GetEmailAttachment(
         [Description("Required. Account that owns the email.")] string accountId,
-        [Description("Required. Email message ID, from get_email_details.")] string emailId,
-        [Description("Required. Provider-side attachment ID, from the attachments[] array on get_email_details.")] string attachmentId,
+        [Description("Required. Email ID — pass as parameter name 'emailId' (NOT 'messageId'). Use the value from the 'id' field on get_email_details / get_emails / search_emails.")] string emailId,
+        [Description("Required. Provider-side attachment ID, from the attachments[] array on get_email_details (e.g. 'part-0' for Gmail/IMAP, an opaque string for Microsoft Graph).")] string attachmentId,
         [Description("'stash' (default) returns an attachmentId for use in send_email. 'inline' returns base64Content directly; capped at 1 MB.")] string mode = "stash")
     {
         if (string.IsNullOrEmpty(accountId)) return Err("accountId is required");

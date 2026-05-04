@@ -79,6 +79,61 @@ public class InMemoryAttachmentStoreTests
     }
 
     [TestMethod]
+    public void TryRead_DoesNotConsume_AndIsRepeatable()
+    {
+        var store = CreateStore();
+        var stored = store.Put("a.txt", "text/plain", "hello"u8.ToArray());
+        Assert.IsNotNull(stored);
+
+        var first = store.TryRead(stored!.Id);
+        var second = store.TryRead(stored.Id);
+        Assert.IsNotNull(first);
+        Assert.IsNotNull(second);
+        CollectionAssert.AreEqual(first!.Bytes, second!.Bytes);
+
+        // Subsequent consume still works since read didn't remove the entry.
+        var consumed = store.TryConsume(stored.Id);
+        Assert.IsNotNull(consumed);
+
+        // After consume, both Read and Consume should miss.
+        Assert.IsNull(store.TryRead(stored.Id));
+        Assert.IsNull(store.TryConsume(stored.Id));
+    }
+
+    [TestMethod]
+    public void TryDelete_RemovesEntry_AndFreesQuota()
+    {
+        var store = CreateStore(new AttachmentStoreOptions { MaxTotalBytes = 100 });
+        var stored = store.Put("a", null, new byte[80]);
+        Assert.IsNotNull(stored);
+
+        Assert.IsTrue(store.TryDelete(stored!.Id));
+        Assert.IsFalse(store.TryDelete(stored.Id));   // already gone
+        Assert.IsNull(store.TryRead(stored.Id));
+
+        // Quota was freed: a fresh 80 B upload now fits where the 80 B + 80 B
+        // collision would have failed.
+        Assert.IsNotNull(store.Put("b", null, new byte[80]));
+    }
+
+    [TestMethod]
+    public void TryRead_ExpiredEntry_ReturnsNullAndEvicts()
+    {
+        var time = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        var store = CreateStore(
+            new AttachmentStoreOptions { Ttl = TimeSpan.FromMinutes(1), MaxTotalBytes = 100 },
+            time);
+
+        var stored = store.Put("a", null, new byte[80]);
+        Assert.IsNotNull(stored);
+        time.Advance(TimeSpan.FromMinutes(2));
+
+        Assert.IsNull(store.TryRead(stored!.Id));
+        // Read should have evicted lazily; quota is reclaimed.
+        Assert.IsNotNull(store.Put("b", null, new byte[80]));
+    }
+
+    [TestMethod]
     public void EvictExpired_RemovesPastEntriesAndFreesQuota()
     {
         var time = new FakeTimeProvider(DateTimeOffset.UtcNow);

@@ -18,7 +18,50 @@ public static class AttachmentEndpoints
             .ProducesProblem(StatusCodes.Status413PayloadTooLarge)
             .ProducesProblem(StatusCodes.Status507InsufficientStorage);
 
+        group.MapGet("/{attachmentId}", DownloadAsync)
+            .WithName("DownloadAttachment")
+            .WithSummary("Read the bytes of a stored attachment without consuming it. Entry remains in the store until send_email consumes it, DELETE removes it, or TTL expires.")
+            .Produces(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        group.MapDelete("/{attachmentId}", DeleteAsync)
+            .WithName("DeleteAttachment")
+            .WithSummary("Remove an attachment from the store before its TTL.")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return routes;
+    }
+
+    private static IResult DownloadAsync(
+        string attachmentId,
+        IAttachmentStore store)
+    {
+        var entry = store.TryRead(attachmentId);
+        if (entry == null)
+        {
+            return Results.Problem(
+                title: "Attachment not found",
+                detail: "The attachment ID is unknown, expired, or was already consumed by send_email.",
+                statusCode: StatusCodes.Status404NotFound);
+        }
+
+        return Results.File(
+            entry.Bytes,
+            contentType: entry.ContentType ?? "application/octet-stream",
+            fileDownloadName: entry.Name);
+    }
+
+    private static IResult DeleteAsync(
+        string attachmentId,
+        IAttachmentStore store)
+    {
+        return store.TryDelete(attachmentId)
+            ? Results.NoContent()
+            : Results.Problem(
+                title: "Attachment not found",
+                detail: "Nothing to delete; the attachment ID is unknown, expired, or was already consumed.",
+                statusCode: StatusCodes.Status404NotFound);
     }
 
     private static async Task<IResult> UploadAsync(

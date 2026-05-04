@@ -15,14 +15,29 @@ public interface IAttachmentStore
 
     /// <summary>
     /// Atomically removes and returns the entry. Returns <c>null</c> if the
-    /// ID is unknown or already expired.
+    /// ID is unknown or already expired. Use this for single-use consumption
+    /// paths (e.g. send_email).
     /// </summary>
     StoredAttachment? TryConsume(string attachmentId);
 
     /// <summary>
+    /// Returns the entry without removing it. Returns <c>null</c> if the ID
+    /// is unknown or expired. The entry remains in the store until consumed,
+    /// explicitly deleted, or TTL'd out. Use this for the HTTP GET path
+    /// where the caller may want to read first and consume later.
+    /// </summary>
+    StoredAttachment? TryRead(string attachmentId);
+
+    /// <summary>
+    /// Removes the entry if present. Returns true if removed, false if it
+    /// was already gone (or never existed). No-throw.
+    /// </summary>
+    bool TryDelete(string attachmentId);
+
+    /// <summary>
     /// Removes any entries past their absolute expiry. Safe to call from a
-    /// background sweeper; <see cref="TryConsume"/> also rejects expired
-    /// entries lazily.
+    /// background sweeper; <see cref="TryConsume"/> and <see cref="TryRead"/>
+    /// also reject expired entries lazily.
     /// </summary>
     void EvictExpired();
 }

@@ -85,6 +85,42 @@ public sealed class InMemoryAttachmentStore : IAttachmentStore
         }
     }
 
+    public StoredAttachment? TryRead(string attachmentId)
+    {
+        if (string.IsNullOrEmpty(attachmentId))
+            return null;
+
+        lock (_gate)
+        {
+            if (!_entries.TryGetValue(attachmentId, out var entry))
+                return null;
+
+            if (entry.ExpiresAt <= _time.GetUtcNow())
+            {
+                // Lazily clean up the expired entry while we hold the lock.
+                _entries.Remove(attachmentId);
+                _totalBytes -= entry.Bytes.Length;
+                return null;
+            }
+
+            return entry;
+        }
+    }
+
+    public bool TryDelete(string attachmentId)
+    {
+        if (string.IsNullOrEmpty(attachmentId))
+            return false;
+
+        lock (_gate)
+        {
+            if (!_entries.Remove(attachmentId, out var entry))
+                return false;
+            _totalBytes -= entry.Bytes.Length;
+            return true;
+        }
+    }
+
     public void EvictExpired()
     {
         lock (_gate)
