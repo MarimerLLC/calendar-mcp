@@ -23,8 +23,21 @@ public interface IProviderService
         CancellationToken cancellationToken = default);
     
     Task<EmailMessage?> GetEmailDetailsAsync(
-        string accountId, 
+        string accountId,
         string emailId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches the raw bytes of one attachment on a received email.
+    /// <paramref name="attachmentId"/> is the provider-side ID returned in
+    /// <see cref="EmailAttachment.AttachmentId"/> by
+    /// <see cref="GetEmailDetailsAsync"/>. Returns <c>null</c> if the
+    /// attachment isn't found or access fails.
+    /// </summary>
+    Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
+        string accountId,
+        string emailId,
+        string attachmentId,
         CancellationToken cancellationToken = default);
     
     Task<string> SendEmailAsync(
@@ -34,6 +47,7 @@ public interface IProviderService
         string body,
         string bodyFormat = "html",
         List<string>? cc = null,
+        IReadOnlyList<OutboundEmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default);
 
     Task DeleteEmailAsync(

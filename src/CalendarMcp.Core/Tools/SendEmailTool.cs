@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -13,16 +14,22 @@ namespace CalendarMcp.Core.Tools;
 public sealed class SendEmailTool(
     IAccountRegistry accountRegistry,
     IProviderServiceFactory providerFactory,
+    IAttachmentStore attachmentStore,
     ILogger<SendEmailTool> logger)
 {
-    [McpServerTool, Description("Send an email. If accountId is omitted, smart routing selects the account whose domains match the first recipient's email domain; if no match, the first configured account is used. Provide accountId explicitly to guarantee which account sends the message.")]
+    // Total decoded attachment payload limit per message. Keeps the JSON tool
+    // call within agent limits and matches typical provider caps (~25 MB).
+    private const long MaxTotalAttachmentBytes = 25L * 1024 * 1024;
+
+    [McpServerTool, Description("Send an email, optionally with file attachments. If accountId is omitted, smart routing selects the account whose domains match the first recipient's email domain; if no match, the first configured account is used. Provide accountId explicitly to guarantee which account sends the message.")]
     public async Task<string> SendEmail(
         [Description("Recipient email address(es). Supply as a JSON array of strings, e.g. [\"alice@example.com\"] or [\"alice@example.com\",\"bob@example.com\"].")] List<string> to,
         [Description("Email subject line")] string subject,
         [Description("Email body content. Use HTML when bodyFormat is 'html' (the default).")] string body,
         [Description("Account ID to send from. Omit to use smart routing (matches recipient domain to account domains, then falls back to first account). Obtain from list_accounts.")] string? accountId = null,
         [Description("Body content format: 'html' (default) or 'text'")] string bodyFormat = "html",
-        [Description("CC recipient email addresses")] List<string>? cc = null)
+        [Description("CC recipient email addresses")] List<string>? cc = null,
+        [Description("Optional file attachments as a JSON array. Each item must set EITHER \"attachmentId\" (preferred for anything non-trivial: upload the file via POST /attachments first to get the ID) OR \"base64Content\" (the raw bytes encoded as base64; use only for very small files). \"name\" is required when using base64Content and optional when using attachmentId. \"contentType\" is optional. Total decoded payload per message must stay under 25 MB; Microsoft 365 and Outlook.com cap each individual attachment at 3 MB. Examples: [{\"attachmentId\":\"AbCd...\"}] or [{\"name\":\"x.pdf\",\"base64Content\":\"...\"}].")] List<OutboundEmailAttachment>? attachments = null)
     {
         // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
         body = StripCdataWrapper(body);
@@ -33,6 +40,26 @@ public sealed class SendEmailTool(
             {
                 error = "At least one recipient address is required in the 'to' field."
             });
+        }
+
+        List<OutboundEmailAttachment>? resolvedAttachments = null;
+        if (attachments is { Count: > 0 })
+        {
+            var shapeError = ValidateAttachmentShapes(attachments);
+            if (shapeError != null)
+            {
+                return JsonSerializer.Serialize(new { error = shapeError });
+            }
+
+            // Second pass: consume any AttachmentId-backed entries. From this
+            // point on, IDs are removed from the store; an error after this
+            // requires the agent to re-upload.
+            var (resolved, consumeError) = ResolveAttachments(attachments);
+            if (consumeError != null)
+            {
+                return JsonSerializer.Serialize(new { error = consumeError });
+            }
+            resolvedAttachments = resolved;
         }
 
         var toJoined = string.Join(", ", to);
@@ -99,7 +126,7 @@ public sealed class SendEmailTool(
             // Send email
             var provider = providerFactory.GetProvider(account.Provider);
             var messageId = await provider.SendEmailAsync(
-                account.Id, toJoined, subject, body, bodyFormat, cc, CancellationToken.None);
+                account.Id, toJoined, subject, body, bodyFormat, cc, resolvedAttachments, CancellationToken.None);
 
             var result = new
             {
@@ -126,6 +153,92 @@ public sealed class SendEmailTool(
                 inner = ex.InnerException?.Message
             });
         }
+    }
+
+    /// <summary>
+    /// First pass: structural validation only. Does NOT touch the attachment
+    /// store. Returns an error string for the caller, or null if all items are
+    /// well-formed.
+    /// </summary>
+    private static string? ValidateAttachmentShapes(List<OutboundEmailAttachment> attachments)
+    {
+        long inlineEstimatedBytes = 0;
+        for (var i = 0; i < attachments.Count; i++)
+        {
+            var att = attachments[i];
+            var hasInline = !string.IsNullOrEmpty(att.Base64Content);
+            var hasId = !string.IsNullOrEmpty(att.AttachmentId);
+
+            if (hasInline && hasId)
+            {
+                return $"attachments[{i}]: set either 'base64Content' or 'attachmentId', not both.";
+            }
+            if (!hasInline && !hasId)
+            {
+                return $"attachments[{i}]: set either 'base64Content' (inline bytes) or 'attachmentId' (from POST /attachments).";
+            }
+            if (hasInline && string.IsNullOrWhiteSpace(att.Name))
+            {
+                return $"attachments[{i}].name is required when using base64Content.";
+            }
+            if (hasInline)
+            {
+                // Cheap size estimate from base64 length; overestimates by up
+                // to 2 bytes per attachment, which is fine for the 25 MB cap.
+                var len = att.Base64Content!.Length;
+                inlineEstimatedBytes += (long)(len / 4) * 3;
+                if (inlineEstimatedBytes > MaxTotalAttachmentBytes)
+                {
+                    return $"Total inline attachment size exceeds {MaxTotalAttachmentBytes:N0} bytes.";
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Second pass: resolves any <see cref="OutboundEmailAttachment.AttachmentId"/>
+    /// entries to inline bytes by consuming them from the store. Single-use:
+    /// successfully consumed IDs are removed, so an error after this point
+    /// requires the agent to re-upload.
+    /// </summary>
+    private (List<OutboundEmailAttachment>? resolved, string? error) ResolveAttachments(
+        List<OutboundEmailAttachment> attachments)
+    {
+        var result = new List<OutboundEmailAttachment>(attachments.Count);
+        long totalBytes = 0;
+
+        for (var i = 0; i < attachments.Count; i++)
+        {
+            var att = attachments[i];
+
+            if (!string.IsNullOrEmpty(att.AttachmentId))
+            {
+                var stored = attachmentStore.TryConsume(att.AttachmentId);
+                if (stored == null)
+                {
+                    return (null, $"attachments[{i}]: attachmentId '{att.AttachmentId}' is unknown or expired. Re-upload via POST /attachments.");
+                }
+                totalBytes += stored.Bytes.Length;
+                if (totalBytes > MaxTotalAttachmentBytes)
+                {
+                    return (null, $"Total attachment size exceeds {MaxTotalAttachmentBytes:N0} bytes.");
+                }
+                result.Add(new OutboundEmailAttachment
+                {
+                    Name = string.IsNullOrWhiteSpace(att.Name) ? stored.Name : att.Name,
+                    ContentType = att.ContentType ?? stored.ContentType,
+                    Base64Content = Convert.ToBase64String(stored.Bytes),
+                });
+            }
+            else
+            {
+                // Inline base64 — already validated by ValidateAttachmentShapes.
+                result.Add(att);
+            }
+        }
+
+        return (result, null);
     }
 
     /// <summary>

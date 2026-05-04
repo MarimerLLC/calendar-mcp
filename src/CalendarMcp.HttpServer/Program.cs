@@ -3,6 +3,7 @@ using CalendarMcp.Auth;
 using CalendarMcp.Core.Configuration;
 using CalendarMcp.HttpServer.Admin;
 using CalendarMcp.HttpServer.BlazorAdmin;
+using CalendarMcp.HttpServer.Endpoints;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -101,6 +102,10 @@ public class Program
         builder.Services.AddSingleton<DeviceCodeAuthManager>();
         builder.Services.AddSingleton<GoogleOAuthManager>();
 
+        // Background sweeper for the attachment store (uploads land here only
+        // in HTTP mode, so eviction is HTTP-side too).
+        builder.Services.AddHostedService<AttachmentEvictionService>();
+
         // OpenAPI
         builder.Services.AddOpenApi();
 
@@ -126,6 +131,7 @@ public class Program
             .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailDetailsTool>()
+            .WithTools<CalendarMcp.Core.Tools.GetEmailAttachmentTool>()
             .WithTools<CalendarMcp.Core.Tools.SearchEmailsTool>()
             .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
             .WithTools<CalendarMcp.Core.Tools.DeleteEmailTool>()
@@ -202,6 +208,10 @@ public class Program
 
         // Map MCP protocol endpoints (HTTP/SSE)
         app.MapMcp();
+
+        // Map attachment upload endpoint (sibling of /mcp; same network-level
+        // protection — Tailscale ACLs / reverse proxy).
+        app.MapAttachmentEndpoints();
 
         // Map admin API endpoints
         app.MapAdminEndpoints();

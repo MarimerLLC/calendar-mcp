@@ -23,14 +23,15 @@ public class SendEmailToolTests
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", "Body", Arg.Any<string>(),
-            Arg.Any<List<string>?>(), Arg.Any<CancellationToken>())
+            Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
+            Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult("msg-123"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
         factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
 
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail(new List<string> { "to@example.com" }, "Subject", "Body", "acc-1");
         var doc = JsonDocument.Parse(result);
@@ -52,7 +53,7 @@ public class SendEmailToolTests
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail(new List<string> { "to@example.com" }, "Subject", "Body", "nonexistent");
         var doc = JsonDocument.Parse(result);
@@ -70,7 +71,7 @@ public class SendEmailToolTests
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail(new List<string> { "to@unknown.com" }, "Subject", "Body");
         var doc = JsonDocument.Parse(result);
@@ -85,12 +86,115 @@ public class SendEmailToolTests
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<SendEmailTool>.Instance);
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
         var result = await tool.SendEmail([], "Subject", "Body", "acc-1");
         var doc = JsonDocument.Parse(result);
 
         var error = doc.RootElement.GetProperty("error").GetString();
         Assert.IsTrue(error?.Contains("recipient", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    [TestMethod]
+    public async Task SendEmail_WithAttachment_PassesThroughToProvider()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.SendEmailAsync(
+            "acc-1", "to@example.com", "Subject", "Body", Arg.Any<string>(),
+            Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
+            Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult("msg-123"));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
+
+        var attachment = new OutboundEmailAttachment
+        {
+            Name = "hello.txt",
+            ContentType = "text/plain",
+            Base64Content = Convert.ToBase64String("hello"u8.ToArray()),
+        };
+
+        var result = await tool.SendEmail(
+            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+            attachments: new List<OutboundEmailAttachment> { attachment });
+
+        var doc = JsonDocument.Parse(result);
+        Assert.IsTrue(doc.RootElement.GetProperty("success").GetBoolean());
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task SendEmail_AttachmentMissingName_ReturnsError()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
+
+        var result = await tool.SendEmail(
+            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+            attachments: new List<OutboundEmailAttachment>
+            {
+                new() { Name = "", Base64Content = "aGVsbG8=" },
+            });
+
+        var doc = JsonDocument.Parse(result);
+        var error = doc.RootElement.GetProperty("error").GetString();
+        Assert.IsTrue(error?.Contains("name is required", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    [TestMethod]
+    public async Task SendEmail_AttachmentMissingContent_ReturnsError()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
+
+        var result = await tool.SendEmail(
+            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+            attachments: new List<OutboundEmailAttachment>
+            {
+                new() { Name = "x.txt", Base64Content = "" },
+            });
+
+        var doc = JsonDocument.Parse(result);
+        var error = doc.RootElement.GetProperty("error").GetString();
+        Assert.IsTrue(error?.Contains("base64Content", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    [TestMethod]
+    public async Task SendEmail_AttachmentExceedsTotalCap_ReturnsError()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
+            new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
+
+        // 35 MB of base64 chars decodes to ~26 MB, just over the 25 MB cap.
+        var bigBase64 = new string('A', 35 * 1024 * 1024);
+        var result = await tool.SendEmail(
+            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+            attachments: new List<OutboundEmailAttachment>
+            {
+                new() { Name = "a.bin", Base64Content = bigBase64 },
+            });
+
+        var doc = JsonDocument.Parse(result);
+        var error = doc.RootElement.GetProperty("error").GetString();
+        Assert.IsTrue(error?.Contains("exceeds", StringComparison.OrdinalIgnoreCase) ?? false);
     }
 }

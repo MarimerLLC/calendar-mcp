@@ -172,7 +172,7 @@ public sealed class UnsubscribeFromEmailTool(
         try
         {
             var (to, subject, body) = parsed.Value;
-            await provider.SendEmailAsync(account.Id, to, subject, body, "text", null, CancellationToken.None);
+            await provider.SendEmailAsync(account.Id, to, subject, body, "text", null, null, CancellationToken.None);
 
             return new Models.UnsubscribeResult
             {

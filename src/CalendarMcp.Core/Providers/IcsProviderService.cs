@@ -263,9 +263,15 @@ public class IcsProviderService : IIcsProviderService
         CancellationToken cancellationToken = default)
         => Task.FromResult<EmailMessage?>(null);
 
+    public Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
+        string accountId, string emailId, string attachmentId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<EmailAttachmentContent?>(null);
+
     public Task<string> SendEmailAsync(
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
+        IReadOnlyList<OutboundEmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider does not support sending emails.");
 

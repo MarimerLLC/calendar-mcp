@@ -10,9 +10,12 @@ using Google.Apis.PeopleService.v1.Data;
 using Google.Apis.Services;
 using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
+using MimeKit;
 using System.Text;
 using Person = Google.Apis.PeopleService.v1.Data.Person;
 using Event = Google.Apis.Calendar.v3.Data.Event;
+// Disambiguate from MimeKit.MessagePart, introduced by the MimeKit imports above.
+using MessagePart = Google.Apis.Gmail.v1.Data.MessagePart;
 
 namespace CalendarMcp.Core.Providers;
 
@@ -262,6 +265,12 @@ public class GoogleProviderService : IGoogleProviderService
             }
 
             var result = ConvertToEmailMessage(message, accountId, includeBody: true);
+            // Augment with attachment metadata only on detail fetches.
+            if (result.HasAttachments && message.Payload != null)
+            {
+                var index = 0;
+                CollectGmailAttachments(message.Payload, result.Attachments, ref index);
+            }
             _logger.LogInformation("Retrieved email details for {EmailId} from Google account {AccountId}", emailId, accountId);
             return result;
         }
@@ -272,13 +281,146 @@ public class GoogleProviderService : IGoogleProviderService
         }
     }
 
+    // Gmail surfaces an attachment whenever a part has a filename. We expose
+    // a positional id (part-0, part-1, ...) rather than Gmail's body.attachmentId
+    // because (a) small attachments (< 5 KB) come back inline in body.data with
+    // no separately-fetchable attachmentId, and (b) the positional scheme matches
+    // the IMAP provider so the agent sees a consistent shape.
+    private static void CollectGmailAttachments(MessagePart part, List<EmailAttachment> result, ref int index)
+    {
+        if (!string.IsNullOrEmpty(part.Filename) && part.Body != null)
+        {
+            result.Add(new EmailAttachment
+            {
+                Name = part.Filename,
+                Size = part.Body.Size ?? 0,
+                ContentType = part.MimeType ?? "application/octet-stream",
+                AttachmentId = $"part-{index}",
+            });
+            index++;
+        }
+        if (part.Parts != null)
+        {
+            foreach (var child in part.Parts)
+                CollectGmailAttachments(child, result, ref index);
+        }
+    }
+
+    private static MessagePart? FindGmailPartByIndex(MessagePart part, int target, ref int index)
+    {
+        if (!string.IsNullOrEmpty(part.Filename) && part.Body != null)
+        {
+            if (index == target) return part;
+            index++;
+        }
+        if (part.Parts != null)
+        {
+            foreach (var child in part.Parts)
+            {
+                var found = FindGmailPartByIndex(child, target, ref index);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    public async Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
+        string accountId,
+        string emailId,
+        string attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!attachmentId.StartsWith("part-", StringComparison.Ordinal)
+            || !int.TryParse(attachmentId.AsSpan(5), out var targetIndex)
+            || targetIndex < 0)
+        {
+            _logger.LogWarning("Invalid Gmail attachment id {AttachmentId}; expected 'part-N'", attachmentId);
+            return null;
+        }
+
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+        if (credential == null) return null;
+
+        try
+        {
+            var service = CreateGmailService(credential);
+
+            var message = await service.Users.Messages.Get("me", emailId).ExecuteAsync(cancellationToken);
+            if (message?.Payload == null)
+            {
+                _logger.LogWarning("Message {EmailId} has no payload for attachment fetch", emailId);
+                return null;
+            }
+
+            var index = 0;
+            var part = FindGmailPartByIndex(message.Payload, targetIndex, ref index);
+            if (part == null)
+            {
+                _logger.LogWarning("Attachment index {Index} not found on message {EmailId} (have {Count} attachments)",
+                    targetIndex, emailId, index);
+                return null;
+            }
+
+            byte[] bytes;
+            if (!string.IsNullOrEmpty(part.Body?.Data))
+            {
+                // Small attachment — bytes come inline in the message body.
+                bytes = DecodeBase64UrlBytes(part.Body.Data);
+            }
+            else if (!string.IsNullOrEmpty(part.Body?.AttachmentId))
+            {
+                // Larger attachment — separate fetch by Gmail's attachment id.
+                var attData = await service.Users.Messages.Attachments
+                    .Get("me", emailId, part.Body.AttachmentId)
+                    .ExecuteAsync(cancellationToken);
+                if (string.IsNullOrEmpty(attData?.Data))
+                {
+                    _logger.LogWarning("Gmail attachments.get returned no data for {AttachmentId} on {EmailId}",
+                        part.Body.AttachmentId, emailId);
+                    return null;
+                }
+                bytes = DecodeBase64UrlBytes(attData.Data);
+            }
+            else
+            {
+                _logger.LogWarning("Attachment part on {EmailId} has neither inline data nor attachmentId", emailId);
+                return null;
+            }
+
+            return new EmailAttachmentContent
+            {
+                Name = string.IsNullOrEmpty(part.Filename) ? "attachment" : part.Filename,
+                ContentType = part.MimeType,
+                Bytes = bytes,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching attachment {AttachmentId} on {EmailId} from Google account {AccountId}",
+                attachmentId, emailId, accountId);
+            return null;
+        }
+    }
+
+    private static byte[] DecodeBase64UrlBytes(string base64Url)
+    {
+        var b64 = base64Url.Replace('-', '+').Replace('_', '/');
+        switch (b64.Length % 4)
+        {
+            case 2: b64 += "=="; break;
+            case 3: b64 += "="; break;
+        }
+        return Convert.FromBase64String(b64);
+    }
+
     public async Task<string> SendEmailAsync(
-        string accountId, 
-        string to, 
-        string subject, 
-        string body, 
-        string bodyFormat = "html", 
-        List<string>? cc = null, 
+        string accountId,
+        string to,
+        string subject,
+        string body,
+        string bodyFormat = "html",
+        List<string>? cc = null,
+        IReadOnlyList<OutboundEmailAttachment>? attachments = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -291,31 +433,49 @@ public class GoogleProviderService : IGoogleProviderService
         {
             var service = CreateGmailService(credential);
 
-            // Create the email message in RFC 2822 format
-            var messageBuilder = new StringBuilder();
-            messageBuilder.AppendLine($"To: {to}");
-            if (cc != null && cc.Count > 0)
+            var mime = new MimeMessage();
+            foreach (var addr in to.Split(',', ';'))
             {
-                messageBuilder.AppendLine($"Cc: {string.Join(",", cc)}");
+                var trimmed = addr.Trim();
+                if (trimmed.Length > 0)
+                    mime.To.Add(MailboxAddress.Parse(trimmed));
             }
-            messageBuilder.AppendLine($"Subject: {subject}");
-            
-            if (bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase))
+            if (cc is { Count: > 0 })
             {
-                messageBuilder.AppendLine("Content-Type: text/html; charset=utf-8");
+                foreach (var addr in cc)
+                {
+                    var trimmed = addr.Trim();
+                    if (trimmed.Length > 0)
+                        mime.Cc.Add(MailboxAddress.Parse(trimmed));
+                }
             }
-            else
-            {
-                messageBuilder.AppendLine("Content-Type: text/plain; charset=utf-8");
-            }
-            
-            messageBuilder.AppendLine();
-            messageBuilder.AppendLine(body);
+            mime.Subject = subject;
 
-            var rawMessage = Convert.ToBase64String(Encoding.UTF8.GetBytes(messageBuilder.ToString()))
-                .Replace('+', '-')
-                .Replace('/', '_')
-                .Replace("=", "");
+            var builder = new BodyBuilder();
+            if (bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase))
+                builder.HtmlBody = body;
+            else
+                builder.TextBody = body;
+
+            if (attachments is { Count: > 0 })
+            {
+                foreach (var att in attachments)
+                {
+                    MimeAttachmentBuilder.Add(builder, att);
+                }
+            }
+
+            mime.Body = builder.ToMessageBody();
+
+            string rawMessage;
+            using (var ms = new MemoryStream())
+            {
+                await mime.WriteToAsync(ms, cancellationToken);
+                rawMessage = Convert.ToBase64String(ms.ToArray())
+                    .Replace('+', '-')
+                    .Replace('/', '_')
+                    .Replace("=", "");
+            }
 
             var gmailMessage = new Message
             {
@@ -333,6 +493,7 @@ public class GoogleProviderService : IGoogleProviderService
             throw;
         }
     }
+
 
     public async Task DeleteEmailAsync(
         string accountId,

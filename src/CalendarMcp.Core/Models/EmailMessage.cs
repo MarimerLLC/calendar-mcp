@@ -77,11 +77,32 @@ public class EmailMessage
 }
 
 /// <summary>
-/// Email attachment information
+/// Metadata for an attachment on a received email. Bytes are not included;
+/// use the <c>get_email_attachment</c> tool with <see cref="AttachmentId"/>
+/// to fetch them.
 /// </summary>
 public class EmailAttachment
 {
     public required string Name { get; init; }
     public long Size { get; init; }
     public string ContentType { get; init; } = "application/octet-stream";
+
+    /// <summary>
+    /// Provider-side identifier for fetching the attachment content. Opaque
+    /// string scoped to the parent <see cref="EmailMessage.Id"/>. Format
+    /// varies by provider (Graph attachment id, Gmail body.attachmentId,
+    /// IMAP <c>part-N</c> index).
+    /// </summary>
+    public string? AttachmentId { get; init; }
+}
+
+/// <summary>
+/// Bytes for one inbound email attachment, as returned by
+/// <see cref="Services.IProviderService.GetEmailAttachmentContentAsync"/>.
+/// </summary>
+public sealed class EmailAttachmentContent
+{
+    public required string Name { get; init; }
+    public string? ContentType { get; init; }
+    public required byte[] Bytes { get; init; }
 }
