@@ -268,7 +268,8 @@ public class GoogleProviderService : IGoogleProviderService
             // Augment with attachment metadata only on detail fetches.
             if (result.HasAttachments && message.Payload != null)
             {
-                CollectGmailAttachments(message.Payload, result.Attachments);
+                var index = 0;
+                CollectGmailAttachments(message.Payload, result.Attachments, ref index);
             }
             _logger.LogInformation("Retrieved email details for {EmailId} from Google account {AccountId}", emailId, accountId);
             return result;
@@ -280,10 +281,13 @@ public class GoogleProviderService : IGoogleProviderService
         }
     }
 
-    private static void CollectGmailAttachments(MessagePart part, List<EmailAttachment> result)
+    // Gmail surfaces an attachment whenever a part has a filename. We expose
+    // a positional id (part-0, part-1, ...) rather than Gmail's body.attachmentId
+    // because (a) small attachments (< 5 KB) come back inline in body.data with
+    // no separately-fetchable attachmentId, and (b) the positional scheme matches
+    // the IMAP provider so the agent sees a consistent shape.
+    private static void CollectGmailAttachments(MessagePart part, List<EmailAttachment> result, ref int index)
     {
-        // Gmail surfaces an attachment whenever a part has a filename; the
-        // bytes are fetched separately by Body.AttachmentId.
         if (!string.IsNullOrEmpty(part.Filename) && part.Body != null)
         {
             result.Add(new EmailAttachment
@@ -291,14 +295,33 @@ public class GoogleProviderService : IGoogleProviderService
                 Name = part.Filename,
                 Size = part.Body.Size ?? 0,
                 ContentType = part.MimeType ?? "application/octet-stream",
-                AttachmentId = part.Body.AttachmentId,
+                AttachmentId = $"part-{index}",
             });
+            index++;
         }
         if (part.Parts != null)
         {
             foreach (var child in part.Parts)
-                CollectGmailAttachments(child, result);
+                CollectGmailAttachments(child, result, ref index);
         }
+    }
+
+    private static MessagePart? FindGmailPartByIndex(MessagePart part, int target, ref int index)
+    {
+        if (!string.IsNullOrEmpty(part.Filename) && part.Body != null)
+        {
+            if (index == target) return part;
+            index++;
+        }
+        if (part.Parts != null)
+        {
+            foreach (var child in part.Parts)
+            {
+                var found = FindGmailPartByIndex(child, target, ref index);
+                if (found != null) return found;
+            }
+        }
+        return null;
     }
 
     public async Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
@@ -307,6 +330,14 @@ public class GoogleProviderService : IGoogleProviderService
         string attachmentId,
         CancellationToken cancellationToken = default)
     {
+        if (!attachmentId.StartsWith("part-", StringComparison.Ordinal)
+            || !int.TryParse(attachmentId.AsSpan(5), out var targetIndex)
+            || targetIndex < 0)
+        {
+            _logger.LogWarning("Invalid Gmail attachment id {AttachmentId}; expected 'part-N'", attachmentId);
+            return null;
+        }
+
         var credential = await GetCredentialAsync(accountId, cancellationToken);
         if (credential == null) return null;
 
@@ -314,41 +345,52 @@ public class GoogleProviderService : IGoogleProviderService
         {
             var service = CreateGmailService(credential);
 
-            // Need filename + content-type from the message payload — Gmail's
-            // attachments.get returns only the body bytes.
             var message = await service.Users.Messages.Get("me", emailId).ExecuteAsync(cancellationToken);
-            string? name = null;
-            string? contentType = null;
-            if (message?.Payload != null)
+            if (message?.Payload == null)
             {
-                FindGmailAttachmentMetadata(message.Payload, attachmentId, ref name, ref contentType);
-            }
-            if (name == null)
-            {
-                _logger.LogWarning("Attachment {AttachmentId} not found on message {EmailId}", attachmentId, emailId);
+                _logger.LogWarning("Message {EmailId} has no payload for attachment fetch", emailId);
                 return null;
             }
 
-            var part = await service.Users.Messages.Attachments.Get("me", emailId, attachmentId)
-                .ExecuteAsync(cancellationToken);
-            if (part?.Data == null)
+            var index = 0;
+            var part = FindGmailPartByIndex(message.Payload, targetIndex, ref index);
+            if (part == null)
             {
+                _logger.LogWarning("Attachment index {Index} not found on message {EmailId} (have {Count} attachments)",
+                    targetIndex, emailId, index);
                 return null;
             }
 
-            // Body.Data is base64url-encoded.
-            var b64 = part.Data.Replace('-', '+').Replace('_', '/');
-            switch (b64.Length % 4)
+            byte[] bytes;
+            if (!string.IsNullOrEmpty(part.Body?.Data))
             {
-                case 2: b64 += "=="; break;
-                case 3: b64 += "="; break;
+                // Small attachment — bytes come inline in the message body.
+                bytes = DecodeBase64UrlBytes(part.Body.Data);
             }
-            var bytes = Convert.FromBase64String(b64);
+            else if (!string.IsNullOrEmpty(part.Body?.AttachmentId))
+            {
+                // Larger attachment — separate fetch by Gmail's attachment id.
+                var attData = await service.Users.Messages.Attachments
+                    .Get("me", emailId, part.Body.AttachmentId)
+                    .ExecuteAsync(cancellationToken);
+                if (string.IsNullOrEmpty(attData?.Data))
+                {
+                    _logger.LogWarning("Gmail attachments.get returned no data for {AttachmentId} on {EmailId}",
+                        part.Body.AttachmentId, emailId);
+                    return null;
+                }
+                bytes = DecodeBase64UrlBytes(attData.Data);
+            }
+            else
+            {
+                _logger.LogWarning("Attachment part on {EmailId} has neither inline data nor attachmentId", emailId);
+                return null;
+            }
 
             return new EmailAttachmentContent
             {
-                Name = name,
-                ContentType = contentType,
+                Name = string.IsNullOrEmpty(part.Filename) ? "attachment" : part.Filename,
+                ContentType = part.MimeType,
                 Bytes = bytes,
             };
         }
@@ -360,24 +402,15 @@ public class GoogleProviderService : IGoogleProviderService
         }
     }
 
-    private static void FindGmailAttachmentMetadata(
-        MessagePart part, string attachmentId, ref string? name, ref string? contentType)
+    private static byte[] DecodeBase64UrlBytes(string base64Url)
     {
-        if (name != null) return;
-        if (part.Body?.AttachmentId == attachmentId)
+        var b64 = base64Url.Replace('-', '+').Replace('_', '/');
+        switch (b64.Length % 4)
         {
-            name = string.IsNullOrEmpty(part.Filename) ? "attachment" : part.Filename;
-            contentType = part.MimeType;
-            return;
+            case 2: b64 += "=="; break;
+            case 3: b64 += "="; break;
         }
-        if (part.Parts != null)
-        {
-            foreach (var child in part.Parts)
-            {
-                FindGmailAttachmentMetadata(child, attachmentId, ref name, ref contentType);
-                if (name != null) return;
-            }
-        }
+        return Convert.FromBase64String(b64);
     }
 
     public async Task<string> SendEmailAsync(
