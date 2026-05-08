@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -12,31 +13,29 @@ namespace CalendarMcp.Tests.Tools;
 public class BulkMoveEmailsToolTests
 {
     [TestMethod]
-    public async Task BulkMoveEmails_EmptyDestination_ReturnsError()
+    public async Task BulkMoveEmails_EmptyDestination_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new BulkMoveEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMoveEmailsTool>.Instance);
 
-        var result = await tool.BulkMoveEmails([new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" }], "");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("destination is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.BulkMoveEmails([new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" }], ""));
+        Assert.AreEqual("destination is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task BulkMoveEmails_EmptyArray_ReturnsError()
+    public async Task BulkMoveEmails_EmptyArray_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new BulkMoveEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMoveEmailsTool>.Instance);
 
-        var result = await tool.BulkMoveEmails([], "archive");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.BulkMoveEmails([], "archive"));
+        Assert.AreEqual("items array must not be empty", ex.Message);
     }
 
     [TestMethod]

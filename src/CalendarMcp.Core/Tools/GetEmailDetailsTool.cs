@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -23,43 +24,17 @@ public sealed class GetEmailDetailsTool(
         logger.LogInformation("Getting email details: accountId={AccountId}, emailId={EmailId}",
             accountId, emailId);
 
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(emailId, nameof(emailId));
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            if (string.IsNullOrEmpty(accountId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "accountId is required"
-                });
-            }
-
-            if (string.IsNullOrEmpty(emailId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "emailId is required"
-                });
-            }
-
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Account '{accountId}' not found"
-                });
-            }
-
             var provider = providerFactory.GetProvider(account.Provider);
             var email = await provider.GetEmailDetailsAsync(accountId, emailId, CancellationToken.None);
 
             if (email == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Email '{emailId}' not found in account '{accountId}'"
-                });
-            }
+                throw new McpException($"Email '{emailId}' not found in account '{accountId}'");
 
             var response = new
             {
@@ -92,14 +67,10 @@ public sealed class GetEmailDetailsTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_email_details tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to get email details",
-                message = ex.Message
-            });
+            throw new McpException("Failed to get email details.", ex);
         }
     }
 }

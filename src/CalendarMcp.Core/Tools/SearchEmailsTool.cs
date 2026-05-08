@@ -3,6 +3,7 @@ using System.Text.Json;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -27,30 +28,24 @@ public sealed class SearchEmailsTool(
         logger.LogInformation("Searching emails: query={Query}, accountId={AccountId}, count={Count}",
             query, accountId, count);
 
+        if (string.IsNullOrWhiteSpace(query))
+            throw new McpException("query is required");
+
+        // Determine which accounts to query
+        List<AccountInfo> validAccounts;
+        if (string.IsNullOrEmpty(accountId))
+        {
+            validAccounts = (await accountRegistry.GetAllAccountsAsync()).ToList();
+            if (validAccounts.Count == 0)
+                throw new McpException("No accounts found");
+        }
+        else
+        {
+            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+        }
+
         try
         {
-            if (string.IsNullOrWhiteSpace(query))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "Parameter 'query' is required"
-                });
-            }
-
-            // Determine which accounts to query
-            var accounts = string.IsNullOrEmpty(accountId)
-                ? await accountRegistry.GetAllAccountsAsync()
-                : new[] { await accountRegistry.GetAccountAsync(accountId) }.Where(a => a != null).Cast<AccountInfo>();
-
-            var validAccounts = accounts.ToList();
-
-            if (validAccounts.Count == 0)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = accountId != null ? $"Account '{accountId}' not found" : "No accounts found"
-                });
-            }
 
             // Query all accounts in parallel
             var tasks = validAccounts.Select(async account =>
@@ -96,14 +91,10 @@ public sealed class SearchEmailsTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in search_emails tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to search emails",
-                message = ex.Message
-            });
+            throw new McpException("Failed to search emails.", ex);
         }
     }
 }

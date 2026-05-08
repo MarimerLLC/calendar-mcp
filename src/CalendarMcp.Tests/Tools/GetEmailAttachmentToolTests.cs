@@ -5,6 +5,7 @@ using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -69,7 +70,7 @@ public class GetEmailAttachmentToolTests
     }
 
     [TestMethod]
-    public async Task InlineMode_OverCap_ReturnsError()
+    public async Task InlineMode_OverCap_ThrowsMcpException()
     {
         var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
         // 2 MB > 1 MB inline cap.
@@ -81,14 +82,14 @@ public class GetEmailAttachmentToolTests
         var tool = new GetEmailAttachmentTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<GetEmailAttachmentTool>.Instance);
 
-        var json = await tool.GetEmailAttachment("acc-1", "msg-1", "att-1", "inline");
-        var error = JsonDocument.Parse(json).RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("inline mode is capped", StringComparison.Ordinal) ?? false);
-        Assert.IsTrue(error?.Contains("stash", StringComparison.Ordinal) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmailAttachment("acc-1", "msg-1", "att-1", "inline"));
+        Assert.IsTrue(ex.Message.Contains("inline mode is capped", StringComparison.Ordinal));
+        Assert.IsTrue(ex.Message.Contains("stash", StringComparison.Ordinal));
     }
 
     [TestMethod]
-    public async Task ProviderReturnsNull_BubblesAsError()
+    public async Task ProviderReturnsNull_ThrowsMcpException()
     {
         var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
         var (regExp, factExp, _) = WireProviderForFetch(account, "msg-1", "missing", null);
@@ -96,22 +97,22 @@ public class GetEmailAttachmentToolTests
         var tool = new GetEmailAttachmentTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<GetEmailAttachmentTool>.Instance);
 
-        var json = await tool.GetEmailAttachment("acc-1", "msg-1", "missing");
-        var error = JsonDocument.Parse(json).RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("not found", StringComparison.Ordinal) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmailAttachment("acc-1", "msg-1", "missing"));
+        Assert.IsTrue(ex.Message.Contains("not found", StringComparison.Ordinal));
     }
 
     [TestMethod]
-    public async Task InvalidMode_ReturnsError()
+    public async Task InvalidMode_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new GetEmailAttachmentTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<GetEmailAttachmentTool>.Instance);
 
-        var json = await tool.GetEmailAttachment("acc-1", "msg-1", "att-1", "weird");
-        var error = JsonDocument.Parse(json).RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("invalid", StringComparison.OrdinalIgnoreCase) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmailAttachment("acc-1", "msg-1", "att-1", "weird"));
+        Assert.IsTrue(ex.Message.Contains("invalid", StringComparison.OrdinalIgnoreCase));
     }
 
     private static (

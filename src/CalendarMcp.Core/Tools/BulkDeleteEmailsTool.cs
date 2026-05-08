@@ -3,6 +3,7 @@ using System.Text.Json;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -25,27 +26,21 @@ public sealed class BulkDeleteEmailsTool(
     {
         logger.LogInformation("Bulk deleting emails");
 
+        if (items == null || items.Length == 0)
+            throw new McpException("items array must not be empty");
+
+        if (items.Length > MaxBatchSize)
+            throw new McpException($"Batch size {items.Length} exceeds maximum of {MaxBatchSize}");
+
+        // Validate all items have required fields
+        foreach (var item in items)
+        {
+            if (string.IsNullOrEmpty(item.AccountId) || string.IsNullOrEmpty(item.EmailId))
+                throw new McpException("Each item must have 'accountId' and 'emailId' fields");
+        }
+
         try
         {
-            if (items == null || items.Length == 0)
-            {
-                return JsonSerializer.Serialize(new { error = "items array must not be empty" });
-            }
-
-            if (items.Length > MaxBatchSize)
-            {
-                return JsonSerializer.Serialize(new { error = $"Batch size {items.Length} exceeds maximum of {MaxBatchSize}" });
-            }
-
-            // Validate all items have required fields
-            foreach (var item in items)
-            {
-                if (string.IsNullOrEmpty(item.AccountId) || string.IsNullOrEmpty(item.EmailId))
-                {
-                    return JsonSerializer.Serialize(new { error = "Each item must have 'accountId' and 'emailId' fields" });
-                }
-            }
-
             // Resolve accounts once per unique accountId
             var accounts = await ResolveAccountsAsync(items);
 
@@ -65,7 +60,8 @@ public sealed class BulkDeleteEmailsTool(
                 }
                 catch (Exception ex)
                 {
-                    return new BulkResultItem(item.EmailId, item.AccountId, false, ex.Message);
+                    logger.LogError(ex, "Error deleting email {EmailId} in account {AccountId}", item.EmailId, item.AccountId);
+                    return new BulkResultItem(item.EmailId, item.AccountId, false, "Failed to delete email.");
                 }
                 finally
                 {
@@ -89,10 +85,10 @@ public sealed class BulkDeleteEmailsTool(
                     : new { r.EmailId, r.AccountId, r.Success, error = r.Error })
             }, new JsonSerializerOptions { WriteIndented = true });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in bulk_delete_emails tool");
-            return JsonSerializer.Serialize(new { error = "Failed to bulk delete emails", message = ex.Message });
+            throw new McpException("Failed to bulk delete emails.", ex);
         }
     }
 

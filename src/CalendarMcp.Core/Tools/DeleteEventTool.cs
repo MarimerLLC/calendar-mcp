@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -24,37 +25,25 @@ public sealed class DeleteEventTool(
         logger.LogInformation("Deleting event: eventId={EventId}, accountId={AccountId}, calendarId={CalendarId}",
             eventId, accountId, calendarId);
 
+        ToolGuard.RequireNonEmpty(eventId, nameof(eventId));
+
+        // Determine which account to use
+        Models.AccountInfo account;
+        if (!string.IsNullOrEmpty(accountId))
+        {
+            account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+        }
+        else
+        {
+            var accounts = await accountRegistry.GetAllAccountsAsync();
+            var first = accounts.FirstOrDefault();
+            if (first == null)
+                throw new McpException("No enabled account available to delete event");
+            account = first;
+        }
+
         try
         {
-            // Determine which account to use
-            Models.AccountInfo? account = null;
-
-            if (!string.IsNullOrEmpty(accountId))
-            {
-                account = await accountRegistry.GetAccountAsync(accountId);
-                if (account == null)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        error = $"Account '{accountId}' not found"
-                    });
-                }
-            }
-            else
-            {
-                // Use first enabled account (could enhance with smarter routing)
-                var accounts = await accountRegistry.GetAllAccountsAsync();
-                account = accounts.FirstOrDefault();
-
-                if (account == null)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        error = "No enabled account available to delete event"
-                    });
-                }
-            }
-
             // Delete event
             var provider = providerFactory.GetProvider(account.Provider);
             await provider.DeleteEventAsync(
@@ -76,14 +65,10 @@ public sealed class DeleteEventTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in delete_event tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to delete event",
-                message = ex.Message
-            });
+            throw new McpException("Failed to delete event.", ex);
         }
     }
 }

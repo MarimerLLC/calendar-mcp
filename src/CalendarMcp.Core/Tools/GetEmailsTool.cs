@@ -3,6 +3,7 @@ using System.Text.Json;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -25,22 +26,21 @@ public sealed class GetEmailsTool(
         logger.LogInformation("Getting emails: accountId={AccountId}, count={Count}, unreadOnly={UnreadOnly}",
             accountId, count, unreadOnly);
 
+        // Determine which accounts to query
+        List<AccountInfo> validAccounts;
+        if (string.IsNullOrEmpty(accountId))
+        {
+            validAccounts = (await accountRegistry.GetAllAccountsAsync()).ToList();
+            if (validAccounts.Count == 0)
+                throw new McpException("No accounts found");
+        }
+        else
+        {
+            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+        }
+
         try
         {
-            // Determine which accounts to query
-            var accounts = string.IsNullOrEmpty(accountId)
-                ? await accountRegistry.GetAllAccountsAsync()
-                : new[] { await accountRegistry.GetAccountAsync(accountId) }.Where(a => a != null).Cast<AccountInfo>();
-
-            var validAccounts = accounts.ToList();
-
-            if (validAccounts.Count == 0)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = accountId != null ? $"Account '{accountId}' not found" : "No accounts found"
-                });
-            }
 
             // Query all accounts in parallel
             var tasks = validAccounts.Select(async account =>
@@ -85,14 +85,10 @@ public sealed class GetEmailsTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_emails tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to get emails",
-                message = ex.Message
-            });
+            throw new McpException("Failed to get emails.", ex);
         }
     }
 }

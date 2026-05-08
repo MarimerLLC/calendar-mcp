@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -47,7 +48,7 @@ public class CreateEventToolTests
     }
 
     [TestMethod]
-    public async Task CreateEvent_AccountNotFound_ReturnsError()
+    public async Task CreateEvent_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -57,10 +58,9 @@ public class CreateEventToolTests
         var tool = new CreateEventTool(regExp.Instance(), factExp.Instance(),
             NullLogger<CreateEventTool>.Instance);
 
-        var result = await tool.CreateEvent("Meeting", Start, End, "nonexistent");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.CreateEvent("Meeting", Start, End, "nonexistent"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 
@@ -97,7 +97,7 @@ public class CreateEventToolTests
     }
 
     [TestMethod]
-    public async Task CreateEvent_NoAccounts_ReturnsError()
+    public async Task CreateEvent_NoAccounts_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAllAccountsAsync()
@@ -107,10 +107,9 @@ public class CreateEventToolTests
         var tool = new CreateEventTool(regExp.Instance(), factExp.Instance(),
             NullLogger<CreateEventTool>.Instance);
 
-        var result = await tool.CreateEvent("Meeting", Start, End);
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("No enabled account"));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.CreateEvent("Meeting", Start, End));
+        Assert.IsTrue(ex.Message.Contains("No enabled account"));
         regExp.Verify();
     }
 }

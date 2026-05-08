@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -12,21 +13,20 @@ namespace CalendarMcp.Tests.Tools;
 public class BulkDeleteEmailsToolTests
 {
     [TestMethod]
-    public async Task BulkDeleteEmails_EmptyArray_ReturnsError()
+    public async Task BulkDeleteEmails_EmptyArray_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new BulkDeleteEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkDeleteEmailsTool>.Instance);
 
-        var result = await tool.BulkDeleteEmails([]);
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.BulkDeleteEmails([]));
+        Assert.AreEqual("items array must not be empty", ex.Message);
     }
 
     [TestMethod]
-    public async Task BulkDeleteEmails_ExceedsMaxBatch_ReturnsError()
+    public async Task BulkDeleteEmails_ExceedsMaxBatch_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -37,10 +37,9 @@ public class BulkDeleteEmailsToolTests
             .Select(i => new BulkEmailItem { AccountId = "acc-1", EmailId = $"email-{i}" })
             .ToArray();
 
-        var result = await tool.BulkDeleteEmails(emails);
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("exceeds maximum"));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.BulkDeleteEmails(emails));
+        Assert.IsTrue(ex.Message.Contains("exceeds maximum"));
     }
 
     [TestMethod]

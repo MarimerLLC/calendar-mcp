@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -30,17 +31,13 @@ public sealed class UpdateEventTool(
         logger.LogInformation("Updating event: eventId={EventId}, accountId={AccountId}, calendarId={CalendarId}",
             eventId, accountId, calendarId);
 
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(calendarId, nameof(calendarId));
+        ToolGuard.RequireNonEmpty(eventId, nameof(eventId));
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Account '{accountId}' not found"
-                });
-            }
-
             var provider = providerFactory.GetProvider(account.Provider);
             await provider.UpdateEventAsync(
                 accountId, calendarId, eventId, subject, start, end, location, attendees, timeZone, CancellationToken.None);
@@ -53,14 +50,10 @@ public sealed class UpdateEventTool(
                 calendarUsed = calendarId
             }, new JsonSerializerOptions { WriteIndented = true });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in update_event tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to update event",
-                message = ex.Message
-            });
+            throw new McpException("Failed to update event.", ex);
         }
     }
 }

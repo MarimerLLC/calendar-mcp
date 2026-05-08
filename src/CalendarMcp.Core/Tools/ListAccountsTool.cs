@@ -3,6 +3,7 @@ using System.Text.Json;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -41,14 +42,10 @@ public sealed class ListAccountsTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error listing accounts");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to list accounts",
-                message = ex.Message
-            });
+            throw new McpException("Failed to list accounts.", ex);
         }
     }
 

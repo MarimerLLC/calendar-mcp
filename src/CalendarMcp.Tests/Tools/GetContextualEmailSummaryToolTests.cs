@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -12,7 +13,7 @@ namespace CalendarMcp.Tests.Tools;
 public class GetContextualEmailSummaryToolTests
 {
     [TestMethod]
-    public async Task GetContextualEmailSummary_NoAccounts_ReturnsError()
+    public async Task GetContextualEmailSummary_NoAccounts_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAllAccountsAsync()
@@ -22,10 +23,9 @@ public class GetContextualEmailSummaryToolTests
         var tool = new GetContextualEmailSummaryTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetContextualEmailSummaryTool>.Instance);
 
-        var result = await tool.GetContextualEmailSummary();
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("No accounts configured", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetContextualEmailSummary());
+        Assert.AreEqual("No accounts configured", ex.Message);
         regExp.Verify();
     }
 

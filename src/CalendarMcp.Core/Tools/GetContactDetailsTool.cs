@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -23,34 +24,17 @@ public sealed class GetContactDetailsTool(
         logger.LogInformation("Getting contact details: accountId={AccountId}, contactId={ContactId}",
             accountId, contactId);
 
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(contactId, nameof(contactId));
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            if (string.IsNullOrEmpty(accountId))
-            {
-                return JsonSerializer.Serialize(new { error = "accountId is required" });
-            }
-
-            if (string.IsNullOrEmpty(contactId))
-            {
-                return JsonSerializer.Serialize(new { error = "contactId is required" });
-            }
-
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-            {
-                return JsonSerializer.Serialize(new { error = $"Account '{accountId}' not found" });
-            }
-
             var provider = providerFactory.GetProvider(account.Provider);
             var contact = await provider.GetContactDetailsAsync(accountId, contactId, CancellationToken.None);
 
             if (contact == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Contact '{contactId}' not found in account '{accountId}'"
-                });
-            }
+                throw new McpException($"Contact '{contactId}' not found in account '{accountId}'");
 
             var response = new
             {
@@ -84,14 +68,10 @@ public sealed class GetContactDetailsTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_contact_details tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to get contact details",
-                message = ex.Message
-            });
+            throw new McpException("Failed to get contact details.", ex);
         }
     }
 }

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -23,33 +24,12 @@ public sealed class DeleteEmailTool(
         logger.LogInformation("Deleting email: accountId={AccountId}, emailId={EmailId}",
             accountId, emailId);
 
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(emailId, nameof(emailId));
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            if (string.IsNullOrEmpty(accountId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "accountId is required"
-                });
-            }
-
-            if (string.IsNullOrEmpty(emailId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "emailId is required"
-                });
-            }
-
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Account '{accountId}' not found"
-                });
-            }
-
             var provider = providerFactory.GetProvider(account.Provider);
             await provider.DeleteEmailAsync(accountId, emailId, CancellationToken.None);
 
@@ -69,14 +49,10 @@ public sealed class DeleteEmailTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in delete_email tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to delete email",
-                message = ex.Message
-            });
+            throw new McpException("Failed to delete email.", ex);
         }
     }
 }

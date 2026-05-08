@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -58,20 +59,18 @@ public class ListAccountsToolTests
     }
 
     [TestMethod]
-    public async Task ListAccounts_Exception_ReturnsErrorJson()
+    public async Task ListAccounts_Exception_ThrowsGenericMcpException()
     {
         var registryExpectations = new IAccountRegistryCreateExpectations();
         registryExpectations.Setups.GetAllAccountsAsync()
-            .Callback(() => throw new InvalidOperationException("Test error"));
+            .Callback(() => throw new InvalidOperationException("Sensitive registry detail"));
 
         var registry = registryExpectations.Instance();
         var tool = new ListAccountsTool(registry, NullLogger<ListAccountsTool>.Instance);
 
-        var result = await tool.ListAccounts();
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Failed to list accounts", doc.RootElement.GetProperty("error").GetString());
-        Assert.AreEqual("Test error", doc.RootElement.GetProperty("message").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(() => tool.ListAccounts());
+        Assert.AreEqual("Failed to list accounts.", ex.Message);
+        Assert.IsFalse(ex.Message.Contains("Sensitive registry detail"));
 
         registryExpectations.Verify();
     }

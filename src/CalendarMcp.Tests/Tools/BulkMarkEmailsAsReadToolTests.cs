@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -12,17 +13,16 @@ namespace CalendarMcp.Tests.Tools;
 public class BulkMarkEmailsAsReadToolTests
 {
     [TestMethod]
-    public async Task BulkMarkEmailsAsRead_EmptyArray_ReturnsError()
+    public async Task BulkMarkEmailsAsRead_EmptyArray_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new BulkMarkEmailsAsReadTool(regExp.Instance(), factExp.Instance(),
             NullLogger<BulkMarkEmailsAsReadTool>.Instance);
 
-        var result = await tool.BulkMarkEmailsAsRead([], true);
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("items array must not be empty", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.BulkMarkEmailsAsRead([], true));
+        Assert.AreEqual("items array must not be empty", ex.Message);
     }
 
     [TestMethod]
