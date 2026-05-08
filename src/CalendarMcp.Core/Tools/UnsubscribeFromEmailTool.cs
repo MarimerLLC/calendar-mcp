@@ -3,6 +3,7 @@ using System.Text.Json;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -26,23 +27,17 @@ public sealed class UnsubscribeFromEmailTool(
         logger.LogInformation("Unsubscribe request: accountId={AccountId}, emailId={EmailId}, method={Method}",
             accountId, emailId, method);
 
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(emailId, nameof(emailId));
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            if (string.IsNullOrEmpty(accountId))
-                return JsonSerializer.Serialize(new { error = "accountId is required" });
-
-            if (string.IsNullOrEmpty(emailId))
-                return JsonSerializer.Serialize(new { error = "emailId is required" });
-
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-                return JsonSerializer.Serialize(new { error = $"Account '{accountId}' not found" });
-
             var provider = providerFactory.GetProvider(account.Provider);
             var email = await provider.GetEmailDetailsAsync(accountId, emailId, CancellationToken.None);
 
             if (email == null)
-                return JsonSerializer.Serialize(new { error = $"Email '{emailId}' not found in account '{accountId}'" });
+                throw new McpException($"Email '{emailId}' not found in account '{accountId}'");
 
             if (email.UnsubscribeInfo == null)
             {
@@ -79,14 +74,10 @@ public sealed class UnsubscribeFromEmailTool(
                 result.ErrorDetails
             }, new JsonSerializerOptions { WriteIndented = true });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in unsubscribe_from_email tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to unsubscribe",
-                message = ex.Message
-            });
+            throw new McpException("Failed to unsubscribe.", ex);
         }
     }
 

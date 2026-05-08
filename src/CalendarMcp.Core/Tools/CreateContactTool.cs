@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -30,30 +31,23 @@ public sealed class CreateContactTool(
         logger.LogInformation("Creating contact: displayName={DisplayName}, accountId={AccountId}",
             displayName, accountId);
 
+        // Determine which account to use
+        Models.AccountInfo account;
+        if (!string.IsNullOrEmpty(accountId))
+        {
+            account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+        }
+        else
+        {
+            var accounts = await accountRegistry.GetAllAccountsAsync();
+            var first = accounts.FirstOrDefault();
+            if (first == null)
+                throw new McpException("No enabled account available to create contact");
+            account = first;
+        }
+
         try
         {
-            // Determine which account to use
-            Models.AccountInfo? account = null;
-
-            if (!string.IsNullOrEmpty(accountId))
-            {
-                account = await accountRegistry.GetAccountAsync(accountId);
-                if (account == null)
-                {
-                    return JsonSerializer.Serialize(new { error = $"Account '{accountId}' not found" });
-                }
-            }
-            else
-            {
-                var accounts = await accountRegistry.GetAllAccountsAsync();
-                account = accounts.FirstOrDefault();
-
-                if (account == null)
-                {
-                    return JsonSerializer.Serialize(new { error = "No enabled account available to create contact" });
-                }
-            }
-
             // Parse email and phone into lists
             var emailAddresses = ParseCommaSeparated(email);
             var phoneNumbers = ParseCommaSeparated(phone);
@@ -78,14 +72,10 @@ public sealed class CreateContactTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in create_contact tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to create contact",
-                message = ex.Message
-            });
+            throw new McpException("Failed to create contact.", ex);
         }
     }
 

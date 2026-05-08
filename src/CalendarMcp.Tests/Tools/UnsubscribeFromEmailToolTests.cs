@@ -5,6 +5,7 @@ using CalendarMcp.Core.Tools;
 using CalendarMcp.Core.Utilities;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -23,33 +24,31 @@ public class UnsubscribeFromEmailToolTests
     }
 
     [TestMethod]
-    public async Task UnsubscribeFromEmail_EmptyAccountId_ReturnsError()
+    public async Task UnsubscribeFromEmail_EmptyAccountId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = CreateTool(regExp.Instance(), factExp.Instance());
 
-        var result = await tool.UnsubscribeFromEmail("", "email-1");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("accountId is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.UnsubscribeFromEmail("", "email-1"));
+        Assert.AreEqual("accountId is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task UnsubscribeFromEmail_EmptyEmailId_ReturnsError()
+    public async Task UnsubscribeFromEmail_EmptyEmailId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = CreateTool(regExp.Instance(), factExp.Instance());
 
-        var result = await tool.UnsubscribeFromEmail("acc-1", "");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("emailId is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.UnsubscribeFromEmail("acc-1", ""));
+        Assert.AreEqual("emailId is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task UnsubscribeFromEmail_AccountNotFound_ReturnsError()
+    public async Task UnsubscribeFromEmail_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -58,15 +57,14 @@ public class UnsubscribeFromEmailToolTests
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = CreateTool(regExp.Instance(), factExp.Instance());
 
-        var result = await tool.UnsubscribeFromEmail("nonexistent", "email-1");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.UnsubscribeFromEmail("nonexistent", "email-1"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 
     [TestMethod]
-    public async Task UnsubscribeFromEmail_EmailNotFound_ReturnsError()
+    public async Task UnsubscribeFromEmail_EmailNotFound_ThrowsMcpException()
     {
         var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
 
@@ -83,10 +81,9 @@ public class UnsubscribeFromEmailToolTests
 
         var tool = CreateTool(regExp.Instance(), factExp.Instance());
 
-        var result = await tool.UnsubscribeFromEmail("acc-1", "missing");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("not found"));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.UnsubscribeFromEmail("acc-1", "missing"));
+        Assert.IsTrue(ex.Message.Contains("not found"));
         regExp.Verify();
         factExp.Verify();
         provExp.Verify();

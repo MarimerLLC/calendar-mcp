@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -23,24 +24,12 @@ public sealed class DeleteContactTool(
         logger.LogInformation("Deleting contact: accountId={AccountId}, contactId={ContactId}",
             accountId, contactId);
 
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(contactId, nameof(contactId));
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            if (string.IsNullOrEmpty(accountId))
-            {
-                return JsonSerializer.Serialize(new { error = "accountId is required" });
-            }
-
-            if (string.IsNullOrEmpty(contactId))
-            {
-                return JsonSerializer.Serialize(new { error = "contactId is required" });
-            }
-
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-            {
-                return JsonSerializer.Serialize(new { error = $"Account '{accountId}' not found" });
-            }
-
             var provider = providerFactory.GetProvider(account.Provider);
             await provider.DeleteContactAsync(accountId, contactId, CancellationToken.None);
 
@@ -58,14 +47,10 @@ public sealed class DeleteContactTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in delete_contact tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to delete contact",
-                message = ex.Message
-            });
+            throw new McpException("Failed to delete contact.", ex);
         }
     }
 }

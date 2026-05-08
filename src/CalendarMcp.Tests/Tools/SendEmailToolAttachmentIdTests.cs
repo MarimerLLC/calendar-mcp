@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -78,7 +79,7 @@ public class SendEmailToolAttachmentIdTests
     }
 
     [TestMethod]
-    public async Task SendEmail_UnknownAttachmentId_ReturnsError()
+    public async Task SendEmail_UnknownAttachmentId_ThrowsMcpException()
     {
         var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
 
@@ -92,20 +93,19 @@ public class SendEmailToolAttachmentIdTests
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail(
-            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<OutboundEmailAttachment>
-            {
-                new() { AttachmentId = "does-not-exist" },
-            });
-
-        var error = JsonDocument.Parse(result).RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("does-not-exist", StringComparison.Ordinal) ?? false);
-        Assert.IsTrue(error?.Contains("unknown or expired", StringComparison.Ordinal) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail(
+                new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+                attachments: new List<OutboundEmailAttachment>
+                {
+                    new() { AttachmentId = "does-not-exist" },
+                }));
+        Assert.IsTrue(ex.Message.Contains("does-not-exist", StringComparison.Ordinal));
+        Assert.IsTrue(ex.Message.Contains("unknown or expired", StringComparison.Ordinal));
     }
 
     [TestMethod]
-    public async Task SendEmail_BothInlineAndId_ReturnsError_AndDoesNotConsume()
+    public async Task SendEmail_BothInlineAndId_ThrowsMcpException_AndDoesNotConsume()
     {
         var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
         var store = new TestAttachmentStore();
@@ -117,38 +117,36 @@ public class SendEmailToolAttachmentIdTests
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(), store,
             NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail(
-            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<OutboundEmailAttachment>
-            {
-                new() { AttachmentId = "u1", Name = "x.bin", Base64Content = "AQ==" },
-            });
-
-        var error = JsonDocument.Parse(result).RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("not both", StringComparison.OrdinalIgnoreCase) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail(
+                new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+                attachments: new List<OutboundEmailAttachment>
+                {
+                    new() { AttachmentId = "u1", Name = "x.bin", Base64Content = "AQ==" },
+                }));
+        Assert.IsTrue(ex.Message.Contains("not both", StringComparison.OrdinalIgnoreCase));
 
         // Store entry must NOT have been consumed — shape errors precede consumption.
         Assert.AreEqual(0, store.ConsumedIds.Count);
     }
 
     [TestMethod]
-    public async Task SendEmail_NeitherInlineNorId_ReturnsError()
+    public async Task SendEmail_NeitherInlineNorId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail(
-            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<OutboundEmailAttachment>
-            {
-                new() { Name = "x.bin" },
-            });
-
-        var error = JsonDocument.Parse(result).RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("base64Content", StringComparison.Ordinal) ?? false);
-        Assert.IsTrue(error?.Contains("attachmentId", StringComparison.Ordinal) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail(
+                new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+                attachments: new List<OutboundEmailAttachment>
+                {
+                    new() { Name = "x.bin" },
+                }));
+        Assert.IsTrue(ex.Message.Contains("base64Content", StringComparison.Ordinal));
+        Assert.IsTrue(ex.Message.Contains("attachmentId", StringComparison.Ordinal));
     }
 
     private static (

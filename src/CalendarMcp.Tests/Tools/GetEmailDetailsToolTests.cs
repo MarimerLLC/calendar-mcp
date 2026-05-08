@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -12,35 +13,33 @@ namespace CalendarMcp.Tests.Tools;
 public class GetEmailDetailsToolTests
 {
     [TestMethod]
-    public async Task GetEmailDetails_EmptyAccountId_ReturnsError()
+    public async Task GetEmailDetails_EmptyAccountId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new GetEmailDetailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetEmailDetailsTool>.Instance);
 
-        var result = await tool.GetEmailDetails("", "email-1");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("accountId is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmailDetails("", "email-1"));
+        Assert.AreEqual("accountId is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task GetEmailDetails_EmptyEmailId_ReturnsError()
+    public async Task GetEmailDetails_EmptyEmailId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new GetEmailDetailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetEmailDetailsTool>.Instance);
 
-        var result = await tool.GetEmailDetails("acc-1", "");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("emailId is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmailDetails("acc-1", ""));
+        Assert.AreEqual("emailId is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task GetEmailDetails_AccountNotFound_ReturnsError()
+    public async Task GetEmailDetails_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -50,15 +49,14 @@ public class GetEmailDetailsToolTests
         var tool = new GetEmailDetailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetEmailDetailsTool>.Instance);
 
-        var result = await tool.GetEmailDetails("nonexistent", "email-1");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmailDetails("nonexistent", "email-1"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 
     [TestMethod]
-    public async Task GetEmailDetails_EmailNotFound_ReturnsError()
+    public async Task GetEmailDetails_EmailNotFound_ThrowsMcpException()
     {
         var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
 
@@ -76,10 +74,9 @@ public class GetEmailDetailsToolTests
         var tool = new GetEmailDetailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetEmailDetailsTool>.Instance);
 
-        var result = await tool.GetEmailDetails("acc-1", "missing-email");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("not found"));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmailDetails("acc-1", "missing-email"));
+        Assert.IsTrue(ex.Message.Contains("not found"));
         regExp.Verify();
         factExp.Verify();
         provExp.Verify();

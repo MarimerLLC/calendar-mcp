@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -12,17 +13,16 @@ namespace CalendarMcp.Tests.Tools;
 public class RespondToEventToolTests
 {
     [TestMethod]
-    public async Task RespondToEvent_InvalidResponse_ReturnsError()
+    public async Task RespondToEvent_InvalidResponse_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new RespondToEventTool(regExp.Instance(), factExp.Instance(),
             NullLogger<RespondToEventTool>.Instance);
 
-        var result = await tool.RespondToEvent("ev-1", "invalid");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("Invalid response type"));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.RespondToEvent("ev-1", "invalid"));
+        Assert.IsTrue(ex.Message.Contains("Invalid response type"));
     }
 
     [TestMethod]
@@ -59,7 +59,7 @@ public class RespondToEventToolTests
     }
 
     [TestMethod]
-    public async Task RespondToEvent_AccountNotFound_ReturnsError()
+    public async Task RespondToEvent_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -69,10 +69,9 @@ public class RespondToEventToolTests
         var tool = new RespondToEventTool(regExp.Instance(), factExp.Instance(),
             NullLogger<RespondToEventTool>.Instance);
 
-        var result = await tool.RespondToEvent("ev-1", "accept", "nonexistent");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.RespondToEvent("ev-1", "accept", "nonexistent"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 }

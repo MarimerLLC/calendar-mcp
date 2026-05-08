@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -31,24 +32,12 @@ public sealed class UpdateContactTool(
         logger.LogInformation("Updating contact: accountId={AccountId}, contactId={ContactId}",
             accountId, contactId);
 
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(contactId, nameof(contactId));
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            if (string.IsNullOrEmpty(accountId))
-            {
-                return JsonSerializer.Serialize(new { error = "accountId is required" });
-            }
-
-            if (string.IsNullOrEmpty(contactId))
-            {
-                return JsonSerializer.Serialize(new { error = "contactId is required" });
-            }
-
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-            {
-                return JsonSerializer.Serialize(new { error = $"Account '{accountId}' not found" });
-            }
-
             var emailAddresses = ParseCommaSeparated(email);
             var phoneNumbers = ParseCommaSeparated(phone);
 
@@ -74,14 +63,10 @@ public sealed class UpdateContactTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in update_contact tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to update contact",
-                message = ex.Message
-            });
+            throw new McpException("Failed to update contact.", ex);
         }
     }
 

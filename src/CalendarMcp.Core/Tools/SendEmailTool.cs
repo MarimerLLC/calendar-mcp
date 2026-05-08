@@ -3,6 +3,7 @@ using System.Text.Json;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -35,30 +36,21 @@ public sealed class SendEmailTool(
         body = StripCdataWrapper(body);
 
         if (to is null || to.Count == 0)
-        {
-            return JsonSerializer.Serialize(new
-            {
-                error = "At least one recipient address is required in the 'to' field."
-            });
-        }
+            throw new McpException("At least one recipient address is required in the 'to' field.");
 
         List<OutboundEmailAttachment>? resolvedAttachments = null;
         if (attachments is { Count: > 0 })
         {
             var shapeError = ValidateAttachmentShapes(attachments);
             if (shapeError != null)
-            {
-                return JsonSerializer.Serialize(new { error = shapeError });
-            }
+                throw new McpException(shapeError);
 
             // Second pass: consume any AttachmentId-backed entries. From this
             // point on, IDs are removed from the store; an error after this
             // requires the agent to re-upload.
             var (resolved, consumeError) = ResolveAttachments(attachments);
             if (consumeError != null)
-            {
-                return JsonSerializer.Serialize(new { error = consumeError });
-            }
+                throw new McpException(consumeError);
             resolvedAttachments = resolved;
         }
 
@@ -67,62 +59,53 @@ public sealed class SendEmailTool(
         logger.LogInformation("Sending email: to={To}, subject={Subject}, accountId={AccountId}",
             toJoined, subject, accountId);
 
+        // Determine which account to use
+        Models.AccountInfo account;
+        if (!string.IsNullOrEmpty(accountId))
+        {
+            // Explicit account specified
+            account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+        }
+        else
+        {
+            Models.AccountInfo? selected = null;
+
+            // Smart routing: extract domain from the first recipient
+            var recipientDomain = to[0].Split('@').LastOrDefault();
+            if (!string.IsNullOrEmpty(recipientDomain))
+            {
+                var matchingAccounts = accountRegistry.GetAccountsByDomain(recipientDomain).ToList();
+
+                if (matchingAccounts.Count == 1)
+                {
+                    selected = matchingAccounts[0];
+                    logger.LogInformation("Smart routing selected account {AccountId} based on domain {Domain}",
+                        selected.Id, recipientDomain);
+                }
+                else if (matchingAccounts.Count > 1)
+                {
+                    // Multiple matches, use first one (could enhance with priority logic)
+                    selected = matchingAccounts.First();
+                    logger.LogInformation("Smart routing selected account {AccountId} from {Count} matches",
+                        selected.Id, matchingAccounts.Count);
+                }
+            }
+
+            // If still no account, use default (first enabled)
+            if (selected == null)
+            {
+                var allAccounts = await accountRegistry.GetAllAccountsAsync();
+                selected = allAccounts.FirstOrDefault();
+            }
+
+            if (selected == null)
+                throw new McpException("No enabled account available to send email");
+
+            account = selected;
+        }
+
         try
         {
-            // Determine which account to use
-            Models.AccountInfo? account = null;
-
-            if (!string.IsNullOrEmpty(accountId))
-            {
-                // Explicit account specified
-                account = await accountRegistry.GetAccountAsync(accountId);
-                if (account == null)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        error = $"Account '{accountId}' not found"
-                    });
-                }
-            }
-            else
-            {
-                // Smart routing: extract domain from the first recipient
-                var recipientDomain = to[0].Split('@').LastOrDefault();
-                if (!string.IsNullOrEmpty(recipientDomain))
-                {
-                    var matchingAccounts = accountRegistry.GetAccountsByDomain(recipientDomain).ToList();
-
-                    if (matchingAccounts.Count == 1)
-                    {
-                        account = matchingAccounts[0];
-                        logger.LogInformation("Smart routing selected account {AccountId} based on domain {Domain}",
-                            account.Id, recipientDomain);
-                    }
-                    else if (matchingAccounts.Count > 1)
-                    {
-                        // Multiple matches, use first one (could enhance with priority logic)
-                        account = matchingAccounts.First();
-                        logger.LogInformation("Smart routing selected account {AccountId} from {Count} matches",
-                            account.Id, matchingAccounts.Count);
-                    }
-                }
-
-                // If still no account, use default (first enabled)
-                if (account == null)
-                {
-                    var allAccounts = await accountRegistry.GetAllAccountsAsync();
-                    account = allAccounts.FirstOrDefault();
-                }
-
-                if (account == null)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        error = "No enabled account available to send email"
-                    });
-                }
-            }
-
             // Send email
             var provider = providerFactory.GetProvider(account.Provider);
             var messageId = await provider.SendEmailAsync(
@@ -142,16 +125,10 @@ public sealed class SendEmailTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in send_email tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to send email",
-                errorType = ex.GetType().Name,
-                message = ex.Message,
-                inner = ex.InnerException?.Message
-            });
+            throw new McpException("Failed to send email.", ex);
         }
     }
 

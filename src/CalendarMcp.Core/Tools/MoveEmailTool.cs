@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -24,41 +25,13 @@ public sealed class MoveEmailTool(
         logger.LogInformation("Moving email: accountId={AccountId}, emailId={EmailId}, destination={Destination}",
             accountId, emailId, destination);
 
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(emailId, nameof(emailId));
+        ToolGuard.RequireNonEmpty(destination, nameof(destination));
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            if (string.IsNullOrEmpty(accountId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "accountId is required"
-                });
-            }
-
-            if (string.IsNullOrEmpty(emailId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "emailId is required"
-                });
-            }
-
-            if (string.IsNullOrEmpty(destination))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "destination is required"
-                });
-            }
-
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Account '{accountId}' not found"
-                });
-            }
-
             var provider = providerFactory.GetProvider(account.Provider);
             await provider.MoveEmailAsync(accountId, emailId, destination, CancellationToken.None);
 
@@ -79,14 +52,10 @@ public sealed class MoveEmailTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in move_email tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to move email",
-                message = ex.Message
-            });
+            throw new McpException("Failed to move email.", ex);
         }
     }
 }

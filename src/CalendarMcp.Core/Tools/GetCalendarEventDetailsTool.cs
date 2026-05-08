@@ -3,6 +3,7 @@ using System.Text.Json;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -27,56 +28,26 @@ public sealed class GetCalendarEventDetailsTool(
         logger.LogInformation("Getting calendar event details: accountId={AccountId}, calendarId={CalendarId}, eventId={EventId}, timeZone={TimeZone}",
             accountId, calendarId, eventId, timeZone);
 
+        var tz = TimeZoneHelper.TryGetTimeZone(timeZone);
+        if (tz == null)
+            throw new McpException($"Invalid IANA timezone: '{timeZone}'. Use a valid IANA timezone name such as 'America/Chicago', 'Europe/London', or 'Asia/Tokyo'.");
+
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(eventId, nameof(eventId));
+
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+
         try
         {
-            var tz = TimeZoneHelper.TryGetTimeZone(timeZone);
-            if (tz == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Invalid IANA timezone: '{timeZone}'. Use a valid IANA timezone name such as 'America/Chicago', 'Europe/London', or 'Asia/Tokyo'."
-                });
-            }
-
-            if (string.IsNullOrEmpty(accountId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "accountId is required"
-                });
-            }
-
-            if (string.IsNullOrEmpty(eventId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "eventId is required"
-                });
-            }
-
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Account '{accountId}' not found"
-                });
-            }
-
             var provider = providerFactory.GetProvider(account.Provider);
             var evt = await provider.GetCalendarEventDetailsAsync(
-                accountId, 
-                calendarId ?? "primary", 
-                eventId, 
+                accountId,
+                calendarId ?? "primary",
+                eventId,
                 CancellationToken.None);
 
             if (evt == null)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Event '{eventId}' not found in account '{accountId}'"
-                });
-            }
+                throw new McpException($"Event '{eventId}' not found in account '{accountId}'");
 
             var response = new
             {
@@ -127,14 +98,10 @@ public sealed class GetCalendarEventDetailsTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_calendar_event_details tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to get calendar event details",
-                message = ex.Message
-            });
+            throw new McpException("Failed to get calendar event details.", ex);
         }
     }
 }

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -32,37 +33,30 @@ public sealed class GetEmailAttachmentTool(
         [Description("Required. Provider-side attachment ID, from the attachments[] array on get_email_details (e.g. 'part-0' for Gmail/IMAP, an opaque string for Microsoft Graph).")] string attachmentId,
         [Description("'stash' (default) returns an attachmentId for use in send_email. 'inline' returns base64Content directly; capped at 1 MB.")] string mode = "stash")
     {
-        if (string.IsNullOrEmpty(accountId)) return Err("accountId is required");
-        if (string.IsNullOrEmpty(emailId)) return Err("emailId is required");
-        if (string.IsNullOrEmpty(attachmentId)) return Err("attachmentId is required");
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(emailId, nameof(emailId));
+        ToolGuard.RequireNonEmpty(attachmentId, nameof(attachmentId));
 
         var normalizedMode = mode?.Trim().ToLowerInvariant() ?? "stash";
         if (normalizedMode is not ("stash" or "inline"))
-        {
-            return Err($"mode '{mode}' is invalid; use 'stash' or 'inline'.");
-        }
+            throw new McpException($"mode '{mode}' is invalid; use 'stash' or 'inline'.");
+
+        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
 
         try
         {
-            var account = await accountRegistry.GetAccountAsync(accountId);
-            if (account == null) return Err($"Account '{accountId}' not found");
-
             var provider = providerFactory.GetProvider(account.Provider);
             var content = await provider.GetEmailAttachmentContentAsync(
                 accountId, emailId, attachmentId, CancellationToken.None);
 
             if (content == null)
-            {
-                return Err($"Attachment '{attachmentId}' on email '{emailId}' was not found or could not be fetched.");
-            }
+                throw new McpException($"Attachment '{attachmentId}' on email '{emailId}' was not found or could not be fetched.");
 
             if (normalizedMode == "inline")
             {
                 if (content.Bytes.LongLength > InlineSizeLimitBytes)
-                {
-                    return Err(
+                    throw new McpException(
                         $"Attachment is {content.Bytes.LongLength:N0} bytes; inline mode is capped at {InlineSizeLimitBytes:N0} bytes. Re-call with mode='stash' and pass the returned attachmentId to send_email, or extract the bytes by other means.");
-                }
                 return JsonSerializer.Serialize(new
                 {
                     name = content.Name,
@@ -75,10 +69,8 @@ public sealed class GetEmailAttachmentTool(
             // stash mode
             var stored = attachmentStore.Put(content.Name, content.ContentType, content.Bytes);
             if (stored == null)
-            {
-                return Err(
+                throw new McpException(
                     $"Could not stash the attachment ({content.Bytes.LongLength:N0} bytes); the attachment is over the per-attachment cap or the store is full. Try inline mode if the file is small.");
-            }
 
             logger.LogInformation(
                 "Stashed inbound attachment {AttachmentId} from {EmailId} as {StoreId} ({Size} bytes)",
@@ -93,15 +85,10 @@ public sealed class GetEmailAttachmentTool(
                 expiresAt = stored.ExpiresAt,
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_email_attachment tool");
-            return Err("Failed to fetch attachment", ex.Message);
+            throw new McpException("Failed to fetch attachment.", ex);
         }
     }
-
-    private static string Err(string error, string? detail = null)
-        => detail == null
-            ? JsonSerializer.Serialize(new { error })
-            : JsonSerializer.Serialize(new { error, detail });
 }

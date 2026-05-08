@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -41,7 +42,7 @@ public class DeleteEventToolTests
     }
 
     [TestMethod]
-    public async Task DeleteEvent_AccountNotFound_ReturnsError()
+    public async Task DeleteEvent_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -51,10 +52,9 @@ public class DeleteEventToolTests
         var tool = new DeleteEventTool(regExp.Instance(), factExp.Instance(),
             NullLogger<DeleteEventTool>.Instance);
 
-        var result = await tool.DeleteEvent("ev-1", "nonexistent");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.DeleteEvent("ev-1", "nonexistent"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 

@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -12,49 +13,46 @@ namespace CalendarMcp.Tests.Tools;
 public class MoveEmailToolTests
 {
     [TestMethod]
-    public async Task MoveEmail_EmptyAccountId_ReturnsError()
+    public async Task MoveEmail_EmptyAccountId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new MoveEmailTool(regExp.Instance(), factExp.Instance(),
             NullLogger<MoveEmailTool>.Instance);
 
-        var result = await tool.MoveEmail("", "email-1", "archive");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("accountId is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.MoveEmail("", "email-1", "archive"));
+        Assert.AreEqual("accountId is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task MoveEmail_EmptyEmailId_ReturnsError()
+    public async Task MoveEmail_EmptyEmailId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new MoveEmailTool(regExp.Instance(), factExp.Instance(),
             NullLogger<MoveEmailTool>.Instance);
 
-        var result = await tool.MoveEmail("acc-1", "", "archive");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("emailId is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.MoveEmail("acc-1", "", "archive"));
+        Assert.AreEqual("emailId is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task MoveEmail_EmptyDestination_ReturnsError()
+    public async Task MoveEmail_EmptyDestination_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new MoveEmailTool(regExp.Instance(), factExp.Instance(),
             NullLogger<MoveEmailTool>.Instance);
 
-        var result = await tool.MoveEmail("acc-1", "email-1", "");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("destination is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.MoveEmail("acc-1", "email-1", ""));
+        Assert.AreEqual("destination is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task MoveEmail_AccountNotFound_ReturnsError()
+    public async Task MoveEmail_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -64,10 +62,9 @@ public class MoveEmailToolTests
         var tool = new MoveEmailTool(regExp.Instance(), factExp.Instance(),
             NullLogger<MoveEmailTool>.Instance);
 
-        var result = await tool.MoveEmail("nonexistent", "email-1", "archive");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.MoveEmail("nonexistent", "email-1", "archive"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 

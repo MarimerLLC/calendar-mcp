@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -12,21 +13,20 @@ namespace CalendarMcp.Tests.Tools;
 public class SearchEmailsToolTests
 {
     [TestMethod]
-    public async Task SearchEmails_EmptyQuery_ReturnsError()
+    public async Task SearchEmails_EmptyQuery_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SearchEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<SearchEmailsTool>.Instance);
 
-        var result = await tool.SearchEmails("");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Parameter 'query' is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SearchEmails(""));
+        Assert.AreEqual("query is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task SearchEmails_AccountNotFound_ReturnsError()
+    public async Task SearchEmails_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -36,10 +36,9 @@ public class SearchEmailsToolTests
         var tool = new SearchEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<SearchEmailsTool>.Instance);
 
-        var result = await tool.SearchEmails("test query", "nonexistent");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SearchEmails("test query", "nonexistent"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 
@@ -125,7 +124,7 @@ public class SearchEmailsToolTests
     }
 
     [TestMethod]
-    public async Task SearchEmails_NoAccounts_ReturnsError()
+    public async Task SearchEmails_NoAccounts_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAllAccountsAsync()
@@ -135,10 +134,9 @@ public class SearchEmailsToolTests
         var tool = new SearchEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<SearchEmailsTool>.Instance);
 
-        var result = await tool.SearchEmails("test");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("No accounts found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SearchEmails("test"));
+        Assert.AreEqual("No accounts found", ex.Message);
         regExp.Verify();
     }
 }

@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -42,7 +43,7 @@ public class GetEmailsToolTests
     }
 
     [TestMethod]
-    public async Task GetEmails_AccountNotFound_ReturnsError()
+    public async Task GetEmails_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -52,10 +53,9 @@ public class GetEmailsToolTests
         var tool = new GetEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetEmailsTool>.Instance);
 
-        var result = await tool.GetEmails("nonexistent");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmails("nonexistent"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 
@@ -90,7 +90,7 @@ public class GetEmailsToolTests
     }
 
     [TestMethod]
-    public async Task GetEmails_NoAccounts_ReturnsError()
+    public async Task GetEmails_NoAccounts_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAllAccountsAsync()
@@ -100,10 +100,9 @@ public class GetEmailsToolTests
         var tool = new GetEmailsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetEmailsTool>.Instance);
 
-        var result = await tool.GetEmails();
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("No accounts found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetEmails());
+        Assert.AreEqual("No accounts found", ex.Message);
         regExp.Verify();
     }
 }

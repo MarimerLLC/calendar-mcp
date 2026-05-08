@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -46,15 +47,13 @@ public sealed partial class GetContextualEmailSummaryTool(
             "Getting contextual email summary: topics={Topics}, countPerAccount={Count}, unreadOnly={UnreadOnly}",
             topics, countPerAccount, unreadOnly);
 
+        // Get all enabled accounts
+        var accounts = (await accountRegistry.GetAllAccountsAsync()).ToList();
+        if (accounts.Count == 0)
+            throw new McpException("No accounts configured");
+
         try
         {
-            // Get all enabled accounts
-            var accounts = (await accountRegistry.GetAllAccountsAsync()).ToList();
-            
-            if (accounts.Count == 0)
-            {
-                return JsonSerializer.Serialize(new { error = "No accounts configured" }, JsonOptions);
-            }
 
             // Parse topic keywords
             var searchKeywords = ParseTopics(topics);
@@ -86,14 +85,10 @@ public sealed partial class GetContextualEmailSummaryTool(
 
             return JsonSerializer.Serialize(summary, JsonOptions);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_contextual_email_summary tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to get contextual email summary",
-                message = ex.Message
-            }, JsonOptions);
+            throw new McpException("Failed to get contextual email summary.", ex);
         }
     }
 

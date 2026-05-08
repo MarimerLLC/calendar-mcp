@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -42,7 +43,7 @@ public class ListCalendarsToolTests
     }
 
     [TestMethod]
-    public async Task ListCalendars_AccountNotFound_ReturnsError()
+    public async Task ListCalendars_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -52,10 +53,9 @@ public class ListCalendarsToolTests
         var tool = new ListCalendarsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<ListCalendarsTool>.Instance);
 
-        var result = await tool.ListCalendars("nonexistent");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.ListCalendars("nonexistent"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 

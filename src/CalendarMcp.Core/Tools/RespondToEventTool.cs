@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -26,49 +27,35 @@ public sealed class RespondToEventTool(
         logger.LogInformation("Responding to event: eventId={EventId}, response={Response}, accountId={AccountId}, calendarId={CalendarId}",
             eventId, response, accountId, calendarId);
 
+        ToolGuard.RequireNonEmpty(eventId, nameof(eventId));
+        ToolGuard.RequireNonEmpty(response, nameof(response));
+
+        // Validate response type
+        var normalizedResponse = response.ToLowerInvariant();
+        if (normalizedResponse != "accept" && normalizedResponse != "accepted" &&
+            normalizedResponse != "tentative" && normalizedResponse != "tentativelyaccepted" &&
+            normalizedResponse != "decline" && normalizedResponse != "declined")
+        {
+            throw new McpException("Invalid response type. Valid values are: accept, tentative, decline");
+        }
+
+        // Determine which account to use
+        Models.AccountInfo account;
+        if (!string.IsNullOrEmpty(accountId))
+        {
+            account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+        }
+        else
+        {
+            var accounts = await accountRegistry.GetAllAccountsAsync();
+            var first = accounts.FirstOrDefault();
+            if (first == null)
+                throw new McpException("No enabled account available to respond to event");
+            account = first;
+        }
+
         try
         {
-            // Validate response type
-            var normalizedResponse = response.ToLowerInvariant();
-            if (normalizedResponse != "accept" && normalizedResponse != "accepted" &&
-                normalizedResponse != "tentative" && normalizedResponse != "tentativelyaccepted" &&
-                normalizedResponse != "decline" && normalizedResponse != "declined")
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "Invalid response type. Valid values are: accept, tentative, decline"
-                });
-            }
-
-            // Determine which account to use
-            Models.AccountInfo? account = null;
-
-            if (!string.IsNullOrEmpty(accountId))
-            {
-                account = await accountRegistry.GetAccountAsync(accountId);
-                if (account == null)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        error = $"Account '{accountId}' not found"
-                    });
-                }
-            }
-            else
-            {
-                // Use first enabled account (could enhance with smarter routing)
-                var accounts = await accountRegistry.GetAllAccountsAsync();
-                account = accounts.FirstOrDefault();
-
-                if (account == null)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        error = "No enabled account available to respond to event"
-                    });
-                }
-            }
-
             // Respond to event
             var provider = providerFactory.GetProvider(account.Provider);
             await provider.RespondToEventAsync(
@@ -92,14 +79,10 @@ public sealed class RespondToEventTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in respond_to_event tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to respond to event",
-                message = ex.Message
-            });
+            throw new McpException("Failed to respond to event.", ex);
         }
     }
 }

@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -16,21 +17,20 @@ public class GetCalendarEventsToolTests
     private const string TestTimeZone = "America/Chicago";
 
     [TestMethod]
-    public async Task GetCalendarEvents_InvalidTimeZone_ReturnsError()
+    public async Task GetCalendarEvents_InvalidTimeZone_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents("Invalid/Zone", Start, End);
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("Invalid IANA timezone"));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetCalendarEvents("Invalid/Zone", Start, End));
+        Assert.IsTrue(ex.Message.Contains("Invalid IANA timezone"));
     }
 
     [TestMethod]
-    public async Task GetCalendarEvents_AccountNotFound_ReturnsError()
+    public async Task GetCalendarEvents_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -40,10 +40,9 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "nonexistent");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetCalendarEvents(TestTimeZone, Start, End, "nonexistent"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 
@@ -102,31 +101,29 @@ public class GetCalendarEventsToolTests
     }
 
     [TestMethod]
-    public async Task GetCalendarEvents_NullAccountId_ReturnsValidationError()
+    public async Task GetCalendarEvents_NullAccountId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null);
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("accountId is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetCalendarEvents(TestTimeZone, Start, End, null));
+        Assert.AreEqual("accountId is required", ex.Message);
     }
 
     [TestMethod]
-    public async Task GetCalendarEvents_EmptyAccountId_ReturnsValidationError()
+    public async Task GetCalendarEvents_EmptyAccountId_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("accountId is required", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetCalendarEvents(TestTimeZone, Start, End, ""));
+        Assert.AreEqual("accountId is required", ex.Message);
     }
 
     [TestMethod]
@@ -177,7 +174,7 @@ public class GetCalendarEventsToolTests
     }
 
     [TestMethod]
-    public async Task GetCalendarEvents_NullAccountIdWithCalendarId_NoMatch_ReturnsError()
+    public async Task GetCalendarEvents_NullAccountIdWithCalendarId_NoMatch_ThrowsMcpException()
     {
         var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
         var calendars = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-other", accountId: "acc-1") };
@@ -195,10 +192,9 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null, "cal-missing");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("No calendar found with id 'cal-missing'"));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetCalendarEvents(TestTimeZone, Start, End, null, "cal-missing"));
+        Assert.IsTrue(ex.Message.Contains("No calendar found with id 'cal-missing'"));
 
         regExp.Verify();
         factExp.Verify();
@@ -206,7 +202,7 @@ public class GetCalendarEventsToolTests
     }
 
     [TestMethod]
-    public async Task GetCalendarEvents_NullAccountIdWithCalendarId_AmbiguousCalendarId_ReturnsError()
+    public async Task GetCalendarEvents_NullAccountIdWithCalendarId_AmbiguousCalendarId_ThrowsMcpException()
     {
         var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
         var acc2 = TestData.CreateAccount(id: "acc-2", provider: "google");
@@ -231,10 +227,9 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null, "cal-shared");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.GetProperty("error").GetString()!.Contains("exists in multiple accounts"));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetCalendarEvents(TestTimeZone, Start, End, null, "cal-shared"));
+        Assert.IsTrue(ex.Message.Contains("exists in multiple accounts"));
 
         regExp.Verify();
         factExp.Verify();

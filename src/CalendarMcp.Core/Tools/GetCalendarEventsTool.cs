@@ -4,6 +4,7 @@ using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -28,22 +29,12 @@ public sealed class GetCalendarEventsTool(
     {
         var tz = TimeZoneHelper.TryGetTimeZone(timeZone);
         if (tz == null)
-        {
-            return JsonSerializer.Serialize(new
-            {
-                error = $"Invalid IANA timezone: '{timeZone}'. Use a valid IANA timezone name such as 'America/Chicago', 'Europe/London', or 'Asia/Tokyo'."
-            });
-        }
+            throw new McpException($"Invalid IANA timezone: '{timeZone}'. Use a valid IANA timezone name such as 'America/Chicago', 'Europe/London', or 'Asia/Tokyo'.");
 
         if (string.IsNullOrEmpty(accountId))
         {
             if (string.IsNullOrEmpty(calendarId))
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = "accountId is required"
-                });
-            }
+                throw new McpException("accountId is required");
 
             // calendarId provided but no accountId — try to resolve the account automatically
             try
@@ -68,32 +59,18 @@ public sealed class GetCalendarEventsTool(
                 var matchingAccountIds = lookupResults.OfType<string>().ToList();
 
                 if (matchingAccountIds.Count == 0)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        error = $"No calendar found with id '{calendarId}'. Provide accountId to specify which account to query."
-                    });
-                }
+                    throw new McpException($"No calendar found with id '{calendarId}'. Provide accountId to specify which account to query.");
 
                 if (matchingAccountIds.Count > 1)
-                {
-                    return JsonSerializer.Serialize(new
-                    {
-                        error = $"calendarId '{calendarId}' exists in multiple accounts; provide accountId to specify which account to query."
-                    });
-                }
+                    throw new McpException($"calendarId '{calendarId}' exists in multiple accounts; provide accountId to specify which account to query.");
 
                 accountId = matchingAccountIds[0];
                 logger.LogInformation("Resolved accountId={AccountId} from calendarId={CalendarId}", accountId, calendarId);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not McpException)
             {
                 logger.LogError(ex, "Error resolving accountId from calendarId {CalendarId}", calendarId);
-                return JsonSerializer.Serialize(new
-                {
-                    error = "Failed to resolve account from calendarId",
-                    message = ex.Message
-                });
+                throw new McpException("Failed to resolve account from calendarId.", ex);
             }
         }
 
@@ -105,16 +82,8 @@ public sealed class GetCalendarEventsTool(
 
         try
         {
-            var accounts = new[] { await accountRegistry.GetAccountAsync(accountId) }.Where(a => a != null).Cast<AccountInfo>();
-            var validAccounts = accounts.ToList();
-
-            if (validAccounts.Count == 0)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = $"Account '{accountId}' not found"
-                });
-            }
+            var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+            var validAccounts = new List<AccountInfo> { account };
 
             // Query all accounts in parallel
             var warnings = new List<object>();
@@ -132,7 +101,7 @@ public sealed class GetCalendarEventsTool(
                     logger.LogError(ex, "Error getting calendar events from account {AccountId}", account!.Id);
                     lock (warnings)
                     {
-                        warnings.Add(new { accountId = account.Id, error = ex.Message });
+                        warnings.Add(new { accountId = account.Id, error = "Failed to retrieve events from this account." });
                     }
                     return Enumerable.Empty<CalendarEvent>();
                 }
@@ -172,14 +141,10 @@ public sealed class GetCalendarEventsTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_calendar_events tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to get calendar events",
-                message = ex.Message
-            });
+            throw new McpException("Failed to get calendar events.", ex);
         }
     }
 }

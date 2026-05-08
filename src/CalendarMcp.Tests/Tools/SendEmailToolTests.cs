@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
 using Rocks;
 
 namespace CalendarMcp.Tests.Tools;
@@ -45,7 +46,7 @@ public class SendEmailToolTests
     }
 
     [TestMethod]
-    public async Task SendEmail_AccountNotFound_ReturnsError()
+    public async Task SendEmail_AccountNotFound_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         regExp.Setups.GetAccountAsync("nonexistent")
@@ -55,17 +56,18 @@ public class SendEmailToolTests
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail(new List<string> { "to@example.com" }, "Subject", "Body", "nonexistent");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.AreEqual("Account 'nonexistent' not found", doc.RootElement.GetProperty("error").GetString());
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail(new List<string> { "to@example.com" }, "Subject", "Body", "nonexistent"));
+        Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
     }
 
     [TestMethod]
-    public async Task SendEmail_NoAccountNoMatch_ReturnsError()
+    public async Task SendEmail_NoAccountNoMatch_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountsByDomain("unknown.com")
+            .ReturnValue([]);
         regExp.Setups.GetAllAccountsAsync()
             .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([]));
 
@@ -73,26 +75,23 @@ public class SendEmailToolTests
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail(new List<string> { "to@unknown.com" }, "Subject", "Body");
-        var doc = JsonDocument.Parse(result);
-
-        Assert.IsTrue(doc.RootElement.TryGetProperty("error", out _));
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail(new List<string> { "to@unknown.com" }, "Subject", "Body"));
+        Assert.AreEqual("No enabled account available to send email", ex.Message);
         regExp.Verify();
     }
 
     [TestMethod]
-    public async Task SendEmail_EmptyToList_ReturnsError()
+    public async Task SendEmail_EmptyToList_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail([], "Subject", "Body", "acc-1");
-        var doc = JsonDocument.Parse(result);
-
-        var error = doc.RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("recipient", StringComparison.OrdinalIgnoreCase) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail([], "Subject", "Body", "acc-1"));
+        Assert.IsTrue(ex.Message.Contains("recipient", StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]
@@ -137,47 +136,43 @@ public class SendEmailToolTests
     }
 
     [TestMethod]
-    public async Task SendEmail_AttachmentMissingName_ReturnsError()
+    public async Task SendEmail_AttachmentMissingName_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail(
-            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<OutboundEmailAttachment>
-            {
-                new() { Name = "", Base64Content = "aGVsbG8=" },
-            });
-
-        var doc = JsonDocument.Parse(result);
-        var error = doc.RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("name is required", StringComparison.OrdinalIgnoreCase) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail(
+                new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+                attachments: new List<OutboundEmailAttachment>
+                {
+                    new() { Name = "", Base64Content = "aGVsbG8=" },
+                }));
+        Assert.IsTrue(ex.Message.Contains("name is required", StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]
-    public async Task SendEmail_AttachmentMissingContent_ReturnsError()
+    public async Task SendEmail_AttachmentMissingContent_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new SendEmailTool(regExp.Instance(), factExp.Instance(),
             new TestAttachmentStore(), NullLogger<SendEmailTool>.Instance);
 
-        var result = await tool.SendEmail(
-            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<OutboundEmailAttachment>
-            {
-                new() { Name = "x.txt", Base64Content = "" },
-            });
-
-        var doc = JsonDocument.Parse(result);
-        var error = doc.RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("base64Content", StringComparison.OrdinalIgnoreCase) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail(
+                new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+                attachments: new List<OutboundEmailAttachment>
+                {
+                    new() { Name = "x.txt", Base64Content = "" },
+                }));
+        Assert.IsTrue(ex.Message.Contains("base64Content", StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]
-    public async Task SendEmail_AttachmentExceedsTotalCap_ReturnsError()
+    public async Task SendEmail_AttachmentExceedsTotalCap_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -186,15 +181,13 @@ public class SendEmailToolTests
 
         // 35 MB of base64 chars decodes to ~26 MB, just over the 25 MB cap.
         var bigBase64 = new string('A', 35 * 1024 * 1024);
-        var result = await tool.SendEmail(
-            new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
-            attachments: new List<OutboundEmailAttachment>
-            {
-                new() { Name = "a.bin", Base64Content = bigBase64 },
-            });
-
-        var doc = JsonDocument.Parse(result);
-        var error = doc.RootElement.GetProperty("error").GetString();
-        Assert.IsTrue(error?.Contains("exceeds", StringComparison.OrdinalIgnoreCase) ?? false);
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.SendEmail(
+                new List<string> { "to@example.com" }, "Subject", "Body", "acc-1",
+                attachments: new List<OutboundEmailAttachment>
+                {
+                    new() { Name = "a.bin", Base64Content = bigBase64 },
+                }));
+        Assert.IsTrue(ex.Message.Contains("exceeds", StringComparison.OrdinalIgnoreCase));
     }
 }

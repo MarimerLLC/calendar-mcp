@@ -3,6 +3,7 @@ using System.Text.Json;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
 using ModelContextProtocol.Server;
 
 namespace CalendarMcp.Core.Tools;
@@ -22,22 +23,21 @@ public sealed class ListCalendarsTool(
     {
         logger.LogInformation("Listing calendars: accountId={AccountId}", accountId);
 
+        // Determine which accounts to query
+        List<AccountInfo> validAccounts;
+        if (string.IsNullOrEmpty(accountId))
+        {
+            validAccounts = accountRegistry.GetEnabledAccounts().ToList();
+            if (validAccounts.Count == 0)
+                throw new McpException("No accounts found");
+        }
+        else
+        {
+            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+        }
+
         try
         {
-            // Determine which accounts to query
-            var accounts = string.IsNullOrEmpty(accountId)
-                ? accountRegistry.GetEnabledAccounts()
-                : new[] { await accountRegistry.GetAccountAsync(accountId) }.Where(a => a != null).Cast<AccountInfo>();
-
-            var validAccounts = accounts.ToList();
-
-            if (validAccounts.Count == 0)
-            {
-                return JsonSerializer.Serialize(new
-                {
-                    error = accountId != null ? $"Account '{accountId}' not found" : "No accounts found"
-                });
-            }
 
             // Query all accounts in parallel
             var tasks = validAccounts.Select(async account =>
@@ -79,14 +79,10 @@ public sealed class ListCalendarsTool(
                 WriteIndented = true
             });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in list_calendars tool");
-            return JsonSerializer.Serialize(new
-            {
-                error = "Failed to list calendars",
-                message = ex.Message
-            });
+            throw new McpException("Failed to list calendars.", ex);
         }
     }
 }
