@@ -8,6 +8,27 @@ sequencing.
 Every scenario assumes you have already called `list_accounts` and
 know which `accountId` to use for each step.
 
+## Prompts cover several of these end-to-end
+
+If the MCP client supports prompts, prefer the prompt over the manual
+sequence — it's a single invocation that expands to an equivalent
+plan and reduces the chance of mis-ordering steps:
+
+| Scenario below | Equivalent prompt |
+|---|---|
+| 1. Triage the morning inbox | `email_triage` |
+| 2. Schedule a meeting from an email thread | `schedule_meeting` (after extracting attendees from the thread) |
+| 3. Forward an email with attachments | `forward_with_attachments` |
+| 4. Respond to a meeting invite | `respond_to_invite` |
+| 6. Bulk unsubscribe from marketing emails | `bulk_unsubscribe` |
+| 7. Daily summary across all accounts | `daily_briefing` (today) or `week_ahead` (7 days) |
+| 8. Add the sender of an email as a contact | `contact_summary` (search-first variant) |
+| 10. Cross-account search for a topic | `find_emails_about` |
+
+The remaining scenarios (free-busy approximation, re-routing
+misdirected mail) don't have a prompt yet — drive those with the tools
+directly.
+
 ## 1. Triage the morning inbox
 
 Goal: quickly classify unread mail across all accounts and act on

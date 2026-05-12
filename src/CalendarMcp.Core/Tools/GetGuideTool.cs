@@ -93,6 +93,8 @@ public sealed class GetGuideTool(ILogger<GetGuideTool> logger)
         sb.AppendLine();
         sb.AppendLine("Call `get_guide` with `name=<topic>` (e.g. `get_guide(name=\"overview\")`) to read any guide below.");
         sb.AppendLine();
+        sb.AppendLine("**Prompts:** This server also exposes pre-built MCP prompt workflows (daily briefing, email triage, schedule meeting, forward with attachments, bulk unsubscribe, contact summary, and more). If your client supports prompts, prefer them over orchestrating tools by hand. See the `overview` guide for the full catalog.");
+        sb.AppendLine();
         sb.AppendLine("| Guide | Description |");
         sb.AppendLine("|---|---|");
         foreach (var n in names)

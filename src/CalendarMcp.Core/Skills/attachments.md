@@ -82,6 +82,11 @@ content (e.g., to OCR an image, parse a small PDF). Files larger than
 
 ## Forwarding flow (the most common pattern)
 
+> **Prompt shortcut:** the `forward_with_attachments` prompt wraps this
+> entire flow. Pass `emailId`, `accountId`, `forwardTo`, and an optional
+> `note`; the prompt expands to the same steps shown below. Prefer it
+> when the host supports MCP prompts.
+
 ```
 get_email_details(accountId, emailId)
   → response.attachments[]   // each has provider-side attachmentId

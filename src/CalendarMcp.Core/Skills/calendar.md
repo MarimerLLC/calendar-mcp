@@ -74,9 +74,32 @@ attendees automatically.
   configured account, which typically does not have the invitation.
 - `comment` is optional message text sent with the response.
 
+## Prompt shortcuts
+
+This server exposes MCP prompts that wrap the common calendar
+workflows. When the host supports prompts, prefer them:
+
+- **`daily_briefing`** — today's events + unread email across all
+  accounts. Pass `timeZone`.
+- **`week_ahead`** — 7-day overview grouped by day, with highlights.
+  Pass `timeZone`.
+- **`schedule_meeting`** — find an open slot and create the event.
+  Pass `title`, `durationMinutes`, comma-separated `attendees`,
+  `timeZone`, and optional `preferredDate`.
+- **`respond_to_invite`** — review an invite with conflict check, then
+  accept / tentative / decline from the correct account. Pass
+  `eventId`, `accountId`, `calendarId`, `response`, `timeZone`, and an
+  optional `comment`.
+
+If the user's request matches one of these, invoke the prompt rather
+than orchestrating the steps below by hand.
+
 ## Common patterns
 
 ### Show my week
+
+> Use the `week_ahead` prompt — it groups by day and highlights busy
+> days automatically. For just today + unread mail, use `daily_briefing`.
 
 ```
 list_accounts → pick calendar-capable account(s)
@@ -90,6 +113,10 @@ get_calendar_events(
 ```
 
 ### Schedule a 30-minute meeting tomorrow at 10 AM
+
+> Use the `schedule_meeting` prompt when you need to find a free slot
+> first; use the direct `create_event` call below only when the slot
+> is already known.
 
 ```
 create_event(
@@ -113,6 +140,10 @@ update_event(accountId, calendarId, eventId,
 ```
 
 ### Respond to an invite
+
+> Use the `respond_to_invite` prompt — it adds a conflict check before
+> responding and enforces the always-pass-`accountId`/`calendarId`/`timeZone`
+> contract that's easy to violate by hand.
 
 ```
 get_calendar_events(...)                       // find pending invites
