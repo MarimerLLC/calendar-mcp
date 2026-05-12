@@ -30,6 +30,14 @@ public static class CalendarMcpServerOptions
         Call it with no arguments (or name='index') to see the list of available guides,
         then call it again with a topic name to read that guide.
 
+        This server also exposes MCP prompts that encode the canonical multi-step
+        flows for common tasks — prefer them over orchestrating tools by hand when
+        the user's request matches one:
+        - Calendar: `daily_briefing`, `week_ahead`, `schedule_meeting`, `respond_to_invite`
+        - Email: `email_triage`, `draft_reply`, `find_emails_about`,
+          `forward_with_attachments`, `bulk_unsubscribe`
+        - Contacts: `contact_summary`
+
         Provider capability summary:
         - Microsoft 365 / Google Workspace / Outlook.com: email, calendar, contacts (read/write)
         - IMAP + SMTP: email only (read/write)

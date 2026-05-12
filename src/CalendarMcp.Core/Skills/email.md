@@ -122,6 +122,8 @@ than rebuilding the steps yourself.
 
 ### Triage unread
 
+> Use the `email_triage` prompt for this — it wraps the loop below.
+
 ```
 get_emails(unreadOnly=true, count=50)   // fans out across all accounts
 → for each:
@@ -132,6 +134,8 @@ get_emails(unreadOnly=true, count=50)   // fans out across all accounts
 
 ### Find then read
 
+> Use the `find_emails_about` prompt for a topic search + summary.
+
 ```
 search_emails(query="invoice december")
 → pick the right hit
@@ -140,12 +144,18 @@ search_emails(query="invoice december")
 
 ### Reply with the same account that received
 
+> Use the `draft_reply` prompt to handle this end-to-end (read original,
+> draft in a chosen tone, confirm, send from the correct account).
+
 When replying, always pass the original message's `accountId` to
 `send_email` so the reply goes from the right persona. Smart routing
 will sometimes pick correctly via the recipient domain, but not
 always — be explicit.
 
 ### Bulk unsubscribe newsletters
+
+> Use the `bulk_unsubscribe` prompt — it bakes in the "confirm with
+> the user before mass-unsubscribing" step that's easy to forget.
 
 ```
 search_emails(query="unsubscribe", count=50)

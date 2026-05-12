@@ -52,6 +52,10 @@ Permanent on most providers; no per-tool soft-delete or recovery.
 
 ### Find a contact by name or company
 
+> Use the `contact_summary` prompt when you also want recent
+> correspondence with the person — it adds a `search_emails` step
+> automatically.
+
 ```
 search_contacts(query="Acme")    // fans out across accounts
 → examine results, pick the right one

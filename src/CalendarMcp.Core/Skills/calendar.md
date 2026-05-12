@@ -98,6 +98,9 @@ than orchestrating the steps below by hand.
 
 ### Show my week
 
+> Use the `week_ahead` prompt — it groups by day and highlights busy
+> days automatically. For just today + unread mail, use `daily_briefing`.
+
 ```
 list_accounts → pick calendar-capable account(s)
 get_calendar_events(
@@ -110,6 +113,10 @@ get_calendar_events(
 ```
 
 ### Schedule a 30-minute meeting tomorrow at 10 AM
+
+> Use the `schedule_meeting` prompt when you need to find a free slot
+> first; use the direct `create_event` call below only when the slot
+> is already known.
 
 ```
 create_event(
@@ -133,6 +140,10 @@ update_event(accountId, calendarId, eventId,
 ```
 
 ### Respond to an invite
+
+> Use the `respond_to_invite` prompt — it adds a conflict check before
+> responding and enforces the always-pass-`accountId`/`calendarId`/`timeZone`
+> contract that's easy to violate by hand.
 
 ```
 get_calendar_events(...)                       // find pending invites
