@@ -56,6 +56,7 @@ public static class ServiceCollectionExtensions
         
         // Register MCP tools (method-based pattern - just register the classes)
         services.AddSingleton<ListAccountsTool>();
+        services.AddSingleton<GetGuideTool>();
         services.AddSingleton<GetEmailsTool>();
         services.AddSingleton<GetEmailDetailsTool>();
         services.AddSingleton<GetEmailAttachmentTool>();

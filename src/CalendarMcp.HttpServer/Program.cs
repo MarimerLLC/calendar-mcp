@@ -129,6 +129,7 @@ public class Program
             .AddMcpServer(CalendarMcpServerOptions.Configure)
             .WithHttpTransport()
             .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
+            .WithTools<CalendarMcp.Core.Tools.GetGuideTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailDetailsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailAttachmentTool>()

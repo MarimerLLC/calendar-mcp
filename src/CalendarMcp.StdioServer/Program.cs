@@ -115,6 +115,7 @@ public class Program
                 // Configure MCP server with stdio transport and register tools
                 services.AddMcpServer(CalendarMcpServerOptions.Configure)
                     .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
+                    .WithTools<CalendarMcp.Core.Tools.GetGuideTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetEmailDetailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetEmailAttachmentTool>()

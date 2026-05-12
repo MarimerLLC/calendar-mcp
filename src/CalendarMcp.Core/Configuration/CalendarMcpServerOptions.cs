@@ -13,7 +13,10 @@ public static class CalendarMcpServerOptions
     private const string Description =
         "Unified access to email, calendar, and contacts across Microsoft 365, " +
         "Google Workspace/Gmail, Outlook.com, and IMAP/SMTP mailboxes, plus " +
-        "read-only iCalendar (.ics) URLs and JSON-file calendar sources.";
+        "read-only iCalendar (.ics) URLs and JSON-file calendar sources. " +
+        "Call the GetGuide tool (no arguments) for the index of in-depth " +
+        "topical guides covering accounts, email, calendar, contacts, " +
+        "attachments, end-to-end scenarios, and per-provider behavior.";
 
     private const string Instructions = """
         Calendar MCP exposes email, calendar, and contacts tools across multiple
