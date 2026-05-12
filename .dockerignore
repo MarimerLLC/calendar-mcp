@@ -10,6 +10,11 @@
 **/spikes
 **/installer
 **/*.md
+# Skills markdown files are embedded as MCP guide resources via the
+# CalendarMcp.Core.csproj <EmbeddedResource> item, so they must reach
+# the build context even though the rule above excludes documentation
+# markdown elsewhere in the repo.
+!src/CalendarMcp.Core/Skills/*.md
 **/LICENSE
 **/.gitignore
 **/.dockerignore
