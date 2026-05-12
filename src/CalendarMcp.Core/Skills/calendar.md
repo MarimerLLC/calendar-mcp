@@ -12,22 +12,22 @@ parameter as an IANA name (`America/Chicago`, `Europe/London`,
 receive without specifying a zone will be interpreted at server local
 time, which is rarely what you want.
 
-`GetCalendarEvents` returns each event in **both** UTC (`start_utc`,
+`get_calendar_events` returns each event in **both** UTC (`start_utc`,
 `end_utc`) and the requested local zone (`start_local`, `end_local`).
 Use the local times when surfacing to the user; use the UTC times when
 comparing or scheduling.
 
 ## Tool reference
 
-### `ListCalendars(accountId?)`
+### `list_calendars(accountId?)`
 
 Returns `id, accountId, name, owner, canEdit, isDefault` per calendar.
 Fans out across all accounts when `accountId` is omitted. Use the
-returned `id` + `accountId` to scope `GetCalendarEvents` or
-`CreateEvent` to a specific calendar; otherwise the default calendar is
+returned `id` + `accountId` to scope `get_calendar_events` or
+`create_event` to a specific calendar; otherwise the default calendar is
 used.
 
-### `GetCalendarEvents(timeZone, startDate?, endDate?, accountId?, calendarId?, count=50)`
+### `get_calendar_events(timeZone, startDate?, endDate?, accountId?, calendarId?, count=50)`
 
 - `timeZone` (required) — IANA name; controls the `_local` times in
   output and how `startDate`/`endDate` are interpreted.
@@ -41,11 +41,11 @@ Returns events sorted by start time, each with `id, accountId,
 calendarId, subject, start_utc/start_local, end_utc/end_local,
 location, attendees, isAllDay, organizer`.
 
-### `GetCalendarEventDetails(accountId, calendarId, eventId, timeZone)`
+### `get_calendar_event_details(accountId, calendarId, eventId, timeZone)`
 
 Full event including description/body. All four parameters are required.
 
-### `CreateEvent(subject, start, end, accountId?, calendarId?, location?, attendees?[], body?, timeZone)`
+### `create_event(subject, start, end, accountId?, calendarId?, location?, attendees?[], body?, timeZone)`
 
 - `start` and `end` are ISO 8601 (e.g. `2026-05-14T10:00:00`).
 - Pair them with `timeZone` (IANA). Without `timeZone`, the times are
@@ -56,17 +56,17 @@ Full event including description/body. All four parameters are required.
 - Omitting `calendarId` uses the account's default calendar.
 - `attendees` is an array of email addresses.
 
-### `UpdateEvent(accountId, calendarId, eventId, subject?, start?, end?, location?, attendees?[], timeZone?)`
+### `update_event(accountId, calendarId, eventId, subject?, start?, end?, location?, attendees?[], timeZone?)`
 
 All except identifiers are optional; pass only what you want to change.
 When updating `start` or `end`, also pass `timeZone`.
 
-### `DeleteEvent(accountId, calendarId, eventId)`
+### `delete_event(accountId, calendarId, eventId)`
 
 Removes the event. Some providers send cancellation notices to
 attendees automatically.
 
-### `RespondToEvent(eventId, response, accountId?, calendarId?, comment?)`
+### `respond_to_event(eventId, response, accountId?, calendarId?, comment?)`
 
 - `response`: `accept`, `tentative`, or `decline` (also accepts the
   longer forms `accepted`, `tentativelyaccepted`, `declined`).
@@ -79,8 +79,8 @@ attendees automatically.
 ### Show my week
 
 ```
-ListAccounts → pick calendar-capable account(s)
-GetCalendarEvents(
+list_accounts → pick calendar-capable account(s)
+get_calendar_events(
   timeZone="America/Chicago",
   startDate="2026-05-11",
   endDate="2026-05-17",
@@ -92,7 +92,7 @@ GetCalendarEvents(
 ### Schedule a 30-minute meeting tomorrow at 10 AM
 
 ```
-CreateEvent(
+create_event(
   accountId="work-m365",
   subject="Sync with Alice",
   start="2026-05-13T10:00:00",
@@ -106,17 +106,17 @@ CreateEvent(
 ### Move a meeting
 
 ```
-GetCalendarEvents(...)                              // find the event
-GetCalendarEventDetails(accountId, calendarId, eventId, timeZone)  // confirm details
-UpdateEvent(accountId, calendarId, eventId,
+get_calendar_events(...)                              // find the event
+get_calendar_event_details(accountId, calendarId, eventId, timeZone)  // confirm details
+update_event(accountId, calendarId, eventId,
             start="...", end="...", timeZone="...")
 ```
 
 ### Respond to an invite
 
 ```
-GetCalendarEvents(...)                       // find pending invites
-RespondToEvent(eventId, "accept",
+get_calendar_events(...)                       // find pending invites
+respond_to_event(eventId, "accept",
                accountId="...", calendarId="...",
                comment="Looking forward to it!")
 ```
@@ -124,19 +124,19 @@ RespondToEvent(eventId, "accept",
 ### Find availability before scheduling
 
 There is no dedicated free-busy tool. Fetch your events for the target
-window with `GetCalendarEvents` and check for gaps manually. For
+window with `get_calendar_events` and check for gaps manually. For
 multi-account availability, fan out and merge.
 
 ## Pitfalls
 
-- **Default account** for `CreateEvent`/`RespondToEvent` is whichever
+- **Default account** for `create_event`/`respond_to_event` is whichever
   account was registered first — pass `accountId` explicitly.
 - **All-day events**: pass start/end as midnight-to-midnight in the
   user's zone; check provider behavior — `isAllDay` is returned but
   not a creation parameter.
 - **Recurring events**: not directly supported via tool parameters in
-  the current version. `GetCalendarEvents` returns expanded
-  occurrences; `CreateEvent` creates single instances.
+  the current version. `get_calendar_events` returns expanded
+  occurrences; `create_event` creates single instances.
 - **Read-only sources**: `ics` and `json` calendars cannot be written
-  to. `ListCalendars` reports `canEdit=false`. Verify before calling
-  `CreateEvent`/`UpdateEvent`/`DeleteEvent`.
+  to. `list_calendars` reports `canEdit=false`. Verify before calling
+  `create_event`/`update_event`/`delete_event`.

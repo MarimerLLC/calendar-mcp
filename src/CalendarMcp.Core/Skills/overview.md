@@ -6,7 +6,7 @@ every configured account; capabilities vary per provider.
 
 ## Always start here
 
-1. Call **`ListAccounts`** to discover what accounts are configured and what
+1. Call **`list_accounts`** to discover what accounts are configured and what
    each can do. The response includes an `accountId`, `provider`,
    `displayName`, `domains`, and a `capabilities` array per account.
 2. Pass the chosen `accountId` to every tool that operates on data (email,
@@ -31,24 +31,23 @@ account configuration.
 
 ## Tool categories
 
-- **Accounts / meta**: `ListAccounts`, `GetGuide`
-- **Email read**: `GetEmails`, `SearchEmails`, `GetEmailDetails`,
-  `GetEmailAttachment`, `get_contextual_email_summary`
-- **Email write**: `SendEmail`, `DeleteEmail`, `MarkEmailAsRead`,
-  `MoveEmail`
-- **Email bulk**: `BulkDeleteEmails`, `BulkMarkEmailsAsRead`,
-  `BulkMoveEmails`
-- **Email unsubscribe**: `GetUnsubscribeInfo`, `UnsubscribeFromEmail`
-- **Calendar read**: `ListCalendars`, `GetCalendarEvents`,
-  `GetCalendarEventDetails`
-- **Calendar write**: `CreateEvent`, `UpdateEvent`, `DeleteEvent`,
-  `RespondToEvent`
-- **Contacts**: `GetContacts`, `SearchContacts`, `GetContactDetails`,
-  `CreateContact`, `UpdateContact`, `DeleteContact`
+- **Accounts / meta**: `list_accounts`, `get_guide`
+- **Email read**: `get_emails`, `search_emails`, `get_email_details`,
+  `get_email_attachment`, `get_contextual_email_summary`
+- **Email write**: `send_email`, `delete_email`, `mark_email_as_read`,
+  `move_email`
+- **Email bulk**: `bulk_delete_emails`, `bulk_mark_emails_as_read`,
+  `bulk_move_emails`
+- **Email unsubscribe**: `get_unsubscribe_info`, `unsubscribe_from_email`
+- **Calendar read**: `list_calendars`, `get_calendar_events`,
+  `get_calendar_event_details`
+- **Calendar write**: `create_event`, `update_event`, `delete_event`,
+  `respond_to_event`
+- **Contacts**: `get_contacts`, `search_contacts`, `get_contact_details`,
+  `create_contact`, `update_contact`, `delete_contact`
 
-Tool names are PascalCase as exposed by the C# MCP SDK. The only
-exception is `get_contextual_email_summary`, which is published as
-snake_case for historical reasons.
+Tool names are snake_case (the C# MCP SDK auto-converts from the
+PascalCase method names in the source).
 
 ## Where to go next
 

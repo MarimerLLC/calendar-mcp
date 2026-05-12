@@ -91,7 +91,7 @@ public sealed class GetGuideTool(ILogger<GetGuideTool> logger)
         var sb = new StringBuilder();
         sb.AppendLine("# Calendar MCP — Available Guides");
         sb.AppendLine();
-        sb.AppendLine("Call `GetGuide` with `name=<topic>` (e.g. `GetGuide(name=\"overview\")`) to read any guide below.");
+        sb.AppendLine("Call `get_guide` with `name=<topic>` (e.g. `get_guide(name=\"overview\")`) to read any guide below.");
         sb.AppendLine();
         sb.AppendLine("| Guide | Description |");
         sb.AppendLine("|---|---|");

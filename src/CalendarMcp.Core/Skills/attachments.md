@@ -6,11 +6,11 @@ exist; pick by direction.
 
 ## Outbound (sending a file)
 
-`SendEmail` accepts `attachments[]` where each item has one of:
+`send_email` accepts `attachments[]` where each item has one of:
 
 - **`{ "attachmentId": "abc..." }`** — preferred. The bytes were
   previously uploaded to the server's attachment store. Single-use:
-  consumed when `SendEmail` succeeds.
+  consumed when `send_email` succeeds.
 - **`{ "name": "x.pdf", "base64Content": "...", "contentType": "..." }`** —
   the agent encodes the file inline. Use only for very small files; the
   total decoded payload per message is capped at **25 MB** by this
@@ -32,7 +32,7 @@ Then in the tool call:
 
 ```json
 {
-  "tool": "SendEmail",
+  "tool": "send_email",
   "arguments": {
     "to": ["alice@example.com"],
     "subject": "Q4 report",
@@ -43,15 +43,15 @@ Then in the tool call:
 ```
 
 Single-use: a successful send removes the ID. If the send fails, the ID
-remains usable until it expires; re-call `SendEmail`.
+remains usable until it expires; re-call `send_email`.
 
 The stdio transport does not have an HTTP upload endpoint, so on stdio
 you can only send via inline `base64Content` (small files), or by first
-calling `GetEmailAttachment` in `stash` mode to get an ID for forwarding.
+calling `get_email_attachment` in `stash` mode to get an ID for forwarding.
 
 ## Inbound (reading/forwarding a file)
 
-`GetEmailAttachment(accountId, emailId, attachmentId, mode="stash")`
+`get_email_attachment(accountId, emailId, attachmentId, mode="stash")`
 fetches an attachment from a received email. Two modes:
 
 ### `mode="stash"` (default)
@@ -69,7 +69,7 @@ Downloads the file into the server's attachment store and returns:
 ```
 
 The bytes never round-trip through the agent. Hand the returned
-`attachmentId` directly to `SendEmail` to forward, or (HTTP server
+`attachmentId` directly to `send_email` to forward, or (HTTP server
 only) fetch the raw bytes via `GET /attachments/{id}` for non-MCP
 consumers.
 
@@ -83,14 +83,14 @@ content (e.g., to OCR an image, parse a small PDF). Files larger than
 ## Forwarding flow (the most common pattern)
 
 ```
-GetEmailDetails(accountId, emailId)
+get_email_details(accountId, emailId)
   → response.attachments[]   // each has provider-side attachmentId
 
 For each attachment to forward:
-  GetEmailAttachment(accountId, emailId, attachmentId, mode="stash")
+  get_email_attachment(accountId, emailId, attachmentId, mode="stash")
   → response.attachmentId     // server-stash ID (different from provider's)
 
-SendEmail(
+send_email(
   to=[<forward target>],
   subject="...",
   body="...",
@@ -105,10 +105,10 @@ Two distinct `attachmentId` namespaces exist:
 
 | Source | What it identifies | Where it's used |
 |---|---|---|
-| `GetEmailDetails.attachments[].attachmentId` | Provider-side ID (Gmail `part-0`, Graph opaque ID) | Input to `GetEmailAttachment` |
-| `GetEmailAttachment` (stash) / `POST /attachments` | Server-side store ID | Input to `SendEmail` |
+| `get_email_details.attachments[].attachmentId` | Provider-side ID (Gmail `part-0`, Graph opaque ID) | Input to `get_email_attachment` |
+| `get_email_attachment` (stash) / `POST /attachments` | Server-side store ID | Input to `send_email` |
 
-Don't mix them — passing a provider-side ID directly to `SendEmail`
+Don't mix them — passing a provider-side ID directly to `send_email`
 fails.
 
 ## Size limits
@@ -117,7 +117,7 @@ fails.
 |---|---|---|
 | Total decoded payload per outbound message | 25 MB | This server |
 | Per-attachment cap | 3 MB (M365 / Outlook.com), 25 MB (Google) | Upstream provider |
-| Inline mode (`GetEmailAttachment mode="inline"`) | 1 MB | This server |
+| Inline mode (`get_email_attachment mode="inline"`) | 1 MB | This server |
 | Server store per-item | Configurable (admin) | This server |
 
 Exceeding the total or per-attachment caps results in `McpException`
@@ -126,7 +126,7 @@ with a descriptive message — surface it to the user; don't retry blindly.
 ## Pitfalls
 
 - **Stash IDs are single-use** for sending; consume them by passing to
-  `SendEmail`. Re-stash if needed.
+  `send_email`. Re-stash if needed.
 - **IDs expire** (server-configurable, default minutes-to-hours). Treat
   them as transient — get-and-use within the same conversation turn
   when possible.

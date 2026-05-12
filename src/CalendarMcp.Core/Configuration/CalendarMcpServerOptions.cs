@@ -14,7 +14,7 @@ public static class CalendarMcpServerOptions
         "Unified access to email, calendar, and contacts across Microsoft 365, " +
         "Google Workspace/Gmail, Outlook.com, and IMAP/SMTP mailboxes, plus " +
         "read-only iCalendar (.ics) URLs and JSON-file calendar sources. " +
-        "Call the GetGuide tool (no arguments) for the index of in-depth " +
+        "Call the get_guide tool (no arguments) for the index of in-depth " +
         "topical guides covering accounts, email, calendar, contacts, " +
         "attachments, end-to-end scenarios, and per-provider behavior.";
 
@@ -22,11 +22,11 @@ public static class CalendarMcpServerOptions
         Calendar MCP exposes email, calendar, and contacts tools across multiple
         personal-information providers. Capabilities vary per configured account.
 
-        Start by calling `ListAccounts` to discover which accounts are configured
+        Start by calling `list_accounts` to discover which accounts are configured
         and what each one supports (email / calendar / contacts, read-only or read-write).
         Use the returned accountId values when calling other tools.
 
-        For detailed how-to playbooks on specific topics, call the `GetGuide` tool.
+        For detailed how-to playbooks on specific topics, call the `get_guide` tool.
         Call it with no arguments (or name='index') to see the list of available guides,
         then call it again with a topic name to read that guide.
 

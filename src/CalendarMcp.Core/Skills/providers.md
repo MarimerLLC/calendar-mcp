@@ -1,7 +1,7 @@
 # Providers
 
 Per-provider behavior, quirks, and capability nuances. The `provider`
-field returned by `ListAccounts` selects which of these applies to a
+field returned by `list_accounts` selects which of these applies to a
 given account.
 
 ## Microsoft 365 (`microsoft365`)
@@ -10,14 +10,14 @@ given account.
   silently on the server).
 - **Capabilities**: email, calendar, contacts — all read/write.
 - **API**: Microsoft Graph.
-- **Folders**: real folder structure. `MoveEmail` destinations accept
+- **Folders**: real folder structure. `move_email` destinations accept
   `inbox`, `archive`, `trash` (alias `deleteditems`), `spam` (alias
   `junkemail`), `drafts`, `sentitems`, or a folder ID.
 - **Attachments**: per-attachment cap **3 MB** (Graph limit). For
   bigger files, Graph supports an upload-session protocol that this
   server does not currently use — large attachments will fail.
 - **Recurring events**: returned as expanded occurrences in
-  `GetCalendarEvents`; not directly creatable through this server.
+  `get_calendar_events`; not directly creatable through this server.
 - **Default calendar** = the user's primary calendar in Outlook.
 
 ## Outlook.com / Hotmail (`outlook.com`)
@@ -33,14 +33,14 @@ given account.
 - **Auth**: Google OAuth.
 - **Capabilities**: email, calendar, contacts — all read/write.
 - **APIs**: Gmail API, Calendar API, People API.
-- **Folders → labels**: Gmail has no folders. `MoveEmail` destinations:
+- **Folders → labels**: Gmail has no folders. `move_email` destinations:
   - `inbox`, `trash`, `spam`, `archive` (archive = remove `INBOX` label)
   - Any other value is treated as a label ID (not a label *name*) — get
     label IDs from the Gmail label list (not currently exposed as a
     tool; ask the admin or check the email headers).
 - **Threads vs messages**: Gmail's natural unit is the thread. These
   tools operate on individual messages — the `id` you pass to
-  `GetEmailDetails` is a message ID, not a thread ID.
+  `get_email_details` is a message ID, not a thread ID.
 - **Attachment IDs**: typically `part-<n>` (e.g. `part-0`, `part-1`).
 - **Attachments**: 25 MB upper limit on the Gmail side.
 - **Contacts**: People API; phone/email types may be normalized
@@ -68,9 +68,9 @@ given account.
 - **Capabilities**: calendar — **read-only**.
 - **Use case**: subscribed feeds (sports schedules, school calendars,
   shared family calendars exported as `.ics`).
-- **`ListCalendars`**: returns a single calendar with `canEdit=false`.
-- **Write tools** (`CreateEvent`, `UpdateEvent`, `DeleteEvent`,
-  `RespondToEvent`) **will fail** — check `capabilities[].readOnly` first.
+- **`list_calendars`**: returns a single calendar with `canEdit=false`.
+- **Write tools** (`create_event`, `update_event`, `delete_event`,
+  `respond_to_event`) **will fail** — check `capabilities[].readOnly` first.
 - **Refresh**: the server polls the URL; events reflect the last
   successful fetch, which can lag.
 

@@ -6,7 +6,7 @@ else you do here.
 
 ## Discover accounts first
 
-Call **`ListAccounts`** at the start of any new session. It returns:
+Call **`list_accounts`** at the start of any new session. It returns:
 
 ```json
 {
@@ -42,13 +42,13 @@ Use these fields to decide what's possible before calling other tools:
 - **`provider`** — informs behavior (Gmail uses labels, M365 uses folders,
   ICS is read-only, etc.). See `providers` for details.
 - **`domains`** — the email domains this account "owns." Used by
-  smart-routing in `SendEmail`.
+  smart-routing in `send_email`.
 - **`capabilities`** — which categories the account supports and whether
   they are read-only. Always check this before calling a write tool.
 
 ## Provider type values
 
-The `provider` field returned by `ListAccounts` uses these canonical
+The `provider` field returned by `list_accounts` uses these canonical
 strings:
 
 | Value | Description |
@@ -66,18 +66,18 @@ Most tools accept `accountId` as optional. When you omit it, the server
 either targets the first configured account or uses smart routing — both
 can silently target the wrong account. Treat the `accountId` parameter as
 effectively required for any tool that writes data
-(`SendEmail`, `CreateEvent`, `CreateContact`, `DeleteEmail`, etc.).
+(`send_email`, `create_event`, `create_contact`, `delete_email`, etc.).
 
 The exceptions where omitting `accountId` is fine:
 
-- `GetEmails`, `SearchEmails`, `ListCalendars`, `GetContacts`,
-  `SearchContacts` — these fan out across all enabled accounts when
+- `get_emails`, `search_emails`, `list_calendars`, `get_contacts`,
+  `search_contacts` — these fan out across all enabled accounts when
   `accountId` is omitted, which is often what you want.
 - `get_contextual_email_summary` — always fans out across all accounts.
 
 ## Capability checking before write operations
 
-Before calling a write tool (e.g. `CreateEvent`), confirm the chosen
+Before calling a write tool (e.g. `create_event`), confirm the chosen
 account isn't read-only for that category:
 
 ```text
@@ -86,12 +86,12 @@ if !capability || capability.readOnly == true:
   pick a different account (or surface an error to the user)
 ```
 
-This avoids calling `CreateEvent` against an `ics` or `json` account,
+This avoids calling `create_event` against an `ics` or `json` account,
 which will fail at the provider layer with a less helpful message.
 
-## Smart routing in `SendEmail`
+## Smart routing in `send_email`
 
-`SendEmail` accepts a missing `accountId`. When omitted:
+`send_email` accepts a missing `accountId`. When omitted:
 
 1. Extract domain from the first recipient (`to[0]` after `@`).
 2. Look up accounts whose `domains` array contains that domain.
@@ -106,15 +106,15 @@ received the original).
 
 ## Multi-account fan-out
 
-`GetEmails`, `SearchEmails`, and `get_contextual_email_summary` query
+`get_emails`, `search_emails`, and `get_contextual_email_summary` query
 all accounts in parallel and merge results, sorting newest-first. Each
 returned email carries its own `accountId` — use that to call
-`GetEmailDetails`, `MoveEmail`, etc. Never assume the original
+`get_email_details`, `move_email`, etc. Never assume the original
 `accountId` you might have used for filtering; always echo it back from
 the result.
 
 ## Disabled accounts
 
-Accounts can be marked disabled via the admin UI. `ListAccounts`
+Accounts can be marked disabled via the admin UI. `list_accounts`
 returns only enabled accounts. If a previously-known `accountId` stops
-working, re-call `ListAccounts` to refresh.
+working, re-call `list_accounts` to refresh.

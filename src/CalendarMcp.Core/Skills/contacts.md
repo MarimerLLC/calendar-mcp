@@ -4,27 +4,27 @@ Contact tools are available on Microsoft 365, Google (People API),
 Outlook.com, and optionally JSON-file accounts. IMAP and ICS accounts
 do not expose contacts.
 
-Always confirm capability via `ListAccounts` before calling a contact
+Always confirm capability via `list_accounts` before calling a contact
 tool against an account.
 
 ## Tool reference
 
-### `GetContacts(accountId?, count=50)`
+### `get_contacts(accountId?, count=50)`
 
 Lists contacts. Fans out across contact-capable accounts when
 `accountId` is omitted. Returns lightweight metadata.
 
-### `SearchContacts(query, accountId?, count=20)`
+### `search_contacts(query, accountId?, count=20)`
 
 Full-text search across name, email, company. Fans out across all
 contact-capable accounts when `accountId` is omitted.
 
-### `GetContactDetails(accountId, contactId)`
+### `get_contact_details(accountId, contactId)`
 
 Returns the full contact record including all email addresses, phone
 numbers, addresses, and notes.
 
-### `CreateContact(displayName, accountId?, givenName?, surname?, email?, phone?, jobTitle?, companyName?, notes?)`
+### `create_contact(displayName, accountId?, givenName?, surname?, email?, phone?, jobTitle?, companyName?, notes?)`
 
 - `displayName` is required.
 - `email` and `phone` accept a single value or a comma-separated list.
@@ -32,12 +32,12 @@ numbers, addresses, and notes.
   smart routing — pass it explicitly if you care which account ends up
   with the contact.
 
-### `UpdateContact(accountId, contactId, ...)`
+### `update_contact(accountId, contactId, ...)`
 
-Same shape as `CreateContact` but with `contactId` and all other fields
+Same shape as `create_contact` but with `contactId` and all other fields
 optional. Pass only what changes.
 
-### `DeleteContact(accountId, contactId)`
+### `delete_contact(accountId, contactId)`
 
 Permanent on most providers; no per-tool soft-delete or recovery.
 
@@ -46,18 +46,18 @@ Permanent on most providers; no per-tool soft-delete or recovery.
 ### Find a contact by name or company
 
 ```
-SearchContacts(query="Acme")    // fans out across accounts
+search_contacts(query="Acme")    // fans out across accounts
 → examine results, pick the right one
-→ GetContactDetails(accountId, contactId) for full info
+→ get_contact_details(accountId, contactId) for full info
 ```
 
 ### Promote an email sender to a contact
 
 ```
-GetEmailDetails(accountId, emailId)    // get from, fromName
-SearchContacts(query=fromEmail)        // check for an existing record
+get_email_details(accountId, emailId)    // get from, fromName
+search_contacts(query=fromEmail)        // check for an existing record
 → if no match:
-   CreateContact(
+   create_contact(
      accountId=<contact-capable account>,
      displayName=fromName,
      email=fromEmail
@@ -70,7 +70,7 @@ user.
 
 ### Bulk import
 
-There is no bulk-create tool. Call `CreateContact` once per record;
+There is no bulk-create tool. Call `create_contact` once per record;
 use the per-call response to detect duplicates.
 
 ## Pitfalls
