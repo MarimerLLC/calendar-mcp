@@ -126,7 +126,7 @@ public class Program
 
         // Configure MCP server with HTTP/SSE transport and register tools
         builder.Services
-            .AddMcpServer()
+            .AddMcpServer(CalendarMcpServerOptions.Configure)
             .WithHttpTransport()
             .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
