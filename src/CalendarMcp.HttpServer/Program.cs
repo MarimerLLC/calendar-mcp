@@ -126,9 +126,10 @@ public class Program
 
         // Configure MCP server with HTTP/SSE transport and register tools
         builder.Services
-            .AddMcpServer()
+            .AddMcpServer(CalendarMcpServerOptions.Configure)
             .WithHttpTransport()
             .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
+            .WithTools<CalendarMcp.Core.Tools.GetGuideTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailDetailsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailAttachmentTool>()
@@ -232,7 +233,7 @@ public class Program
         {
             Log.Information("Calendar MCP HTTP Server listening on {Url}", url);
         }
-        Log.Information("  MCP endpoint:  /mcp");
+        Log.Information("  MCP endpoint:  /");
         Log.Information("  Admin API:     /admin");
         Log.Information("  Admin UI:      /admin/ui");
         Log.Information("  API Docs:      /scalar/v1");
