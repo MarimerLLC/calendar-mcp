@@ -61,6 +61,46 @@ public sealed class CalendarPrompts
             """;
     }
 
+    [McpServerPrompt(Name = "respond_to_invite"), Description(
+        "Reviews a meeting invite — including conflicts — and submits an accept / tentative / decline response " +
+        "from the correct account.")]
+    public string RespondToInvite(
+        [Description("Event ID of the invite. Obtain from get_calendar_events or the originating email thread.")] string eventId,
+        [Description("Account ID that received the invite. Required — defaulting to the first account often picks the wrong calendar.")] string accountId,
+        [Description("Calendar ID the event lives on. Obtain from get_calendar_events.")] string calendarId,
+        [Description("Response: 'accept', 'tentative', or 'decline'.")] string response,
+        [Description("IANA timezone name (e.g. 'America/Chicago'). Required.")] string timeZone,
+        [Description("Optional note to send to the organizer with the response.")] string? comment = null)
+    {
+        var commentHint = string.IsNullOrWhiteSpace(comment)
+            ? "No comment was provided. Ask me if I want to add one before sending the response."
+            : $"Include this comment with the response: \"{comment}\"";
+
+        return $"""
+            Please help me respond to a meeting invite. Follow these steps:
+
+            1. Call get_calendar_event_details with accountId="{accountId}", calendarId="{calendarId}", eventId="{eventId}", timeZone="{timeZone}".
+               Review subject, time (in {timeZone}), location, attendees, and body.
+
+            2. Check for conflicts:
+               Call get_calendar_events with timeZone="{timeZone}", accountId="{accountId}", and a startDate/endDate covering the invite's day.
+               Report any overlapping events.
+
+            3. Summarise the invite + conflicts to me and confirm I want to respond "{response}".
+
+            4. {commentHint}
+
+            5. Call respond_to_event:
+               - eventId="{eventId}"
+               - accountId="{accountId}"  (must match the account that received the invite)
+               - calendarId="{calendarId}"
+               - response="{response}"
+               - comment=<the comment if provided>
+
+            6. Confirm the response was submitted.
+            """;
+    }
+
     [McpServerPrompt(Name = "schedule_meeting"), Description(
         "Guides the assistant to find available times and create a calendar event. " +
         "Provide the meeting title, duration, and attendee email addresses to get started.")]

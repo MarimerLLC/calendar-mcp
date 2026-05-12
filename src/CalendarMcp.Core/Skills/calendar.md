@@ -74,6 +74,26 @@ attendees automatically.
   configured account, which typically does not have the invitation.
 - `comment` is optional message text sent with the response.
 
+## Prompt shortcuts
+
+This server exposes MCP prompts that wrap the common calendar
+workflows. When the host supports prompts, prefer them:
+
+- **`daily_briefing`** — today's events + unread email across all
+  accounts. Pass `timeZone`.
+- **`week_ahead`** — 7-day overview grouped by day, with highlights.
+  Pass `timeZone`.
+- **`schedule_meeting`** — find an open slot and create the event.
+  Pass `title`, `durationMinutes`, comma-separated `attendees`,
+  `timeZone`, and optional `preferredDate`.
+- **`respond_to_invite`** — review an invite with conflict check, then
+  accept / tentative / decline from the correct account. Pass
+  `eventId`, `accountId`, `calendarId`, `response`, `timeZone`, and an
+  optional `comment`.
+
+If the user's request matches one of these, invoke the prompt rather
+than orchestrating the steps below by hand.
+
 ## Common patterns
 
 ### Show my week

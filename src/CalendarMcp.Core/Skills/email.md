@@ -97,6 +97,27 @@ that may have been sent to the wrong account ("mismatches"), and
 profiles each account's "persona" (top sender domains, primary
 topics). Use for daily/weekly triage, not for routine lookups.
 
+## Prompt shortcuts
+
+This server exposes MCP prompts that wrap the most common email
+workflows. When the host supports prompts, prefer them over manual
+orchestration:
+
+- **`email_triage`** — wraps the "triage unread" pattern below. Pass
+  optional `focusTopics` to bias the classification.
+- **`draft_reply`** — wraps the "reply with the same account that
+  received" pattern. Pass `emailId`, `accountId`, and a `tone`.
+- **`find_emails_about`** — wraps the "find then read" pattern as a
+  topic search + summary. Pass a `topic` (and optional `accountId`).
+- **`forward_with_attachments`** — wraps the forward flow including the
+  non-obvious attachment stash sequence (see `attachments`). Pass
+  `emailId`, `accountId`, `forwardTo`, and an optional `note`.
+- **`bulk_unsubscribe`** — wraps the unsubscribe-then-cleanup pattern.
+  Pass an optional `searchQuery`, `accountId`, and `deleteAfter` flag.
+
+If the user's request matches one of these, invoke the prompt rather
+than rebuilding the steps yourself.
+
 ## Common patterns
 
 ### Triage unread

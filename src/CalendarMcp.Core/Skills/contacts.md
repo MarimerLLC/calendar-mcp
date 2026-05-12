@@ -41,6 +41,13 @@ optional. Pass only what changes.
 
 Permanent on most providers; no per-tool soft-delete or recovery.
 
+## Prompt shortcuts
+
+- **`contact_summary`** — builds a cross-account profile for a person
+  by name or email, including recent correspondence. Pass
+  `nameOrEmail`. When the host supports prompts, prefer this over
+  hand-wiring `search_contacts` + `get_contact_details` + `search_emails`.
+
 ## Common patterns
 
 ### Find a contact by name or company
