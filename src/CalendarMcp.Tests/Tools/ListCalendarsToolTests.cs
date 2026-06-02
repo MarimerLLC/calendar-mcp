@@ -88,4 +88,39 @@ public class ListCalendarsToolTests
         factExp.Verify();
         provExp.Verify();
     }
+
+    [TestMethod]
+    public async Task ListCalendars_AllAccounts_SkipsEmailOnlyAccounts()
+    {
+        // The email-only (IMAP) account is enabled but must be skipped in the fan-out so
+        // ListCalendarsAsync (which it doesn't support) is never attempted on it.
+        var calendarAccount = TestData.CreateAccount(id: "acc-cal", provider: "microsoft365");
+        var emailOnlyAccount = TestData.CreateAccount(id: "acc-imap", provider: "imap");
+        var calendars = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-1", accountId: "acc-cal") };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([calendarAccount, emailOnlyAccount]);
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.ListCalendarsAsync("acc-cal", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>(calendars));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        // Only the calendar-capable account's provider is ever resolved.
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new ListCalendarsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<ListCalendarsTool>.Instance);
+
+        var result = await tool.ListCalendars();
+        var doc = JsonDocument.Parse(result);
+
+        var calendarsArray = doc.RootElement.GetProperty("calendars");
+        Assert.AreEqual(1, calendarsArray.GetArrayLength());
+        Assert.AreEqual("acc-cal", calendarsArray[0].GetProperty("accountId").GetString());
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
 }

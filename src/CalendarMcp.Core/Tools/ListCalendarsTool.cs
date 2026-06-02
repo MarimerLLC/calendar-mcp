@@ -30,6 +30,13 @@ public sealed class ListCalendarsTool(
             validAccounts = accountRegistry.GetEnabledAccounts().ToList();
             if (validAccounts.Count == 0)
                 throw new McpException("No accounts found");
+
+            // Skip email-only accounts (e.g. IMAP) — listing calendars on them would throw
+            // NotSupportedException. An explicit accountId is left untouched so a direct
+            // request still surfaces the provider error.
+            foreach (var skipped in validAccounts.Where(a => !AccountCapabilities.HasCalendar(a)))
+                logger.LogInformation("Skipping account {AccountId} in list_calendars: no calendar capability", skipped.Id);
+            validAccounts = validAccounts.Where(AccountCapabilities.HasCalendar).ToList();
         }
         else
         {
