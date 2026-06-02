@@ -607,8 +607,10 @@ public class M365ProviderService : IM365ProviderService
 
             // Use CalendarView for date range queries (it expands recurring events)
             Microsoft.Graph.Models.EventCollectionResponse? events;
-            
-            if (string.IsNullOrEmpty(calendarId))
+
+            // "primary" is our alias for the default calendar (Graph has no such id), so treat
+            // it like an omitted calendarId — mirrors GetCalendarEventDetailsAsync below.
+            if (string.IsNullOrEmpty(calendarId) || calendarId == "primary")
             {
                 // Query the default calendar
                 events = await graphClient.Me.Calendar.CalendarView.GetAsync(config =>
