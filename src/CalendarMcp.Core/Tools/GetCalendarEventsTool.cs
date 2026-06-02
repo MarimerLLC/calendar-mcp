@@ -35,10 +35,18 @@ public sealed class GetCalendarEventsTool(
         //   - accountId provided        -> that single account
         //   - calendarId provided alone -> resolve the owning account automatically
         //   - neither provided          -> all enabled accounts
+        // When an explicit accountId is paired with a calendarId, we can't tell from an empty
+        // result whether the calendar is genuinely empty or the calendarId simply doesn't exist
+        // in that account. Validate it against ListCalendarsAsync and surface a warning if missing.
+        // The calendarId-only path (below) already validates via its account-resolution lookup,
+        // so this flag stays false there to avoid a redundant ListCalendarsAsync call.
+        var validateCalendarId = false;
+
         List<AccountInfo> validAccounts;
         if (!string.IsNullOrEmpty(accountId))
         {
             validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+            validateCalendarId = !string.IsNullOrEmpty(calendarId);
         }
         else if (!string.IsNullOrEmpty(calendarId))
         {
@@ -104,6 +112,34 @@ public sealed class GetCalendarEventsTool(
                 try
                 {
                     var provider = providerFactory.GetProvider(account!.Provider);
+
+                    if (validateCalendarId)
+                    {
+                        // Best-effort check that the supplied calendarId actually exists in this
+                        // account. If it doesn't, warn and skip the (pointless) events fetch.
+                        // A ListCalendarsAsync failure shouldn't block the read, so we fall through.
+                        try
+                        {
+                            var calendars = await provider.ListCalendarsAsync(account.Id, CancellationToken.None);
+                            if (!calendars.Any(c => c.Id == calendarId))
+                            {
+                                lock (warnings)
+                                {
+                                    warnings.Add(new
+                                    {
+                                        accountId = account.Id,
+                                        warning = $"calendarId '{calendarId}' was not found in account '{account.Id}'. Use list_calendars to obtain a valid calendar id."
+                                    });
+                                }
+                                return Enumerable.Empty<CalendarEvent>();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "Error validating calendarId {CalendarId} for account {AccountId}", calendarId, account.Id);
+                        }
+                    }
+
                     var events = await provider.GetCalendarEventsAsync(
                         account.Id, calendarId, resolvedStart, resolvedEnd, count, CancellationToken.None);
                     return events;
