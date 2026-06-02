@@ -101,29 +101,112 @@ public class GetCalendarEventsToolTests
     }
 
     [TestMethod]
-    public async Task GetCalendarEvents_NullAccountId_ThrowsMcpException()
+    public async Task GetCalendarEvents_NullAccountId_QueriesAllEnabledAccounts()
+    {
+        var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var acc2 = TestData.CreateAccount(id: "acc-2", provider: "google");
+        var events1 = new List<CalendarEvent>
+        {
+            TestData.CreateEvent(id: "ev1", accountId: "acc-1", subject: "M365 Meeting",
+                start: new DateTime(2025, 1, 10, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 10, 16, 0, 0, DateTimeKind.Utc))
+        };
+        var events2 = new List<CalendarEvent>
+        {
+            TestData.CreateEvent(id: "ev2", accountId: "acc-2", subject: "Google Meeting",
+                start: new DateTime(2025, 1, 9, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 9, 16, 0, 0, DateTimeKind.Utc))
+        };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([acc1, acc2]);
+
+        var prov1Exp = new IProviderServiceCreateExpectations();
+        prov1Exp.Setups.GetCalendarEventsAsync(
+            "acc-1", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events1));
+
+        var prov2Exp = new IProviderServiceCreateExpectations();
+        prov2Exp.Setups.GetCalendarEventsAsync(
+            "acc-2", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events2));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(prov1Exp.Instance());
+        factExp.Setups.GetProvider("google").ReturnValue(prov2Exp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null);
+        var doc = JsonDocument.Parse(result);
+        var eventsArray = doc.RootElement.GetProperty("events");
+
+        // Events from both accounts are merged and sorted by start time (ev2 is earlier).
+        Assert.AreEqual(2, eventsArray.GetArrayLength());
+        Assert.AreEqual("ev2", eventsArray[0].GetProperty("id").GetString());
+        Assert.AreEqual("ev1", eventsArray[1].GetProperty("id").GetString());
+
+        regExp.Verify();
+        factExp.Verify();
+        prov1Exp.Verify();
+        prov2Exp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_EmptyAccountId_QueriesAllEnabledAccounts()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var events = new List<CalendarEvent>
+        {
+            TestData.CreateEvent(id: "ev1", accountId: "acc-1", subject: "Meeting",
+                start: new DateTime(2025, 1, 10, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 10, 16, 0, 0, DateTimeKind.Utc))
+        };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([account]);
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetCalendarEventsAsync(
+            "acc-1", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "");
+        var doc = JsonDocument.Parse(result);
+        var eventsArray = doc.RootElement.GetProperty("events");
+
+        Assert.AreEqual(1, eventsArray.GetArrayLength());
+        Assert.AreEqual("ev1", eventsArray[0].GetProperty("id").GetString());
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_NoAccountsConfigured_ThrowsMcpException()
     {
         var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([]);
+
         var factExp = new IProviderServiceFactoryCreateExpectations();
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
         var ex = await Assert.ThrowsExactlyAsync<McpException>(
             () => tool.GetCalendarEvents(TestTimeZone, Start, End, null));
-        Assert.AreEqual("accountId is required", ex.Message);
-    }
-
-    [TestMethod]
-    public async Task GetCalendarEvents_EmptyAccountId_ThrowsMcpException()
-    {
-        var regExp = new IAccountRegistryCreateExpectations();
-        var factExp = new IProviderServiceFactoryCreateExpectations();
-        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
-            NullLogger<GetCalendarEventsTool>.Instance);
-
-        var ex = await Assert.ThrowsExactlyAsync<McpException>(
-            () => tool.GetCalendarEvents(TestTimeZone, Start, End, ""));
-        Assert.AreEqual("accountId is required", ex.Message);
+        Assert.AreEqual("No accounts found", ex.Message);
+        regExp.Verify();
     }
 
     [TestMethod]

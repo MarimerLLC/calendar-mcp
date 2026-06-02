@@ -33,8 +33,9 @@ used.
   output and how `startDate`/`endDate` are interpreted.
 - `startDate` defaults to today (in `timeZone`); `endDate` defaults to
   7 days after `startDate`.
-- `accountId` is required unless `calendarId` uniquely identifies one
-  account (the server resolves it).
+- `accountId` fans out across all enabled accounts when omitted (like
+  `list_calendars`). Provide it to scope to one account, or provide
+  `calendarId` alone to resolve the account when it uniquely identifies one.
 - `count` is per-account.
 
 Returns events sorted by start time, each with `id, accountId,
