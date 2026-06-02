@@ -18,12 +18,12 @@ public sealed class GetCalendarEventsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetCalendarEventsTool> logger)
 {
-    [McpServerTool, Description("Get calendar events for a date range from a specific account. The timeZone parameter is required. The accountId parameter is required unless calendarId uniquely identifies a calendar across all accounts, in which case the account is resolved automatically. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
+    [McpServerTool, Description("Get calendar events for a date range from one or all accounts. The timeZone parameter is required. Omit accountId (and calendarId) to query all enabled accounts at once; provide accountId to scope to one account, or provide calendarId alone to resolve the account automatically when it uniquely identifies a single account. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
     public async Task<string> GetCalendarEvents(
         [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone. Required.")] string timeZone,
         [Description("Start of the date range (ISO 8601 format, e.g. `2026-02-20`). Defaults to today.")] DateTime? startDate = null,
         [Description("End of the date range, inclusive (ISO 8601 format, e.g. `2026-02-27`). Defaults to 7 days after startDate.")] DateTime? endDate = null,
-        [Description("Account ID to query. Obtain from list_accounts. Required unless calendarId uniquely identifies a single account.")] string? accountId = null,
+        [Description("Account ID to query, or omit to query all enabled accounts. Obtain from list_accounts.")] string? accountId = null,
         [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars. If accountId is omitted, calendarId is used to identify the account automatically when it exists in exactly one account.")] string? calendarId = null,
         [Description("Maximum number of events to return per account (default 50)")] int count = 50)
     {
@@ -31,11 +31,17 @@ public sealed class GetCalendarEventsTool(
         if (tz == null)
             throw new McpException($"Invalid IANA timezone: '{timeZone}'. Use a valid IANA timezone name such as 'America/Chicago', 'Europe/London', or 'Asia/Tokyo'.");
 
-        if (string.IsNullOrEmpty(accountId))
+        // Determine which accounts to query (mirrors search_emails / list_calendars):
+        //   - accountId provided        -> that single account
+        //   - calendarId provided alone -> resolve the owning account automatically
+        //   - neither provided          -> all enabled accounts
+        List<AccountInfo> validAccounts;
+        if (!string.IsNullOrEmpty(accountId))
         {
-            if (string.IsNullOrEmpty(calendarId))
-                throw new McpException("accountId is required");
-
+            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+        }
+        else if (!string.IsNullOrEmpty(calendarId))
+        {
             // calendarId provided but no accountId — try to resolve the account automatically
             try
             {
@@ -72,19 +78,25 @@ public sealed class GetCalendarEventsTool(
                 logger.LogError(ex, "Error resolving accountId from calendarId {CalendarId}", calendarId);
                 throw new McpException("Failed to resolve account from calendarId.", ex);
             }
+
+            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+        }
+        else
+        {
+            // Neither accountId nor calendarId supplied — query all enabled accounts.
+            validAccounts = accountRegistry.GetEnabledAccounts().ToList();
+            if (validAccounts.Count == 0)
+                throw new McpException("No accounts found");
         }
 
         var resolvedStart = startDate ?? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;
         var resolvedEnd = endDate.HasValue ? endDate.Value.Date.AddDays(1) : resolvedStart.AddDays(7);
 
-        logger.LogInformation("Getting calendar events: startDate={StartDate}, endDate={EndDate}, accountId={AccountId}, count={Count}, timeZone={TimeZone}",
-            resolvedStart, resolvedEnd, accountId, count, timeZone);
+        logger.LogInformation("Getting calendar events: startDate={StartDate}, endDate={EndDate}, accountCount={AccountCount}, count={Count}, timeZone={TimeZone}",
+            resolvedStart, resolvedEnd, validAccounts.Count, count, timeZone);
 
         try
         {
-            var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
-            var validAccounts = new List<AccountInfo> { account };
-
             // Query all accounts in parallel
             var warnings = new List<object>();
             var tasks = validAccounts.Select(async account =>
