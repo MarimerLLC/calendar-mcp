@@ -590,8 +590,10 @@ public class OutlookComProviderService : IOutlookComProviderService
             var end = endDate ?? DateTime.UtcNow.Date.AddDays(30);
 
             Microsoft.Graph.Models.EventCollectionResponse? events;
-            
-            if (string.IsNullOrEmpty(calendarId))
+
+            // "primary" is our alias for the default calendar (Graph has no such id), so treat
+            // it like an omitted calendarId — mirrors GetCalendarEventDetailsAsync below.
+            if (string.IsNullOrEmpty(calendarId) || calendarId == "primary")
             {
                 events = await graphClient.Me.Calendar.CalendarView.GetAsync(config =>
                 {

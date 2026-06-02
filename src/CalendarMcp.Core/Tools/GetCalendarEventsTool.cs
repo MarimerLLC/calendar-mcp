@@ -24,7 +24,7 @@ public sealed class GetCalendarEventsTool(
         [Description("Start of the date range (ISO 8601 format, e.g. `2026-02-20`). Defaults to today.")] DateTime? startDate = null,
         [Description("End of the date range, inclusive (ISO 8601 format, e.g. `2026-02-27`). Defaults to 7 days after startDate.")] DateTime? endDate = null,
         [Description("Account ID to query, or omit to query all enabled accounts. Obtain from list_accounts.")] string? accountId = null,
-        [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars. If accountId is omitted, calendarId is used to identify the account automatically when it exists in exactly one account.")] string? calendarId = null,
+        [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars, or pass 'primary' for the account's default calendar (also the value returned for default-calendar events). Requires accountId when using 'primary'. If accountId is omitted, calendarId is used to identify the account automatically when it exists in exactly one account.")] string? calendarId = null,
         [Description("Maximum number of events to return per account (default 50)")] int count = 50)
     {
         var tz = TimeZoneHelper.TryGetTimeZone(timeZone);
@@ -46,7 +46,12 @@ public sealed class GetCalendarEventsTool(
         if (!string.IsNullOrEmpty(accountId))
         {
             validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
-            validateCalendarId = !string.IsNullOrEmpty(calendarId);
+            // "primary" is a universal alias for each account's default calendar. It never
+            // appears in ListCalendarsAsync output (providers return real calendar ids), and
+            // it's what the tool emits as the calendarId for default-calendar events — so skip
+            // validation and let the provider resolve it. Validating it would wrongly warn
+            // "not found" and skip the fetch.
+            validateCalendarId = !string.IsNullOrEmpty(calendarId) && !IsPrimaryAlias(calendarId);
         }
         else if (!string.IsNullOrEmpty(calendarId))
         {
@@ -224,4 +229,12 @@ public sealed class GetCalendarEventsTool(
             throw new McpException("Failed to get calendar events.", ex);
         }
     }
+
+    /// <summary>
+    /// "primary" is the alias every provider uses for an account's default calendar, and the
+    /// calendarId the tool emits for default-calendar events. It is accepted as input but is
+    /// never returned by ListCalendarsAsync, so it must bypass calendarId validation.
+    /// </summary>
+    private static bool IsPrimaryAlias(string? calendarId) =>
+        string.Equals(calendarId, "primary", StringComparison.Ordinal);
 }

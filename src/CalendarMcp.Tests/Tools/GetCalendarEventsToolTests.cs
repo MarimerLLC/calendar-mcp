@@ -230,7 +230,9 @@ public class GetCalendarEventsToolTests
         var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
             NullLogger<GetCalendarEventsTool>.Instance);
 
-        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-1", "primary");
+        // Use a genuinely non-existent id here ("primary" is a default-calendar alias that is
+        // intentionally accepted without validation — see the primary-alias test).
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-1", "cal-missing");
         var doc = JsonDocument.Parse(result);
 
         Assert.AreEqual(0, doc.RootElement.GetProperty("events").GetArrayLength());
@@ -239,9 +241,54 @@ public class GetCalendarEventsToolTests
         Assert.AreEqual(1, warnings.GetArrayLength());
         Assert.AreEqual("acc-1", warnings[0].GetProperty("accountId").GetString());
         var warningText = warnings[0].GetProperty("warning").GetString();
-        Assert.IsTrue(warningText!.Contains("primary"));
+        Assert.IsTrue(warningText!.Contains("cal-missing"));
         Assert.IsTrue(warningText.Contains("acc-1"));
         Assert.IsTrue(warningText.Contains("list_calendars"));
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_AccountIdWithPrimaryAlias_SkipsValidationAndReturnsEvents()
+    {
+        // "primary" is the default-calendar alias and is never returned by ListCalendarsAsync,
+        // so it must bypass calendarId validation rather than warn "not found". The provider
+        // receives "primary" and resolves it to the default calendar.
+        var account = TestData.CreateAccount(id: "rockyl", provider: "outlook.com");
+        var events = new List<CalendarEvent>
+        {
+            TestData.CreateEvent(id: "ev1", accountId: "rockyl", calendarId: "primary", subject: "Meeting",
+                start: new DateTime(2025, 1, 10, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 10, 16, 0, 0, DateTimeKind.Utc))
+        };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("rockyl")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        // ListCalendarsAsync must NOT be called for the "primary" alias — no validation needed.
+        provExp.Setups.GetCalendarEventsAsync(
+            "rockyl", "primary", Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("outlook.com").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "rockyl", "primary");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual(1, doc.RootElement.GetProperty("events").GetArrayLength());
+        Assert.AreEqual("ev1", doc.RootElement.GetProperty("events")[0].GetProperty("id").GetString());
+        Assert.AreEqual("primary", doc.RootElement.GetProperty("events")[0].GetProperty("calendarId").GetString());
+        // No "not found" warning for the primary alias.
+        Assert.AreEqual(JsonValueKind.Null, doc.RootElement.GetProperty("warnings").ValueKind);
 
         regExp.Verify();
         factExp.Verify();
