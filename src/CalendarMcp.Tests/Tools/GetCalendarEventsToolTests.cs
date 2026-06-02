@@ -210,6 +210,89 @@ public class GetCalendarEventsToolTests
     }
 
     [TestMethod]
+    public async Task GetCalendarEvents_AccountIdWithMissingCalendarId_WarnsAndReturnsEmpty()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var calendars = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-real", accountId: "acc-1") };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>(calendars));
+        // GetCalendarEventsAsync must NOT be called when the calendarId doesn't exist.
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-1", "primary");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("events").GetArrayLength());
+
+        var warnings = doc.RootElement.GetProperty("warnings");
+        Assert.AreEqual(1, warnings.GetArrayLength());
+        Assert.AreEqual("acc-1", warnings[0].GetProperty("accountId").GetString());
+        var warningText = warnings[0].GetProperty("warning").GetString();
+        Assert.IsTrue(warningText!.Contains("primary"));
+        Assert.IsTrue(warningText.Contains("acc-1"));
+        Assert.IsTrue(warningText.Contains("list_calendars"));
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_AccountIdWithValidCalendarId_ReturnsEventsNoWarning()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var calendars = new List<CalendarInfo> { TestData.CreateCalendar(id: "cal-work", accountId: "acc-1") };
+        var events = new List<CalendarEvent>
+        {
+            TestData.CreateEvent(id: "ev1", accountId: "acc-1", subject: "Meeting",
+                start: new DateTime(2025, 1, 10, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 10, 16, 0, 0, DateTimeKind.Utc))
+        };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>(calendars));
+        provExp.Setups.GetCalendarEventsAsync(
+            "acc-1", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        // The provider is resolved once per account and reused for both the calendarId
+        // validation and the events fetch.
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-1", "cal-work");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual(1, doc.RootElement.GetProperty("events").GetArrayLength());
+        Assert.AreEqual("ev1", doc.RootElement.GetProperty("events")[0].GetProperty("id").GetString());
+        Assert.AreEqual(JsonValueKind.Null, doc.RootElement.GetProperty("warnings").ValueKind);
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
     public async Task GetCalendarEvents_NullAccountIdWithCalendarId_SingleMatch_ResolvesAccount()
     {
         var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
