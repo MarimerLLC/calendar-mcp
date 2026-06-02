@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Text.Json;
-using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -33,7 +32,8 @@ public sealed class ListAccountsTool(
                     provider = a.Provider,
                     displayName = a.DisplayName,
                     domains = a.Domains,
-                    capabilities = GetAccountCapabilities(a)
+                    capabilities = AccountCapabilities.GetCapabilities(a)
+                        .Select(c => new { name = c.Name, readOnly = c.ReadOnly })
                 })
             };
 
@@ -47,68 +47,5 @@ public sealed class ListAccountsTool(
             logger.LogError(ex, "Error listing accounts");
             throw new McpException("Failed to list accounts.", ex);
         }
-    }
-
-    /// <summary>
-    /// Determines capabilities for an account based on its provider type and configuration.
-    /// </summary>
-    private static List<object> GetAccountCapabilities(AccountInfo account)
-    {
-        var provider = account.Provider.ToLowerInvariant();
-
-        return provider switch
-        {
-            "microsoft365" or "m365" => [
-                new { name = "calendar", readOnly = false },
-                new { name = "email", readOnly = false },
-                new { name = "contacts", readOnly = false }
-            ],
-            "google" or "gmail" or "google workspace" => [
-                new { name = "calendar", readOnly = false },
-                new { name = "email", readOnly = false },
-                new { name = "contacts", readOnly = false }
-            ],
-            "outlook.com" or "outlook" or "hotmail" => [
-                new { name = "calendar", readOnly = false },
-                new { name = "email", readOnly = false },
-                new { name = "contacts", readOnly = false }
-            ],
-            "ics" or "icalendar" => [
-                new { name = "calendar", readOnly = true }
-            ],
-            "imap" or "imap-smtp" => [
-                new { name = "email", readOnly = false }
-            ],
-            "json" or "json-calendar" => GetJsonCapabilities(account),
-            _ => [
-                new { name = "calendar", readOnly = false }
-            ]
-        };
-    }
-
-    /// <summary>
-    /// JSON accounts have optional email and contacts support depending on configured file paths.
-    /// </summary>
-    private static List<object> GetJsonCapabilities(AccountInfo account)
-    {
-        var config = account.ProviderConfig;
-        var capabilities = new List<object>
-        {
-            new { name = "calendar", readOnly = true }
-        };
-
-        if (config.ContainsKey("emailsFilePath") && !string.IsNullOrEmpty(config["emailsFilePath"])
-            || config.ContainsKey("emailsOneDrivePath") && !string.IsNullOrEmpty(config["emailsOneDrivePath"]))
-        {
-            capabilities.Add(new { name = "email", readOnly = true });
-        }
-
-        if (config.ContainsKey("contactsFilePath") && !string.IsNullOrEmpty(config["contactsFilePath"])
-            || config.ContainsKey("contactsOneDrivePath") && !string.IsNullOrEmpty(config["contactsOneDrivePath"]))
-        {
-            capabilities.Add(new { name = "contacts", readOnly = true });
-        }
-
-        return capabilities;
     }
 }

@@ -70,10 +70,16 @@ effectively required for any tool that writes data
 
 The exceptions where omitting `accountId` is fine:
 
-- `get_emails`, `search_emails`, `list_calendars`, `get_contacts`,
-  `search_contacts` — these fan out across all enabled accounts when
-  `accountId` is omitted, which is often what you want.
+- `get_emails`, `search_emails`, `list_calendars`, `get_calendar_events`,
+  `get_contacts`, `search_contacts` — these fan out across all enabled
+  accounts when `accountId` is omitted, which is often what you want.
 - `get_contextual_email_summary` — always fans out across all accounts.
+
+The calendar fan-outs (`list_calendars`, `get_calendar_events`)
+automatically skip accounts that lack a `calendar` capability (e.g.
+email-only IMAP accounts), so those never produce errors or warnings.
+Targeting such an account explicitly via `accountId` returns no events
+plus an actionable warning.
 
 ## Capability checking before write operations
 

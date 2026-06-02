@@ -402,4 +402,80 @@ public class GetCalendarEventsToolTests
         prov1Exp.Verify();
         prov2Exp.Verify();
     }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_NullAccountId_SkipsEmailOnlyAccounts()
+    {
+        // An email-only (IMAP) account is enabled alongside a calendar account. It must be
+        // skipped silently rather than attempted and surfaced as a "Failed to retrieve" warning.
+        var calendarAccount = TestData.CreateAccount(id: "acc-cal", provider: "microsoft365");
+        var emailOnlyAccount = TestData.CreateAccount(id: "acc-imap", provider: "imap");
+        var events = new List<CalendarEvent>
+        {
+            TestData.CreateEvent(id: "ev1", accountId: "acc-cal", subject: "Meeting",
+                start: new DateTime(2025, 1, 10, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 10, 16, 0, 0, DateTimeKind.Utc))
+        };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([calendarAccount, emailOnlyAccount]);
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetCalendarEventsAsync(
+            "acc-cal", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        // GetProvider must only ever be resolved for the calendar-capable account.
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, null);
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual(1, doc.RootElement.GetProperty("events").GetArrayLength());
+        Assert.AreEqual("ev1", doc.RootElement.GetProperty("events")[0].GetProperty("id").GetString());
+        // No spurious warning for the skipped email-only account.
+        Assert.AreEqual(JsonValueKind.Null, doc.RootElement.GetProperty("warnings").ValueKind);
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_ExplicitEmailOnlyAccount_WarnsAndReturnsEmpty()
+    {
+        // Explicitly targeting an email-only account yields an actionable warning, not a
+        // generic "Failed to retrieve" message, and no provider call is attempted.
+        var emailOnlyAccount = TestData.CreateAccount(id: "acc-imap", provider: "imap");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-imap")
+            .ReturnValue(Task.FromResult<AccountInfo?>(emailOnlyAccount));
+
+        // No provider is set up: GetProvider / GetCalendarEventsAsync must never be called.
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-imap");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("events").GetArrayLength());
+
+        var warnings = doc.RootElement.GetProperty("warnings");
+        Assert.AreEqual(1, warnings.GetArrayLength());
+        Assert.AreEqual("acc-imap", warnings[0].GetProperty("accountId").GetString());
+        var warningText = warnings[0].GetProperty("warning").GetString();
+        Assert.IsTrue(warningText!.Contains("no calendar capability"));
+        Assert.IsTrue(warningText.Contains("list_accounts"));
+
+        regExp.Verify();
+        factExp.Verify();
+    }
 }
