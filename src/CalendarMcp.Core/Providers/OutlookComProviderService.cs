@@ -372,7 +372,7 @@ public class OutlookComProviderService : IOutlookComProviderService
                 Body = new ItemBody
                 {
                     Content = bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase)
-                        ? htmlBody!
+                        ? htmlBody ?? string.Empty
                         : body,
                     ContentType = bodyFormat.Equals("text", StringComparison.OrdinalIgnoreCase) ? BodyType.Text : BodyType.Html,
                 },
