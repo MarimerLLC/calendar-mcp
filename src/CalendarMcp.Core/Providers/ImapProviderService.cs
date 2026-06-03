@@ -322,7 +322,9 @@ public class ImapProviderService : IImapProviderService
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? textBody = null,
+        string? htmlBody = null)
     {
         var cfg = await ResolveConfigAsync(accountId);
 
@@ -337,16 +339,24 @@ public class ImapProviderService : IImapProviderService
         }
         message.Subject = subject;
 
-        if (attachments is { Count: > 0 })
+        if (attachments is { Count: > 0 } || bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
         {
             var builder = new BodyBuilder();
-            if (bodyFormat?.Equals("text", StringComparison.OrdinalIgnoreCase) == true)
+            if (bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.TextBody = textBody;
+                builder.HtmlBody = htmlBody;
+            }
+            else if (bodyFormat?.Equals("text", StringComparison.OrdinalIgnoreCase) == true)
                 builder.TextBody = body;
             else
                 builder.HtmlBody = body;
 
-            foreach (var att in attachments)
-                MimeAttachmentBuilder.Add(builder, att);
+            if (attachments is { Count: > 0 })
+            {
+                foreach (var att in attachments)
+                    MimeAttachmentBuilder.Add(builder, att);
+            }
 
             message.Body = builder.ToMessageBody();
         }

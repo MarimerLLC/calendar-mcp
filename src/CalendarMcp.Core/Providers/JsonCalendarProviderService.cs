@@ -426,7 +426,9 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? textBody = null,
+        string? htmlBody = null)
         => throw new NotSupportedException("JSON file provider is read-only; emails cannot be sent.");
 
     public Task DeleteEmailAsync(

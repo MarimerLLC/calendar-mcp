@@ -25,7 +25,7 @@ public class SendEmailToolTests
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", "Body", Arg.Any<string>(),
             Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
-            Arg.Any<CancellationToken>())
+            Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<string?>())
             .ReturnValue(Task.FromResult("msg-123"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -107,7 +107,7 @@ public class SendEmailToolTests
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", "Body", Arg.Any<string>(),
             Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
-            Arg.Any<CancellationToken>())
+            Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<string?>())
             .ReturnValue(Task.FromResult("msg-123"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();

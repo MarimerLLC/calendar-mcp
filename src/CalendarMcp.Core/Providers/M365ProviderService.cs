@@ -366,7 +366,9 @@ public class M365ProviderService : IM365ProviderService
         string bodyFormat = "html",
         List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? textBody = null,
+        string? htmlBody = null)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
         if (token == null)
@@ -384,8 +386,10 @@ public class M365ProviderService : IM365ProviderService
                 Subject = subject,
                 Body = new ItemBody
                 {
-                    Content = body,
-                    ContentType = bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase) ? BodyType.Html : BodyType.Text,
+                    Content = bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase)
+                        ? htmlBody!
+                        : body,
+                    ContentType = bodyFormat.Equals("text", StringComparison.OrdinalIgnoreCase) ? BodyType.Text : BodyType.Html,
                 },
                 ToRecipients = to.Split(',', ';')
                     .Select(email => email.Trim())

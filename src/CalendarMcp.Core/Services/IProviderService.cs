@@ -48,7 +48,9 @@ public interface IProviderService
         string bodyFormat = "html",
         List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? textBody = null,
+        string? htmlBody = null);
 
     Task DeleteEmailAsync(
         string accountId,
