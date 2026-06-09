@@ -10,6 +10,8 @@ using MailKit.Security;
 using Microsoft.Extensions.Logging;
 using MimeKit;
 using MimeKit.Text;
+using System.Collections.Concurrent;
+using System.Net.Sockets;
 
 namespace CalendarMcp.Core.Providers;
 
@@ -19,7 +21,7 @@ namespace CalendarMcp.Core.Providers;
 /// Gmail (host names, sent/trash folders) but every value can be overridden per
 /// account, so the provider works for any IMAP host.
 /// </summary>
-public class ImapProviderService : IImapProviderService
+public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisposable
 {
     public const string DefaultImapHost = "imap.gmail.com";
     public const int DefaultImapPort = 993;
@@ -42,6 +44,17 @@ public class ImapProviderService : IImapProviderService
     private readonly IAccountRegistry _accountRegistry;
     private readonly PasswordProtector _passwordProtector;
     private readonly ILogger<ImapProviderService> _logger;
+
+    // Gmail (and most IMAP hosts) cap the number of simultaneous connections per
+    // account and aggressively throttle repeated AUTHENTICATE attempts. Opening a
+    // fresh, separately-authenticated connection on every call — and closing it
+    // abruptly via Dispose() without a graceful LOGOUT — leaves connection slots
+    // lingering server-side, so a burst of calls exhausts the limit and stalls the
+    // next AUTHENTICATE. Instead we keep one authenticated connection per account,
+    // reuse it across calls, and dispose it gracefully. A per-account gate
+    // serializes access because a single ImapClient can only run one command at a time.
+    private readonly ConcurrentDictionary<string, PooledImapConnection> _imapConnections = new();
+    private volatile bool _disposed;
 
     public ImapProviderService(
         IAccountRegistry accountRegistry,
@@ -177,35 +190,159 @@ public class ImapProviderService : IImapProviderService
         return folder;
     }
 
+    // ── Connection pooling ───────────────────────────────────────────
+
+    /// <summary>
+    /// Runs <paramref name="action"/> against a reused, authenticated IMAP connection
+    /// for the account. The connection is health-checked (NOOP) before use and
+    /// reconnected if dead; a broken connection mid-operation triggers a single
+    /// reconnect-and-retry. The connection is kept open for subsequent calls rather
+    /// than disposed, avoiding repeated AUTHENTICATE round-trips that IMAP hosts throttle.
+    /// </summary>
+    private async Task<T> WithImapAsync<T>(
+        ImapAccountConfig cfg, Func<ImapClient, Task<T>> action, CancellationToken ct)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var conn = _imapConnections.GetOrAdd(cfg.AccountId, _ => new PooledImapConnection());
+        await conn.Gate.WaitAsync(ct);
+        try
+        {
+            var (client, reused) = await AcquireClientAsync(conn, cfg, ct);
+            try
+            {
+                return await action(client);
+            }
+            catch (Exception ex) when (reused && IsConnectionException(ex) && !ct.IsCancellationRequested)
+            {
+                _logger.LogDebug(ex,
+                    "Pooled IMAP connection for {AccountId} broke mid-operation; reconnecting and retrying once.",
+                    cfg.AccountId);
+                await EvictClientAsync(conn);
+                var (retryClient, _) = await AcquireClientAsync(conn, cfg, ct);
+                return await action(retryClient);
+            }
+            catch (Exception ex) when (IsConnectionException(ex))
+            {
+                await EvictClientAsync(conn);
+                throw;
+            }
+        }
+        finally
+        {
+            conn.Gate.Release();
+        }
+    }
+
+    private Task WithImapAsync(ImapAccountConfig cfg, Func<ImapClient, Task> action, CancellationToken ct) =>
+        WithImapAsync(cfg, async client =>
+        {
+            await action(client);
+            return true;
+        }, ct);
+
+    /// <summary>
+    /// Returns the account's cached connection if it is still alive (verified with a
+    /// lightweight NOOP), otherwise opens and caches a fresh authenticated connection.
+    /// The boolean indicates whether an existing connection was reused.
+    /// </summary>
+    private async Task<(ImapClient Client, bool Reused)> AcquireClientAsync(
+        PooledImapConnection conn, ImapAccountConfig cfg, CancellationToken ct)
+    {
+        var existing = conn.Client;
+        if (existing is { IsConnected: true, IsAuthenticated: true })
+        {
+            try
+            {
+                await existing.NoOpAsync(ct);
+                return (existing, true);
+            }
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                _logger.LogDebug(ex,
+                    "Cached IMAP connection for {AccountId} failed health check; reconnecting.", cfg.AccountId);
+                await EvictClientAsync(conn);
+            }
+        }
+        else if (existing is not null)
+        {
+            await EvictClientAsync(conn);
+        }
+
+        var fresh = await OpenImapAsync(cfg, ct);
+        conn.Client = fresh;
+        return (fresh, false);
+    }
+
+    /// <summary>
+    /// Gracefully logs out (so the server releases the connection slot immediately)
+    /// and disposes the cached connection. Always uses <see cref="CancellationToken.None"/>
+    /// for the LOGOUT so a cancelled operation still disconnects cleanly.
+    /// </summary>
+    private async Task EvictClientAsync(PooledImapConnection conn)
+    {
+        var client = conn.Client;
+        conn.Client = null;
+        if (client is null) return;
+
+        try
+        {
+            if (client.IsConnected)
+                await client.DisconnectAsync(true, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Error during graceful IMAP disconnect; disposing anyway.");
+        }
+        finally
+        {
+            client.Dispose();
+        }
+    }
+
+    private static bool IsConnectionException(Exception ex) =>
+        ex is ImapProtocolException
+            or IOException
+            or SocketException
+            or ServiceNotConnectedException;
+
+    private sealed class PooledImapConnection
+    {
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+        public ImapClient? Client { get; set; }
+    }
+
     // ── Email operations ─────────────────────────────────────────────
 
     public async Task<IEnumerable<EmailMessage>> GetEmailsAsync(
         string accountId, int count = 20, bool unreadOnly = false, CancellationToken cancellationToken = default)
     {
         var cfg = await ResolveConfigAsync(accountId);
-        using var client = await OpenImapAsync(cfg, cancellationToken);
-        var folder = await OpenFolderAsync(client, cfg.InboxFolder, FolderAccess.ReadOnly, cancellationToken);
-
-        IList<UniqueId> uids;
-        if (unreadOnly)
+        return await WithImapAsync<IEnumerable<EmailMessage>>(cfg, async client =>
         {
-            uids = await folder.SearchAsync(SearchQuery.NotSeen, cancellationToken);
-        }
-        else
-        {
-            uids = (await folder.SearchAsync(SearchQuery.All, cancellationToken)).ToList();
-        }
+            var folder = await OpenFolderAsync(client, cfg.InboxFolder, FolderAccess.ReadOnly, cancellationToken);
 
-        var newest = uids.OrderByDescending(u => u.Id).Take(count).ToList();
-        if (newest.Count == 0)
-            return [];
+            IList<UniqueId> uids;
+            if (unreadOnly)
+            {
+                uids = await folder.SearchAsync(SearchQuery.NotSeen, cancellationToken);
+            }
+            else
+            {
+                uids = (await folder.SearchAsync(SearchQuery.All, cancellationToken)).ToList();
+            }
 
-        var summaries = await folder.FetchAsync(newest, EnvelopeItems, cancellationToken);
+            var newest = uids.OrderByDescending(u => u.Id).Take(count).ToList();
+            if (newest.Count == 0)
+                return [];
 
-        return summaries
-            .OrderByDescending(s => s.InternalDate ?? s.Date)
-            .Select(s => SummaryToEmail(s, cfg.InboxFolder, folder.UidValidity, accountId))
-            .ToList();
+            var summaries = await folder.FetchAsync(newest, EnvelopeItems, cancellationToken);
+
+            return summaries
+                .OrderByDescending(s => s.InternalDate ?? s.Date)
+                .Select(s => SummaryToEmail(s, cfg.InboxFolder, folder.UidValidity, accountId))
+                .ToList();
+        }, cancellationToken);
     }
 
     public async Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
@@ -214,34 +351,36 @@ public class ImapProviderService : IImapProviderService
         CancellationToken cancellationToken = default)
     {
         var cfg = await ResolveConfigAsync(accountId);
-        using var client = await OpenImapAsync(cfg, cancellationToken);
-        var folder = await OpenFolderAsync(client, cfg.InboxFolder, FolderAccess.ReadOnly, cancellationToken);
+        return await WithImapAsync<IEnumerable<EmailMessage>>(cfg, async client =>
+        {
+            var folder = await OpenFolderAsync(client, cfg.InboxFolder, FolderAccess.ReadOnly, cancellationToken);
 
-        SearchQuery search = string.IsNullOrWhiteSpace(query)
-            ? SearchQuery.All
-            : SearchQuery.SubjectContains(query)
-                .Or(SearchQuery.BodyContains(query))
-                .Or(SearchQuery.FromContains(query));
+            SearchQuery search = string.IsNullOrWhiteSpace(query)
+                ? SearchQuery.All
+                : SearchQuery.SubjectContains(query)
+                    .Or(SearchQuery.BodyContains(query))
+                    .Or(SearchQuery.FromContains(query));
 
-        if (fromDate.HasValue)
-            search = search.And(SearchQuery.DeliveredAfter(fromDate.Value));
-        if (toDate.HasValue)
-            search = search.And(SearchQuery.DeliveredBefore(toDate.Value));
+            if (fromDate.HasValue)
+                search = search.And(SearchQuery.DeliveredAfter(fromDate.Value));
+            if (toDate.HasValue)
+                search = search.And(SearchQuery.DeliveredBefore(toDate.Value));
 
-        var uids = (await folder.SearchAsync(search, cancellationToken))
-            .OrderByDescending(u => u.Id)
-            .Take(count)
-            .ToList();
+            var uids = (await folder.SearchAsync(search, cancellationToken))
+                .OrderByDescending(u => u.Id)
+                .Take(count)
+                .ToList();
 
-        if (uids.Count == 0)
-            return [];
+            if (uids.Count == 0)
+                return [];
 
-        var summaries = await folder.FetchAsync(uids, EnvelopeItems, cancellationToken);
+            var summaries = await folder.FetchAsync(uids, EnvelopeItems, cancellationToken);
 
-        return summaries
-            .OrderByDescending(s => s.InternalDate ?? s.Date)
-            .Select(s => SummaryToEmail(s, cfg.InboxFolder, folder.UidValidity, accountId))
-            .ToList();
+            return summaries
+                .OrderByDescending(s => s.InternalDate ?? s.Date)
+                .Select(s => SummaryToEmail(s, cfg.InboxFolder, folder.UidValidity, accountId))
+                .ToList();
+        }, cancellationToken);
     }
 
     public async Task<EmailMessage?> GetEmailDetailsAsync(
@@ -250,25 +389,27 @@ public class ImapProviderService : IImapProviderService
         var (folderName, uidValidity, uid) = ParseEmailId(emailId);
         var cfg = await ResolveConfigAsync(accountId);
 
-        using var client = await OpenImapAsync(cfg, cancellationToken);
-        var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadOnly, cancellationToken);
-
-        if (folder.UidValidity != uidValidity)
+        return await WithImapAsync<EmailMessage?>(cfg, async client =>
         {
-            _logger.LogWarning(
-                "UIDVALIDITY mismatch for {AccountId} folder {Folder}: id={Stored}, current={Current}. Message no longer addressable.",
-                accountId, folderName, uidValidity, folder.UidValidity);
-            return null;
-        }
+            var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadOnly, cancellationToken);
 
-        var message = await folder.GetMessageAsync(new UniqueId(uid), cancellationToken);
-        if (message is null) return null;
+            if (folder.UidValidity != uidValidity)
+            {
+                _logger.LogWarning(
+                    "UIDVALIDITY mismatch for {AccountId} folder {Folder}: id={Stored}, current={Current}. Message no longer addressable.",
+                    accountId, folderName, uidValidity, folder.UidValidity);
+                return null;
+            }
 
-        var summary = (await folder.FetchAsync(new[] { new UniqueId(uid) }, EnvelopeItems, cancellationToken))
-            .FirstOrDefault();
-        var isRead = summary?.Flags?.HasFlag(MessageFlags.Seen) ?? true;
+            var message = await folder.GetMessageAsync(new UniqueId(uid), cancellationToken);
+            if (message is null) return null;
 
-        return MessageToEmail(message, folderName, uidValidity, uid, accountId, isRead);
+            var summary = (await folder.FetchAsync(new[] { new UniqueId(uid) }, EnvelopeItems, cancellationToken))
+                .FirstOrDefault();
+            var isRead = summary?.Flags?.HasFlag(MessageFlags.Seen) ?? true;
+
+            return MessageToEmail(message, folderName, uidValidity, uid, accountId, isRead);
+        }, cancellationToken);
     }
 
     public async Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
@@ -287,35 +428,37 @@ public class ImapProviderService : IImapProviderService
         var (folderName, uidValidity, uid) = ParseEmailId(emailId);
         var cfg = await ResolveConfigAsync(accountId);
 
-        using var client = await OpenImapAsync(cfg, cancellationToken);
-        var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadOnly, cancellationToken);
-
-        if (folder.UidValidity != uidValidity)
+        return await WithImapAsync<EmailAttachmentContent?>(cfg, async client =>
         {
-            _logger.LogWarning("UIDVALIDITY mismatch fetching attachment for {AccountId} {Folder}", accountId, folderName);
-            return null;
-        }
+            var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadOnly, cancellationToken);
 
-        var message = await folder.GetMessageAsync(new UniqueId(uid), cancellationToken);
-        if (message is null) return null;
+            if (folder.UidValidity != uidValidity)
+            {
+                _logger.LogWarning("UIDVALIDITY mismatch fetching attachment for {AccountId} {Folder}", accountId, folderName);
+                return null;
+            }
 
-        var parts = message.Attachments.OfType<MimePart>().ToList();
-        if (index >= parts.Count)
-        {
-            _logger.LogWarning("Attachment index {Index} out of range (have {Count})", index, parts.Count);
-            return null;
-        }
+            var message = await folder.GetMessageAsync(new UniqueId(uid), cancellationToken);
+            if (message is null) return null;
 
-        var part = parts[index];
-        using var ms = new MemoryStream();
-        await part.Content.DecodeToAsync(ms, cancellationToken);
+            var parts = message.Attachments.OfType<MimePart>().ToList();
+            if (index >= parts.Count)
+            {
+                _logger.LogWarning("Attachment index {Index} out of range (have {Count})", index, parts.Count);
+                return null;
+            }
 
-        return new EmailAttachmentContent
-        {
-            Name = part.FileName ?? "attachment",
-            ContentType = part.ContentType?.MimeType,
-            Bytes = ms.ToArray(),
-        };
+            var part = parts[index];
+            using var ms = new MemoryStream();
+            await part.Content.DecodeToAsync(ms, cancellationToken);
+
+            return new EmailAttachmentContent
+            {
+                Name = part.FileName ?? "attachment",
+                ContentType = part.ContentType?.MimeType,
+                Bytes = ms.ToArray(),
+            };
+        }, cancellationToken);
     }
 
     public async Task<string> SendEmailAsync(
@@ -378,11 +521,12 @@ public class ImapProviderService : IImapProviderService
         // Failure here is non-fatal — the message did go out.
         try
         {
-            using var imap = await OpenImapAsync(cfg, cancellationToken);
-            var sent = await imap.GetFolderAsync(cfg.SentFolder, cancellationToken);
-            await sent.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
-            await sent.AppendAsync(message, MessageFlags.Seen, DateTimeOffset.Now, cancellationToken);
-            await imap.DisconnectAsync(true, cancellationToken);
+            await WithImapAsync(cfg, async imap =>
+            {
+                var sent = await imap.GetFolderAsync(cfg.SentFolder, cancellationToken);
+                await sent.OpenAsync(FolderAccess.ReadWrite, cancellationToken);
+                await sent.AppendAsync(message, MessageFlags.Seen, DateTimeOffset.Now, cancellationToken);
+            }, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -400,12 +544,14 @@ public class ImapProviderService : IImapProviderService
         var (folderName, uidValidity, uid) = ParseEmailId(emailId);
         var cfg = await ResolveConfigAsync(accountId);
 
-        using var client = await OpenImapAsync(cfg, cancellationToken);
-        var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadWrite, cancellationToken);
-        EnsureUidValidity(folder, uidValidity, accountId, folderName);
+        await WithImapAsync(cfg, async client =>
+        {
+            var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadWrite, cancellationToken);
+            EnsureUidValidity(folder, uidValidity, accountId, folderName);
 
-        var trash = await client.GetFolderAsync(cfg.TrashFolder, cancellationToken);
-        await folder.MoveToAsync(new[] { new UniqueId(uid) }, trash, cancellationToken);
+            var trash = await client.GetFolderAsync(cfg.TrashFolder, cancellationToken);
+            await folder.MoveToAsync(new[] { new UniqueId(uid) }, trash, cancellationToken);
+        }, cancellationToken);
     }
 
     public async Task MarkEmailAsReadAsync(
@@ -414,15 +560,17 @@ public class ImapProviderService : IImapProviderService
         var (folderName, uidValidity, uid) = ParseEmailId(emailId);
         var cfg = await ResolveConfigAsync(accountId);
 
-        using var client = await OpenImapAsync(cfg, cancellationToken);
-        var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadWrite, cancellationToken);
-        EnsureUidValidity(folder, uidValidity, accountId, folderName);
+        await WithImapAsync(cfg, async client =>
+        {
+            var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadWrite, cancellationToken);
+            EnsureUidValidity(folder, uidValidity, accountId, folderName);
 
-        var ids = new[] { new UniqueId(uid) };
-        if (isRead)
-            await folder.AddFlagsAsync(ids, MessageFlags.Seen, true, cancellationToken);
-        else
-            await folder.RemoveFlagsAsync(ids, MessageFlags.Seen, true, cancellationToken);
+            var ids = new[] { new UniqueId(uid) };
+            if (isRead)
+                await folder.AddFlagsAsync(ids, MessageFlags.Seen, true, cancellationToken);
+            else
+                await folder.RemoveFlagsAsync(ids, MessageFlags.Seen, true, cancellationToken);
+        }, cancellationToken);
     }
 
     public async Task MoveEmailAsync(
@@ -435,12 +583,14 @@ public class ImapProviderService : IImapProviderService
         var (folderName, uidValidity, uid) = ParseEmailId(emailId);
         var cfg = await ResolveConfigAsync(accountId);
 
-        using var client = await OpenImapAsync(cfg, cancellationToken);
-        var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadWrite, cancellationToken);
-        EnsureUidValidity(folder, uidValidity, accountId, folderName);
+        await WithImapAsync(cfg, async client =>
+        {
+            var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadWrite, cancellationToken);
+            EnsureUidValidity(folder, uidValidity, accountId, folderName);
 
-        var dest = await client.GetFolderAsync(destinationFolder, cancellationToken);
-        await folder.MoveToAsync(new[] { new UniqueId(uid) }, dest, cancellationToken);
+            var dest = await client.GetFolderAsync(destinationFolder, cancellationToken);
+            await folder.MoveToAsync(new[] { new UniqueId(uid) }, dest, cancellationToken);
+        }, cancellationToken);
     }
 
     // ── Calendar / contact methods are unsupported ───────────────────
@@ -617,4 +767,45 @@ public class ImapProviderService : IImapProviderService
         string SmtpHost, int SmtpPort,
         string Username, string Password,
         string InboxFolder, string SentFolder, string TrashFolder);
+
+    // ── Disposal ─────────────────────────────────────────────────────
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        foreach (var conn in _imapConnections.Values)
+        {
+            await conn.Gate.WaitAsync();
+            try
+            {
+                await EvictClientAsync(conn);
+            }
+            finally
+            {
+                conn.Gate.Release();
+                conn.Gate.Dispose();
+            }
+        }
+
+        _imapConnections.Clear();
+        GC.SuppressFinalize(this);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        foreach (var conn in _imapConnections.Values)
+        {
+            try { conn.Client?.Dispose(); }
+            catch { /* best effort during teardown */ }
+            conn.Gate.Dispose();
+        }
+
+        _imapConnections.Clear();
+        GC.SuppressFinalize(this);
+    }
 }
