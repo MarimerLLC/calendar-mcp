@@ -28,10 +28,10 @@ public class SendEmailToolMultipartTests
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
-            Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Callback((string _, string _, string _, string body, string bodyFormat,
                        List<string>? _, IReadOnlyList<OutboundEmailAttachment>? _,
-                       CancellationToken _, string? _, string? _) =>
+                       string? _, string? _, CancellationToken _) =>
             {
                 capturedBody = body;
                 capturedFormat = bodyFormat;
@@ -74,10 +74,10 @@ public class SendEmailToolMultipartTests
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
-            Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Callback((string _, string _, string _, string body, string bodyFormat,
                        List<string>? _, IReadOnlyList<OutboundEmailAttachment>? _,
-                       CancellationToken _, string? _, string? _) =>
+                       string? _, string? _, CancellationToken _) =>
             {
                 capturedBody = body;
                 capturedFormat = bodyFormat;
@@ -121,10 +121,10 @@ public class SendEmailToolMultipartTests
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", Arg.Any<string>(), Arg.Any<string>(),
             Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
-            Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Callback((string _, string _, string _, string _, string bodyFormat,
                        List<string>? _, IReadOnlyList<OutboundEmailAttachment>? _,
-                       CancellationToken _, string? textBody, string? htmlBody) =>
+                       string? textBody, string? htmlBody, CancellationToken _) =>
             {
                 capturedFormat = bodyFormat;
                 capturedTextBody = textBody;

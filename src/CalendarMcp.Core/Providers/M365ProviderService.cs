@@ -366,14 +366,21 @@ public class M365ProviderService : IM365ProviderService
         string bodyFormat = "html",
         List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
-        CancellationToken cancellationToken = default,
         string? textBody = null,
-        string? htmlBody = null)
+        string? htmlBody = null,
+        CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
         if (token == null)
         {
             throw new InvalidOperationException($"Cannot send email: No authentication token for account {accountId}");
+        }
+
+        if (bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Graph API does not support native multipart/alternative; the plain-text body (textBody) will not be included. Only htmlBody will be sent for account {AccountId}.",
+                accountId);
         }
 
         try

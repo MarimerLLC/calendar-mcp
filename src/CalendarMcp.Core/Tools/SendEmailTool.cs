@@ -120,8 +120,8 @@ public sealed class SendEmailTool(
             // Send email
             var provider = providerFactory.GetProvider(account.Provider);
             var messageId = await provider.SendEmailAsync(
-                account.Id, toJoined, subject, body, bodyFormat, cc, resolvedAttachments, CancellationToken.None,
-                textBody, htmlBody);
+                account.Id, toJoined, subject, body, bodyFormat, cc, resolvedAttachments,
+                textBody, htmlBody, CancellationToken.None);
 
             var result = new
             {

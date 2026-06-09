@@ -421,9 +421,9 @@ public class GoogleProviderService : IGoogleProviderService
         string bodyFormat = "html",
         List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
-        CancellationToken cancellationToken = default,
         string? textBody = null,
-        string? htmlBody = null)
+        string? htmlBody = null,
+        CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
         if (credential == null)

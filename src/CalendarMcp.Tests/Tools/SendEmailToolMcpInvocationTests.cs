@@ -34,10 +34,10 @@ public class SendEmailToolMcpInvocationTests
         provExp.Setups.SendEmailAsync(
             "acc-1", "to@example.com", "Subject", "Body", Arg.Any<string>(),
             Arg.Any<List<string>?>(), Arg.Any<IReadOnlyList<OutboundEmailAttachment>?>(),
-            Arg.Any<CancellationToken>(), Arg.Any<string?>(), Arg.Any<string?>())
+            Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .Callback((string _, string _, string _, string _, string _,
                        List<string>? _, IReadOnlyList<OutboundEmailAttachment>? atts,
-                       CancellationToken _, string? _, string? _) =>
+                       string? _, string? _, CancellationToken _) =>
             {
                 capturedAttachments = atts;
                 return Task.FromResult("msg-123");
