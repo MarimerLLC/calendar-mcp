@@ -254,7 +254,15 @@ Send email from specific account (requires explicit account selection or smart r
 - `to`: Recipient email address (can be array)
 - `subject`: Email subject
 - `body`: Email body content
-- `bodyFormat` (default: "html"): "html" or "text"
+- `bodyFormat` (default: "html"): `"html"`, `"text"`, or `"multipart"`
+  - `"html"`: `body` must contain real HTML markup (Markdown is not converted)
+  - `"text"`: `body` is sent as plain text
+  - `"multipart"`: sends a `multipart/alternative` message with both a plain-text
+    fallback and an HTML part. Requires `textBody` and `htmlBody` instead of `body`.
+    **Note:** Microsoft 365 and Outlook.com do not support native multipart/alternative
+    via the Graph API; for those providers only `htmlBody` is sent (a warning is logged).
+- `textBody` (optional): plain-text body, required when `bodyFormat` is `"multipart"`
+- `htmlBody` (optional): HTML body, required when `bodyFormat` is `"multipart"`
 - `cc` (optional): CC recipients
 - `attachments` (optional): File attachments. JSON array of objects. Each item
   must use one of two shapes:
