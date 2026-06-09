@@ -351,12 +351,21 @@ public class OutlookComProviderService : IOutlookComProviderService
         string bodyFormat = "html",
         List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
+        string? textBody = null,
+        string? htmlBody = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
         if (token == null)
         {
             throw new InvalidOperationException($"Cannot send email: No authentication token for account {accountId}");
+        }
+
+        if (bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Graph API does not support native multipart/alternative; the plain-text body (textBody) will not be included. Only htmlBody will be sent for account {AccountId}.",
+                accountId);
         }
 
         try
@@ -369,8 +378,10 @@ public class OutlookComProviderService : IOutlookComProviderService
                 Subject = subject,
                 Body = new ItemBody
                 {
-                    Content = body,
-                    ContentType = bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase) ? BodyType.Html : BodyType.Text,
+                    Content = bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase)
+                        ? htmlBody ?? string.Empty
+                        : body,
+                    ContentType = bodyFormat.Equals("text", StringComparison.OrdinalIgnoreCase) ? BodyType.Text : BodyType.Html,
                 },
                 ToRecipients = to.Split(',', ';')
                     .Select(email => email.Trim())

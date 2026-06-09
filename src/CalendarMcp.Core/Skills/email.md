@@ -41,10 +41,18 @@ omitted. Same return shape as `get_emails`.
 Returns full body, recipients, and the `attachments[]` array. Each
 attachment has `attachmentId` — feed that to `get_email_attachment`.
 
-### `send_email(to[], subject, body, accountId?, bodyFormat="html", cc?[], attachments?[])`
+### `send_email(to[], subject, body, accountId?, bodyFormat="html", cc?[], attachments?[], textBody?, htmlBody?)`
 
 - `to` is an array of strings. Single recipient: `["alice@x"]`.
-- `bodyFormat` defaults to `"html"`. Set `"text"` for plain.
+- `bodyFormat` defaults to `"html"`. Options:
+  - `"html"`: `body` must be real HTML markup (Markdown is not converted).
+  - `"text"`: `body` is sent as plain text.
+  - `"multipart"`: sends a `multipart/alternative` message. Requires `textBody`
+    and `htmlBody` instead of `body`. Use when you want a plain-text fallback for
+    clients that can't render HTML. **Note:** Microsoft 365 / Outlook.com only
+    transmit the `htmlBody` (Graph SDK limitation; a warning is logged).
+- `textBody`: plain-text body for multipart messages. Required when `bodyFormat="multipart"`.
+- `htmlBody`: HTML body for multipart messages. Required when `bodyFormat="multipart"`.
 - `accountId` is *optional but you should usually pass it.* When omitted,
   smart routing picks based on first recipient's domain (see `accounts`).
 - `attachments`: see `attachments` guide. Pass either `{attachmentId: "..."}`

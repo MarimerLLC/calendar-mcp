@@ -272,6 +272,8 @@ public class IcsProviderService : IIcsProviderService
         string accountId, string to, string subject, string body,
         string bodyFormat = "html", List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
+        string? textBody = null,
+        string? htmlBody = null,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider does not support sending emails.");
 

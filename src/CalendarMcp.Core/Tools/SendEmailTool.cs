@@ -26,14 +26,25 @@ public sealed class SendEmailTool(
     public async Task<string> SendEmail(
         [Description("Recipient email address(es). Supply as a JSON array of strings, e.g. [\"alice@example.com\"] or [\"alice@example.com\",\"bob@example.com\"].")] List<string> to,
         [Description("Email subject line")] string subject,
-        [Description("Email body content. Use HTML when bodyFormat is 'html' (the default).")] string body,
+        [Description("Email body content. Use HTML when bodyFormat is 'html' (the default). Ignored when bodyFormat is 'multipart'.")] string body = "",
         [Description("Account ID to send from. Omit to use smart routing (matches recipient domain to account domains, then falls back to first account). Obtain from list_accounts.")] string? accountId = null,
-        [Description("Body content format: 'html' (default) or 'text'")] string bodyFormat = "html",
+        [Description("Body content format: 'html' (default), 'text', or 'multipart'. When 'multipart' is specified, provide textBody and htmlBody instead of body. Note: bodyFormat 'html' requires actual HTML markup; Markdown/plain text is not automatically converted to HTML.")] string bodyFormat = "html",
         [Description("CC recipient email addresses")] List<string>? cc = null,
-        [Description("Optional file attachments as a JSON array. Each item must set EITHER \"attachmentId\" (preferred for anything non-trivial: upload the file via POST /attachments first to get the ID) OR \"base64Content\" (the raw bytes encoded as base64; use only for very small files). \"name\" is required when using base64Content and optional when using attachmentId. \"contentType\" is optional. Total decoded payload per message must stay under 25 MB; Microsoft 365 and Outlook.com cap each individual attachment at 3 MB. Examples: [{\"attachmentId\":\"AbCd...\"}] or [{\"name\":\"x.pdf\",\"base64Content\":\"...\"}].")] List<OutboundEmailAttachment>? attachments = null)
+        [Description("Optional file attachments as a JSON array. Each item must set EITHER \"attachmentId\" (preferred for anything non-trivial: upload the file via POST /attachments first to get the ID) OR \"base64Content\" (the raw bytes encoded as base64; use only for very small files). \"name\" is required when using base64Content and optional when using attachmentId. \"contentType\" is optional. Total decoded payload per message must stay under 25 MB; Microsoft 365 and Outlook.com cap each individual attachment at 3 MB. Examples: [{\"attachmentId\":\"AbCd...\"}] or [{\"name\":\"x.pdf\",\"base64Content\":\"...\"}].")] List<OutboundEmailAttachment>? attachments = null,
+        [Description("Plain-text body for multipart/alternative messages. Required when bodyFormat is 'multipart'.")] string? textBody = null,
+        [Description("HTML body for multipart/alternative messages. Required when bodyFormat is 'multipart'. Must contain actual HTML markup.")] string? htmlBody = null)
     {
         // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
         body = StripCdataWrapper(body);
+        if (textBody != null) textBody = StripCdataWrapper(textBody);
+        if (htmlBody != null) htmlBody = StripCdataWrapper(htmlBody);
+
+        // Validate multipart parameters
+        if (bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrEmpty(textBody) || string.IsNullOrEmpty(htmlBody))
+                throw new McpException("Both 'textBody' and 'htmlBody' are required when bodyFormat is 'multipart'.");
+        }
 
         if (to is null || to.Count == 0)
             throw new McpException("At least one recipient address is required in the 'to' field.");
@@ -109,7 +120,8 @@ public sealed class SendEmailTool(
             // Send email
             var provider = providerFactory.GetProvider(account.Provider);
             var messageId = await provider.SendEmailAsync(
-                account.Id, toJoined, subject, body, bodyFormat, cc, resolvedAttachments, CancellationToken.None);
+                account.Id, toJoined, subject, body, bodyFormat, cc, resolvedAttachments,
+                textBody, htmlBody, CancellationToken.None);
 
             var result = new
             {

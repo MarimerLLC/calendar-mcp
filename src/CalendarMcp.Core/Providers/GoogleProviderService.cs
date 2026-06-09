@@ -421,6 +421,8 @@ public class GoogleProviderService : IGoogleProviderService
         string bodyFormat = "html",
         List<string>? cc = null,
         IReadOnlyList<OutboundEmailAttachment>? attachments = null,
+        string? textBody = null,
+        string? htmlBody = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -452,7 +454,12 @@ public class GoogleProviderService : IGoogleProviderService
             mime.Subject = subject;
 
             var builder = new BodyBuilder();
-            if (bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase))
+            if (bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.TextBody = textBody;
+                builder.HtmlBody = htmlBody;
+            }
+            else if (bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase))
                 builder.HtmlBody = body;
             else
                 builder.TextBody = body;
