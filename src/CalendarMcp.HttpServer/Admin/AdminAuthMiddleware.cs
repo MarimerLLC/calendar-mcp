@@ -1,9 +1,18 @@
 namespace CalendarMcp.HttpServer.Admin;
 
 /// <summary>
-/// Middleware that validates the admin token for /admin endpoints.
-/// Token is configured via CALENDAR_MCP_ADMIN_TOKEN environment variable.
-/// Supports Bearer token, X-Admin-Token header, and .CalendarMcp.AdminAuth cookie.
+/// Validates the admin token for /admin endpoints. The token comes from the
+/// CALENDAR_MCP_ADMIN_TOKEN env var (or CalendarMcp:AdminToken config) and is supplied
+/// as an Authorization: Bearer or X-Admin-Token header. Aura's cockpit never holds the
+/// token — it calls /admin/* through Aura's backend proxy, which injects the header
+/// server-side.
+///
+/// The Blazor admin UI (cookie auth + /admin/ui pages) was removed in the Aura fork, so
+/// every /admin route is now a plain token-gated JSON API — including
+/// /admin/auth/{id}/google/start, which the cockpit fetches (the proxy supplies the
+/// token) to get the Google authorization URL. The only token-exempt route is the
+/// Google OAuth redirect callback, which Google invokes directly with the OAuth
+/// code/state and no token.
 /// </summary>
 public class AdminAuthMiddleware
 {
@@ -11,11 +20,8 @@ public class AdminAuthMiddleware
     private readonly string? _adminToken;
     private readonly ILogger<AdminAuthMiddleware> _logger;
 
-    // Paths that are exempt from admin token validation (Blazor UI login and static files)
     private static readonly string[] ExemptPaths =
     [
-        "/admin/ui/login",
-        "/admin/auth/logout",
         "/admin/auth/google/callback"
     ];
 
@@ -31,14 +37,14 @@ public class AdminAuthMiddleware
     {
         var path = context.Request.Path.Value ?? "";
 
-        // Exempt Blazor UI login page and static assets from token auth
+        // Google's post-consent redirect carries the OAuth code/state, not a token.
         if (IsExemptPath(path))
         {
             await _next(context);
             return;
         }
 
-        // If no admin token is configured, allow access (development mode)
+        // If no admin token is configured, allow access (development mode).
         if (string.IsNullOrEmpty(_adminToken))
         {
             _logger.LogWarning("No admin token configured. Admin API is unprotected. " +
@@ -47,43 +53,7 @@ public class AdminAuthMiddleware
             return;
         }
 
-        // Google OAuth start endpoint is initiated by browser redirect from Blazor UI,
-        // so it uses cookie auth like the UI pages (not API token auth)
-        if (path.StartsWith("/admin/auth/", StringComparison.OrdinalIgnoreCase)
-            && path.EndsWith("/google/start", StringComparison.OrdinalIgnoreCase))
-        {
-            if (context.User.Identity?.IsAuthenticated == true)
-            {
-                await _next(context);
-                return;
-            }
-
-            context.Response.Redirect("/admin/ui/login");
-            return;
-        }
-
-        // For Blazor UI paths, check cookie-based authentication
-        if (path.StartsWith("/admin/ui", StringComparison.OrdinalIgnoreCase))
-        {
-            if (context.User.Identity?.IsAuthenticated == true)
-            {
-                await _next(context);
-                return;
-            }
-
-            // Blazor SignalR hub negotiation must be allowed for authenticated users
-            if (path.StartsWith("/_blazor", StringComparison.OrdinalIgnoreCase))
-            {
-                await _next(context);
-                return;
-            }
-
-            // Redirect unauthenticated Blazor UI requests to login
-            context.Response.Redirect("/admin/ui/login");
-            return;
-        }
-
-        // For REST API paths, check header-based token auth
+        // Header-based token auth for every /admin route.
         var token = context.Request.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "")
             ?? context.Request.Headers["X-Admin-Token"].FirstOrDefault();
 

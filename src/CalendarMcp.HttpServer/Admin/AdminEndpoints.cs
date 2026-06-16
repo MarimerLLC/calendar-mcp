@@ -299,8 +299,12 @@ public static class AdminEndpoints
         // Build the callback redirect URI from the current request
         var redirectUri = BuildRedirectUri(httpContext.Request, "/admin/auth/google/callback", config.Value);
 
+        // Headless: return the Google authorization URL as JSON instead of a 302. The
+        // cockpit (calling this through Aura's token-injecting proxy) opens authUrl in a
+        // browser tab; redirectUri is echoed so the operator can confirm it matches the
+        // URI registered in the Google OAuth client.
         var authUrl = oauthManager.GetAuthorizationUrl(accountId, clientId, clientSecret, redirectUri);
-        return Results.Redirect(authUrl);
+        return Results.Ok(new { authUrl, redirectUri });
     }
 
     /// <summary>
@@ -319,12 +323,12 @@ public static class AdminEndpoints
 
         if (!string.IsNullOrEmpty(error))
         {
-            return Results.Redirect($"/admin/ui?googleAuth=failed&error={Uri.EscapeDataString(error)}");
+            return OAuthResultPage(false, $"Google returned an error: {error}");
         }
 
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
         {
-            return Results.Redirect("/admin/ui?googleAuth=failed&error=Missing+code+or+state+parameter");
+            return OAuthResultPage(false, "Missing code or state parameter.");
         }
 
         try
@@ -332,12 +336,37 @@ public static class AdminEndpoints
             var redirectUri = BuildRedirectUri(httpContext.Request, "/admin/auth/google/callback", config.Value);
 
             var accountId = await oauthManager.ExchangeCodeAsync(state, code, redirectUri, cancellationToken);
-            return Results.Redirect($"/admin/ui/auth/{accountId}?googleAuth=success");
+            return OAuthResultPage(true, $"Account '{accountId}' is now linked. You can close this window and return to Aura.");
         }
         catch (Exception ex)
         {
-            return Results.Redirect($"/admin/ui?googleAuth=failed&error={Uri.EscapeDataString(ex.Message)}");
+            return OAuthResultPage(false, ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Renders a self-contained HTML result for the Google redirect callback. The Blazor
+    /// admin UI was removed in the Aura fork, so this page only reports the outcome — the
+    /// cockpit polls /admin/accounts/{id}/status to detect the linked state.
+    /// </summary>
+    private static IResult OAuthResultPage(bool ok, string message)
+    {
+        var title = ok ? "Connected" : "Connection failed";
+        var color = ok ? "#16a34a" : "#dc2626";
+        var safe = System.Net.WebUtility.HtmlEncode(message);
+        var html = $$"""
+            <!doctype html>
+            <html lang="en"><head><meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Aura · {{title}}</title></head>
+            <body style="font-family:system-ui,sans-serif;background:#0b0b0c;color:#e5e5e5;display:grid;place-items:center;height:100vh;margin:0">
+              <main style="max-width:28rem;text-align:center;padding:2rem">
+                <h1 style="color:{{color}};margin:0 0 .5rem">{{title}}</h1>
+                <p style="opacity:.85">{{safe}}</p>
+              </main>
+            </body></html>
+            """;
+        return Results.Content(html, "text/html");
     }
 
     /// <summary>

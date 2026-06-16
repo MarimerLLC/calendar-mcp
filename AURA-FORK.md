@@ -22,6 +22,16 @@ Branch: `aura/pim-sidecar`. Remotes: `origin` = this fork, `upstream` = MarimerL
    `AccountConfigurationService`, `GoogleOAuthManager`, `DeviceCodeAuthManager`, `AdminAuthMiddleware`),
    the MCP-over-HTTP endpoint (`MapMcp`), attachments, health, and Scalar/OpenAPI docs.
 
+2b. **Made the Google OAuth flow headless** (the redirect flow depended on the deleted Blazor UI:
+   it cookie-gated `/admin/auth/{id}/google/start` and bounced the callback to `/admin/ui/...`).
+   Now: `AdminAuthMiddleware` token-gates every `/admin` route uniformly (no cookie/`/admin/ui`
+   special-cases; only `/admin/auth/google/callback` stays token-exempt for Google's redirect);
+   `StartGoogleOAuth` returns `{authUrl, redirectUri}` JSON (the cockpit fetches it through Aura's
+   token-injecting proxy and opens `authUrl`) instead of a 302; the callback renders a
+   self-contained HTML result page instead of redirecting to Blazor (the cockpit polls
+   `/admin/accounts/{id}/status` to detect the linked state). Device-code (Outlook) was already
+   headless JSON.
+
 3. **Trimmed the tool surface from 29 → 14** (registered in `HttpServer/Program.cs`).
    **Kept:** `list_accounts`, `get_emails`, `get_email_details`, `search_emails`, `send_email`,
    `list_calendars`, `get_calendar_events`, `get_calendar_event_details`, `create_event`,
