@@ -2,10 +2,7 @@ using System.Text.RegularExpressions;
 using CalendarMcp.Auth;
 using CalendarMcp.Core.Configuration;
 using CalendarMcp.HttpServer.Admin;
-using CalendarMcp.HttpServer.BlazorAdmin;
 using CalendarMcp.HttpServer.Endpoints;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
 using ModelContextProtocol;
 using OpenTelemetry.Logs;
@@ -109,54 +106,32 @@ public class Program
         // OpenAPI
         builder.Services.AddOpenApi();
 
-        // Blazor Server + Auth
+        // Aura fork: Blazor admin UI removed — Aura's own frontend drives connect/management
+        // via the token-gated /admin REST API. (AddHttpContextAccessor kept for AdminAuthMiddleware.)
         builder.Services.AddHttpContextAccessor();
-        builder.Services.AddRazorComponents()
-            .AddInteractiveServerComponents();
-        builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-            .AddCookie(options =>
-            {
-                options.Cookie.Name = ".CalendarMcp.AdminAuth";
-                options.Cookie.HttpOnly = true;
-                options.Cookie.SameSite = SameSiteMode.Lax;
-                options.LoginPath = "/admin/ui/login";
-            });
-        builder.Services.AddCascadingAuthenticationState();
-        builder.Services.AddScoped<AuthenticationStateProvider, AdminAuthenticationStateProvider>();
 
         // Configure MCP server with HTTP/SSE transport and register tools
         builder.Services
             .AddMcpServer(CalendarMcpServerOptions.Configure)
             .WithHttpTransport()
+            // Aura fork: trimmed tool surface (14). Dropped: get_guide, get_email_attachment,
+            // delete_email, mark_email_as_read, move_email, bulk_*, get_contextual_email_summary,
+            // delete_event, get_unsubscribe_info, unsubscribe_from_email, create/update/delete_contact.
+            // (delete_event/delete_contact stay off here; Aura's DenyRisk policy is defense-in-depth.)
             .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetGuideTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailDetailsTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetEmailAttachmentTool>()
             .WithTools<CalendarMcp.Core.Tools.SearchEmailsTool>()
             .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
-            .WithTools<CalendarMcp.Core.Tools.DeleteEmailTool>()
-            .WithTools<CalendarMcp.Core.Tools.MarkEmailAsReadTool>()
-            .WithTools<CalendarMcp.Core.Tools.MoveEmailTool>()
-            .WithTools<CalendarMcp.Core.Tools.BulkDeleteEmailsTool>()
-            .WithTools<CalendarMcp.Core.Tools.BulkMarkEmailsAsReadTool>()
-            .WithTools<CalendarMcp.Core.Tools.BulkMoveEmailsTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetContextualEmailSummaryTool>()
             .WithTools<CalendarMcp.Core.Tools.ListCalendarsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetCalendarEventsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetCalendarEventDetailsTool>()
             .WithTools<CalendarMcp.Core.Tools.CreateEventTool>()
-            .WithTools<CalendarMcp.Core.Tools.DeleteEventTool>()
             .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetUnsubscribeInfoTool>()
-            .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>()
             .WithTools<CalendarMcp.Core.Tools.UpdateEventTool>()
             .WithTools<CalendarMcp.Core.Tools.GetContactsTool>()
             .WithTools<CalendarMcp.Core.Tools.SearchContactsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetContactDetailsTool>()
-            .WithTools<CalendarMcp.Core.Tools.CreateContactTool>()
-            .WithTools<CalendarMcp.Core.Tools.UpdateContactTool>()
-            .WithTools<CalendarMcp.Core.Tools.DeleteContactTool>()
             .WithPrompts<CalendarMcp.Core.Prompts.CalendarPrompts>()
             .WithPrompts<CalendarMcp.Core.Prompts.EmailPrompts>()
             .WithPrompts<CalendarMcp.Core.Prompts.ContactPrompts>()
@@ -188,20 +163,14 @@ public class Program
         forwardedHeadersOptions.KnownIPNetworks.Clear();
         forwardedHeadersOptions.KnownProxies.Clear();
         app.UseForwardedHeaders(forwardedHeadersOptions);
-        app.MapStaticAssets();
-        app.UseAuthentication();
-        app.UseAuthorization();
 
-        // Admin token authentication middleware for /admin endpoints (excluding Blazor UI login)
-        // Must run AFTER UseAuthentication so cookie identity is populated
+        // Aura fork: token-auth middleware for /admin endpoints (Blazor cookie auth removed).
         app.UseWhen(
             context => context.Request.Path.StartsWithSegments("/admin"),
             adminApp =>
             {
                 adminApp.UseMiddleware<AdminAuthMiddleware>();
             });
-
-        app.UseAntiforgery();
 
         // OpenAPI + Scalar
         app.MapOpenApi();
@@ -214,18 +183,11 @@ public class Program
         // protection — Tailscale ACLs / reverse proxy).
         app.MapAttachmentEndpoints();
 
-        // Map admin API endpoints
+        // Map admin API endpoints (consumed by Aura's frontend via the Go backend proxy)
         app.MapAdminEndpoints();
-
-        // Map admin Blazor auth endpoints (login/logout)
-        app.MapAdminAuthEndpoints();
 
         // Health check endpoints
         app.MapHealthEndpoints();
-
-        // Blazor Server components
-        app.MapRazorComponents<CalendarMcp.HttpServer.Components.App>()
-            .AddInteractiveServerRenderMode();
 
         app.Start();
 
@@ -235,7 +197,6 @@ public class Program
         }
         Log.Information("  MCP endpoint:  /");
         Log.Information("  Admin API:     /admin");
-        Log.Information("  Admin UI:      /admin/ui");
         Log.Information("  API Docs:      /scalar/v1");
         Log.Information("  Health:        /health");
 
