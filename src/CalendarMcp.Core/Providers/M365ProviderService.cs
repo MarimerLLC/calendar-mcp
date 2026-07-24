@@ -48,10 +48,17 @@ public class M365ProviderService : IM365ProviderService
             return null;
         }
 
+        // Use the scopes this account was actually consented for, if recorded; otherwise
+        // fall back to the historical default so existing configs keep working unchanged.
+        var scopes = account.ProviderConfig.TryGetValue("scopes", out var scopesValue) &&
+            !string.IsNullOrWhiteSpace(scopesValue)
+                ? scopesValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                : DefaultScopes;
+
         var token = await _authService.GetTokenSilentlyAsync(
             tenantId,
             clientId,
-            DefaultScopes,
+            scopes,
             accountId,
             cancellationToken);
 
