@@ -92,7 +92,10 @@ public class AddM365AccountCommand : AsyncCommand<AddM365AccountCommand.Settings
             new TextPrompt<string>(
                 "[green]Scopes[/] (comma-separated Graph permissions, or leave default for mail+calendar+contacts+files):")
                 .DefaultValue(defaultScopes)
-                .ShowDefaultValue(false));
+                .ShowDefaultValue(false)
+                .ValidationErrorMessage("[red]Enter at least one scope, or press Enter to accept the default[/]")
+                .Validate(input =>
+                    input.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length > 0));
 
         var scopes = scopesInput.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
