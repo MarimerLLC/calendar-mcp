@@ -168,6 +168,12 @@ public class M365AuthenticationService : IM365AuthenticationService
         {
             storagePropertiesBuilder.WithLinuxUnprotectedFile();
         }
+        else if (OperatingSystem.IsMacOS())
+        {
+            storagePropertiesBuilder.WithMacKeyChain(
+                serviceName: "CalendarMcp.MsalCache",
+                accountName: cacheFileName);
+        }
 
         var storageProperties = storagePropertiesBuilder.Build();
 
