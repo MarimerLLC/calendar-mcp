@@ -89,9 +89,9 @@ public sealed partial class CalendarActionTool
         - get_contacts: list contacts. accountId, count optional.
         - search_contacts: search contacts. Requires query. accountId, count optional.
         - get_contact_details: full contact detail. Requires accountId, contactId.
-        - delete_email: delete an email. Requires accountId, emailId. Google moves it to Trash (recoverable); Microsoft deletes it outright.
+        - delete_email: delete an email. Requires accountId, emailId. Google trashes it; Microsoft deletes outright.
         - mark_email_read: mark an email read or unread. Requires accountId, emailId, isRead.
-        - move_email: move an email to another folder or label. Requires accountId, emailId, destination.
+        - move_email: move an email to a folder or label. Requires accountId, emailId, destination.
         """;
 
     [McpServerTool, Description(ToolDescription)]
