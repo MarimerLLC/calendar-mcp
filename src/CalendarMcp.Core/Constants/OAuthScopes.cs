@@ -58,6 +58,14 @@ public static class M365Scopes
         "Contacts.ReadWrite",
         "Files.Read"
     ];
+
+    /// <summary>
+    /// Minimal read-only calendar scope, for app registrations granted only Calendars.Read.
+    /// </summary>
+    public static readonly string[] CalendarsReadOnly =
+    [
+        "Calendars.Read"
+    ];
 }
 
 /// <summary>
