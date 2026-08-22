@@ -46,7 +46,7 @@ public sealed partial class CalendarActionTool
     }
 
     /// <summary>
-    /// The 14 curated action names, in the exact casing the design doc's
+    /// The 17 curated action names, in the exact casing the design doc's
     /// calendar action table specifies. Single source of truth for both the
     /// published JSON schema <c>enum</c> (see <see cref="SchemaOptions"/>)
     /// and this method's own unknown-action validation -- there is
@@ -68,6 +68,9 @@ public sealed partial class CalendarActionTool
         "update_event",
         "respond_to_event",
         "send_email",
+        "delete_email",
+        "mark_email_read",
+        "move_email",
     ];
 
     private const string ToolDescription = """
@@ -86,19 +89,22 @@ public sealed partial class CalendarActionTool
         - get_contacts: list contacts. accountId, count optional.
         - search_contacts: search contacts. Requires query. accountId, count optional.
         - get_contact_details: full contact detail. Requires accountId, contactId.
+        - delete_email: delete an email. Requires accountId, emailId. Google moves it to Trash (recoverable); Microsoft deletes it outright.
+        - mark_email_read: mark an email read or unread. Requires accountId, emailId, isRead.
+        - move_email: move an email to another folder or label. Requires accountId, emailId, destination.
         """;
 
     [McpServerTool, Description(ToolDescription)]
     public Task<string> Calendar(
         [Description("Required. The operation to perform -- see the tool description for each action's required and optional fields.")]
         string action,
-        [Description("Account id. A defaultable routing hint on get_emails/search_emails/list_calendars/get_calendar_events/get_contacts/search_contacts/create_event/respond_to_event (omit to use all accounts or smart routing). Required (not a hint) on get_email_details, get_contact_details, update_event. NOT used by get_calendar_event_details -- pass its eventId instead. Obtain from list_accounts.")]
+        [Description("Account id. A defaultable routing hint on get_emails/search_emails/list_calendars/get_calendar_events/get_contacts/search_contacts/create_event/respond_to_event (omit to use all accounts or smart routing). Required (not a hint) on get_email_details, get_contact_details, update_event, delete_email, mark_email_read, move_email. NOT used by get_calendar_event_details -- pass its eventId instead. Obtain from list_accounts.")]
         string? accountId = null,
         [Description("Calendar id. Required for get_calendar_event_details and update_event; optional scoping filter for get_calendar_events; optional target for create_event. Obtain from list_calendars, or pass 'primary' for the default calendar.")]
         string? calendarId = null,
         [Description("Event id. For get_calendar_event_details this is the OPAQUE eventId returned per event by get_calendar_events -- pass it back unchanged; do not construct or guess one. For update_event/respond_to_event this is the plain event id from get_calendar_events or get_calendar_event_details.")]
         string? eventId = null,
-        [Description("Email id. Required for get_email_details. Obtain from the id field returned by get_emails or search_emails.")]
+        [Description("Email id. Required for get_email_details, delete_email, mark_email_read and move_email. Obtain from the id field returned by get_emails or search_emails.")]
         string? emailId = null,
         [Description("Contact id. Required for get_contact_details. Obtain from get_contacts or search_contacts.")]
         string? contactId = null,
@@ -145,7 +151,11 @@ public sealed partial class CalendarActionTool
         [Description("respond_to_event only. Required. One of: 'accept', 'tentative', 'decline'.")]
         string? response = null,
         [Description("respond_to_event only. Optional message to include with the response.")]
-        string? comment = null)
+        string? comment = null,
+        [Description("mark_email_read only. Required. True to mark the email read, false to mark it unread.")]
+        bool? isRead = null,
+        [Description("move_email only. Required. Destination: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft only), 'sentitems' (Microsoft only), or a custom label/folder id (Google only). Aliases: 'deleteditems'='trash', 'junkemail'='spam'.")]
+        string? destination = null)
     {
         if (!ActionNames.Contains(action, StringComparer.Ordinal))
         {
@@ -168,6 +178,9 @@ public sealed partial class CalendarActionTool
             "update_event" => UpdateEventAction(accountId, calendarId, eventId, subject, start, end, location, attendees, timeZone),
             "respond_to_event" => RespondToEventAction(eventId, response, accountId, calendarId, comment),
             "send_email" => SendEmailAction(to, subject, body, accountId, bodyFormat, cc, attachments, textBody, htmlBody),
+            "delete_email" => DeleteEmailAction(accountId, emailId),
+            "mark_email_read" => MarkEmailReadAction(accountId, emailId, isRead),
+            "move_email" => MoveEmailAction(accountId, emailId, destination),
             _ => throw UnknownAction(action),
         };
     }

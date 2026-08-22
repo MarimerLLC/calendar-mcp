@@ -413,4 +413,121 @@ public sealed partial class CalendarActionTool
 
         return content;
     }
+
+    /// <summary>delete_email -- unchanged from the raw DeleteEmailTool.</summary>
+    /// <remarks>
+    /// Provider-defined destructiveness: Google moves the message to Trash
+    /// (recoverable); Microsoft Graph issues a real DELETE. The action name is
+    /// deliberately not "trash_email" -- it cannot promise recoverability on
+    /// every provider, and a name that over-promises is worse than a blunt one.
+    /// </remarks>
+    private async Task<string> DeleteEmailAction(string? accountId, string? emailId)
+    {
+        _logger.LogInformation("Deleting email: accountId={AccountId}, emailId={EmailId}",
+            accountId, emailId);
+
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(emailId, nameof(emailId));
+        var account = await ToolGuard.RequireAccountAsync(_accountRegistry, accountId!);
+
+        try
+        {
+            var provider = _providerFactory.GetProvider(account.Provider);
+            await provider.DeleteEmailAsync(accountId!, emailId!, CancellationToken.None);
+
+            var response = new
+            {
+                success = true,
+                emailId,
+                accountId,
+                message = $"Email '{emailId}' deleted successfully from account '{accountId}'"
+            };
+
+            _logger.LogInformation("Deleted email {EmailId} from account {AccountId}", emailId, accountId);
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex) when (ex is not McpException)
+        {
+            _logger.LogError(ex, "Error in delete_email action");
+            throw new McpException("Failed to delete email.", ex);
+        }
+    }
+
+    /// <summary>mark_email_read -- unchanged from the raw MarkEmailAsReadTool.</summary>
+    private async Task<string> MarkEmailReadAction(string? accountId, string? emailId, bool? isRead)
+    {
+        _logger.LogInformation("Marking email read state: accountId={AccountId}, emailId={EmailId}, isRead={IsRead}",
+            accountId, emailId, isRead);
+
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(emailId, nameof(emailId));
+        if (isRead is null)
+        {
+            throw new McpException("mark_email_read requires 'isRead' (true to mark read, false to mark unread).");
+        }
+        var account = await ToolGuard.RequireAccountAsync(_accountRegistry, accountId!);
+
+        try
+        {
+            var provider = _providerFactory.GetProvider(account.Provider);
+            await provider.MarkEmailAsReadAsync(accountId!, emailId!, isRead.Value, CancellationToken.None);
+
+            var response = new
+            {
+                success = true,
+                emailId,
+                accountId,
+                isRead = isRead.Value,
+                message = $"Email '{emailId}' marked as {(isRead.Value ? "read" : "unread")} in account '{accountId}'"
+            };
+
+            _logger.LogInformation("Marked email {EmailId} as {ReadStatus} in account {AccountId}",
+                emailId, isRead.Value ? "read" : "unread", accountId);
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex) when (ex is not McpException)
+        {
+            _logger.LogError(ex, "Error in mark_email_read action");
+            throw new McpException("Failed to mark email read state.", ex);
+        }
+    }
+
+    /// <summary>move_email -- unchanged from the raw MoveEmailTool.</summary>
+    private async Task<string> MoveEmailAction(string? accountId, string? emailId, string? destination)
+    {
+        _logger.LogInformation("Moving email: accountId={AccountId}, emailId={EmailId}, destination={Destination}",
+            accountId, emailId, destination);
+
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(emailId, nameof(emailId));
+        ToolGuard.RequireNonEmpty(destination, nameof(destination));
+        var account = await ToolGuard.RequireAccountAsync(_accountRegistry, accountId!);
+
+        try
+        {
+            var provider = _providerFactory.GetProvider(account.Provider);
+            await provider.MoveEmailAsync(accountId!, emailId!, destination!, CancellationToken.None);
+
+            var response = new
+            {
+                success = true,
+                emailId,
+                accountId,
+                destination,
+                message = $"Email '{emailId}' moved to '{destination}' in account '{accountId}'"
+            };
+
+            _logger.LogInformation("Moved email {EmailId} to folder '{Destination}' in account {AccountId}",
+                emailId, destination, accountId);
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (Exception ex) when (ex is not McpException)
+        {
+            _logger.LogError(ex, "Error in move_email action");
+            throw new McpException("Failed to move email.", ex);
+        }
+    }
 }
