@@ -48,10 +48,29 @@ public class M365ProviderService : IM365ProviderService
             return null;
         }
 
+        // Use the scopes this account was actually consented for, if recorded; otherwise
+        // fall back to the historical default so existing configs keep working unchanged.
+        var scopes = DefaultScopes;
+        if (account.ProviderConfig.TryGetValue("scopes", out var scopesValue) &&
+            !string.IsNullOrWhiteSpace(scopesValue))
+        {
+            var parsedScopes = scopesValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parsedScopes.Length > 0)
+            {
+                scopes = parsedScopes;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Account {AccountId} has a 'scopes' value with no valid entries; falling back to default scopes.",
+                    accountId);
+            }
+        }
+
         var token = await _authService.GetTokenSilentlyAsync(
             tenantId,
             clientId,
-            DefaultScopes,
+            scopes,
             accountId,
             cancellationToken);
 
