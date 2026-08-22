@@ -1,4 +1,5 @@
 using CalendarMcp.Core.Configuration;
+using CalendarMcp.Core.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -113,14 +114,16 @@ public class Program
                 services.AddCalendarMcpCore();
                 
                 // Configure MCP server with stdio transport and register tools
+                // Aura fork: list_accounts, get_emails, get_email_details, search_emails,
+                // send_email, list_calendars, get_calendar_events, get_calendar_event_details,
+                // create_event, respond_to_event, update_event, get_contacts, search_contacts,
+                // get_contact_details collapsed into one curated action tool (D-17..D-26); see
+                // CalendarActionTool. Mirrors the HttpServer registration so both transports
+                // advertise the identical curated surface.
                 services.AddMcpServer(CalendarMcpServerOptions.Configure)
-                    .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
+                    .WithCalendarActionTool()
                     .WithTools<CalendarMcp.Core.Tools.GetGuideTool>()
-                    .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
-                    .WithTools<CalendarMcp.Core.Tools.GetEmailDetailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetEmailAttachmentTool>()
-                    .WithTools<CalendarMcp.Core.Tools.SearchEmailsTool>()
-                    .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
                     .WithTools<CalendarMcp.Core.Tools.DeleteEmailTool>()
                     .WithTools<CalendarMcp.Core.Tools.MarkEmailAsReadTool>()
                     .WithTools<CalendarMcp.Core.Tools.MoveEmailTool>()
@@ -128,18 +131,9 @@ public class Program
                     .WithTools<CalendarMcp.Core.Tools.BulkMarkEmailsAsReadTool>()
                     .WithTools<CalendarMcp.Core.Tools.BulkMoveEmailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetContextualEmailSummaryTool>()
-                    .WithTools<CalendarMcp.Core.Tools.ListCalendarsTool>()
-                    .WithTools<CalendarMcp.Core.Tools.GetCalendarEventsTool>()
-                    .WithTools<CalendarMcp.Core.Tools.GetCalendarEventDetailsTool>()
-                    .WithTools<CalendarMcp.Core.Tools.CreateEventTool>()
                     .WithTools<CalendarMcp.Core.Tools.DeleteEventTool>()
-                    .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetUnsubscribeInfoTool>()
                     .WithTools<CalendarMcp.Core.Tools.UnsubscribeFromEmailTool>()
-                    .WithTools<CalendarMcp.Core.Tools.UpdateEventTool>()
-                    .WithTools<CalendarMcp.Core.Tools.GetContactsTool>()
-                    .WithTools<CalendarMcp.Core.Tools.SearchContactsTool>()
-                    .WithTools<CalendarMcp.Core.Tools.GetContactDetailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.CreateContactTool>()
                     .WithTools<CalendarMcp.Core.Tools.UpdateContactTool>()
                     .WithTools<CalendarMcp.Core.Tools.DeleteContactTool>()

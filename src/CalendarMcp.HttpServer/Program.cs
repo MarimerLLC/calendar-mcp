@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using CalendarMcp.Auth;
 using CalendarMcp.Core.Configuration;
+using CalendarMcp.Core.Tools;
 using CalendarMcp.HttpServer.Admin;
 using CalendarMcp.HttpServer.Endpoints;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -114,24 +115,16 @@ public class Program
         builder.Services
             .AddMcpServer(CalendarMcpServerOptions.Configure)
             .WithHttpTransport()
-            // Aura fork: trimmed tool surface (14). Dropped: get_guide, get_email_attachment,
-            // delete_email, mark_email_as_read, move_email, bulk_*, get_contextual_email_summary,
-            // delete_event, get_unsubscribe_info, unsubscribe_from_email, create/update/delete_contact.
-            // (delete_event/delete_contact stay off here; Aura's DenyRisk policy is defense-in-depth.)
-            .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetEmailDetailsTool>()
-            .WithTools<CalendarMcp.Core.Tools.SearchEmailsTool>()
-            .WithTools<CalendarMcp.Core.Tools.SendEmailTool>()
-            .WithTools<CalendarMcp.Core.Tools.ListCalendarsTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetCalendarEventsTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetCalendarEventDetailsTool>()
-            .WithTools<CalendarMcp.Core.Tools.CreateEventTool>()
-            .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
-            .WithTools<CalendarMcp.Core.Tools.UpdateEventTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetContactsTool>()
-            .WithTools<CalendarMcp.Core.Tools.SearchContactsTool>()
-            .WithTools<CalendarMcp.Core.Tools.GetContactDetailsTool>()
+            // Aura fork: the 14 individually registered tools (list_accounts, get_emails,
+            // get_email_details, search_emails, send_email, list_calendars,
+            // get_calendar_events, get_calendar_event_details, create_event,
+            // respond_to_event, update_event, get_contacts, search_contacts,
+            // get_contact_details) collapsed into ONE curated, action-multiplexed tool
+            // (D-17..D-26; docs/superpowers/specs/2026-08-17-mcp-curated-surface-design.md
+            // in the Aura repo). The 14 raw tool classes are deleted, not left
+            // registered-but-hidden. get_calendar_event_details no longer takes accountId
+            // (MCP-05/D-20) -- see CalendarActionTool for the full contract.
+            .WithCalendarActionTool()
             .WithPrompts<CalendarMcp.Core.Prompts.CalendarPrompts>()
             .WithPrompts<CalendarMcp.Core.Prompts.EmailPrompts>()
             .WithPrompts<CalendarMcp.Core.Prompts.ContactPrompts>()
