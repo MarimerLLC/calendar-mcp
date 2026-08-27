@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -34,7 +35,8 @@ public sealed class UpdateContactTool(
 
         ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
         ToolGuard.RequireNonEmpty(contactId, nameof(contactId));
-        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+        var account = await ToolGuard.RequireAccountAsync(
+            accountRegistry, accountId, AccountPermission.ContactsWrite);
 
         try
         {

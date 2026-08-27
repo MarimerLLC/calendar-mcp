@@ -51,10 +51,31 @@ public static class AdminEndpoints
             provider = a.Provider,
             domains = a.Domains,
             enabled = a.Enabled,
-            priority = a.Priority
+            priority = a.Priority,
+            permissions = DescribePermissions(a)
         });
 
         return Results.Ok(new { accounts = response });
+    }
+
+    /// <summary>
+    /// Projects an account's granted and effective permissions. "granted" is what the operator
+    /// set; "effective" is that intersected with what the provider actually supports, so a
+    /// client can tell a revoked grant apart from one the provider can never honour.
+    /// </summary>
+    private static object DescribePermissions(AccountInfo account)
+    {
+        var effective = AccountCapabilities.GetEffectivePermissions(account);
+        return new
+        {
+            granted = ToDictionary(account.Permissions),
+            effective = ToDictionary(effective)
+        };
+
+        static Dictionary<string, bool> ToDictionary(AccountPermissions permissions) =>
+            AccountPermissions.AllPermissions.ToDictionary(
+                AccountPermissions.ToPropertyName,
+                permissions.IsGranted);
     }
 
     /// <summary>
@@ -79,6 +100,7 @@ public static class AdminEndpoints
             displayName = account.DisplayName,
             provider = account.Provider,
             enabled = account.Enabled,
+            permissions = DescribePermissions(account),
             authFlow = flowStatus.Status != "not_found" ? flowStatus : null
         });
     }
@@ -113,6 +135,7 @@ public static class AdminEndpoints
             Domains = request.Domains,
             Enabled = request.Enabled,
             Priority = request.Priority,
+            Permissions = request.Permissions ?? AccountPermissions.All,
             ProviderConfig = request.ProviderConfig
         };
 
@@ -126,7 +149,8 @@ public static class AdminEndpoints
                 provider = account.Provider,
                 domains = account.Domains,
                 enabled = account.Enabled,
-                priority = account.Priority
+                priority = account.Priority,
+                permissions = DescribePermissions(account)
             });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
@@ -161,6 +185,7 @@ public static class AdminEndpoints
             Domains = request.Domains,
             Enabled = request.Enabled,
             Priority = request.Priority,
+            Permissions = request.Permissions ?? existing.Permissions,
             ProviderConfig = request.ProviderConfig
         };
 
@@ -174,7 +199,8 @@ public static class AdminEndpoints
                 provider = updated.Provider,
                 domains = updated.Domains,
                 enabled = updated.Enabled,
-                priority = updated.Priority
+                priority = updated.Priority,
+                permissions = DescribePermissions(updated)
             });
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not found"))

@@ -106,8 +106,9 @@ public sealed class GetCalendarEventsTool(
                 throw new McpException("No accounts found");
         }
 
-        // Email-only accounts (e.g. IMAP) have no calendar capability, so a read would throw
-        // NotSupportedException and surface a misleading "Failed to retrieve events" warning.
+        // An account may be unreadable for two reasons: the provider has no calendar at all
+        // (e.g. IMAP), where a read would throw NotSupportedException and surface a misleading
+        // "Failed to retrieve events" warning, or the operator revoked calendar-read on it.
         //   - explicit accountId targeting such an account -> actionable warning, no fetch
         //   - all-accounts fan-out -> silently skip them
         var warnings = new List<object>();
@@ -116,20 +117,23 @@ public sealed class GetCalendarEventsTool(
             var only = validAccounts[0];
             if (!AccountCapabilities.HasCalendar(only))
             {
-                logger.LogInformation("Account {AccountId} has no calendar capability; returning empty result", only.Id);
+                var reason = AccountCapabilities.GetProviderCapabilities(only)
+                    .Any(c => c.Name == AccountCapabilities.Calendar)
+                        ? "does not permit reading calendars"
+                        : "has no calendar capability (it is email-only)";
+                logger.LogInformation("Account {AccountId} is not readable for calendar: {Reason}", only.Id, reason);
                 warnings.Add(new
                 {
                     accountId = only.Id,
-                    warning = $"Account '{only.Id}' has no calendar capability (it is email-only). Use list_accounts to see each account's capabilities."
+                    warning = $"Account '{only.Id}' {reason}. Use list_accounts to see each account's capabilities and permissions."
                 });
                 validAccounts = new List<AccountInfo>();
             }
         }
         else
         {
-            foreach (var skipped in validAccounts.Where(a => !AccountCapabilities.HasCalendar(a)))
-                logger.LogInformation("Skipping account {AccountId} in calendar read: no calendar capability", skipped.Id);
-            validAccounts = validAccounts.Where(AccountCapabilities.HasCalendar).ToList();
+            validAccounts = ToolGuard.FilterByPermission(
+                validAccounts, AccountPermission.CalendarRead, logger, "get_calendar_events");
         }
 
         var resolvedStart = startDate ?? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;

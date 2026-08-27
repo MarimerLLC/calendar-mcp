@@ -52,6 +52,11 @@ public sealed partial class GetContextualEmailSummaryTool(
         if (accounts.Count == 0)
             throw new McpException("No accounts configured");
 
+        accounts = ToolGuard.FilterByPermission(
+            accounts, AccountPermission.EmailRead, logger, "get_contextual_email_summary");
+        if (accounts.Count == 0)
+            throw ToolGuard.NoPermittedAccounts(AccountPermission.EmailRead);
+
         try
         {
 

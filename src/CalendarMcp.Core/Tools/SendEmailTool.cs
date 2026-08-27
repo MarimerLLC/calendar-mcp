@@ -75,17 +75,22 @@ public sealed class SendEmailTool(
         if (!string.IsNullOrEmpty(accountId))
         {
             // Explicit account specified
-            account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+            account = await ToolGuard.RequireAccountAsync(
+                accountRegistry, accountId, Models.AccountPermission.EmailSend);
         }
         else
         {
             Models.AccountInfo? selected = null;
 
-            // Smart routing: extract domain from the first recipient
+            // Smart routing only ever considers accounts permitted to send, so a domain match
+            // on a read-only account falls through to the next candidate instead of failing.
+            var matchingAccounts = new List<Models.AccountInfo>();
             var recipientDomain = to[0].Split('@').LastOrDefault();
             if (!string.IsNullOrEmpty(recipientDomain))
             {
-                var matchingAccounts = accountRegistry.GetAccountsByDomain(recipientDomain).ToList();
+                matchingAccounts = ToolGuard.FilterByPermission(
+                    accountRegistry.GetAccountsByDomain(recipientDomain),
+                    Models.AccountPermission.EmailSend, logger, "send_email");
 
                 if (matchingAccounts.Count == 1)
                 {
@@ -102,15 +107,18 @@ public sealed class SendEmailTool(
                 }
             }
 
-            // If still no account, use default (first enabled)
+            // If still no account, use default (first that permits sending)
             if (selected == null)
             {
                 var allAccounts = await accountRegistry.GetAllAccountsAsync();
-                selected = allAccounts.FirstOrDefault();
+                selected = ToolGuard.FilterByPermission(
+                    allAccounts, Models.AccountPermission.EmailSend, logger, "send_email")
+                    .FirstOrDefault();
             }
 
             if (selected == null)
-                throw new McpException("No enabled account available to send email");
+                throw new McpException(
+                    "No enabled account permits sending email. Use list_accounts to see each account's permissions.");
 
             account = selected;
         }

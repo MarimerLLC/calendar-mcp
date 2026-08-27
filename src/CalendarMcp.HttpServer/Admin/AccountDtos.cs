@@ -1,3 +1,5 @@
+using CalendarMcp.Core.Models;
+
 namespace CalendarMcp.HttpServer.Admin;
 
 /// <summary>
@@ -11,6 +13,13 @@ public record CreateAccountRequest
     public List<string> Domains { get; init; } = [];
     public bool Enabled { get; init; } = true;
     public int Priority { get; init; } = 0;
+
+    /// <summary>
+    /// Optional per-capability grants. Omit the block, or any flag within it, to grant
+    /// everything the provider supports.
+    /// </summary>
+    public AccountPermissions? Permissions { get; init; }
+
     public Dictionary<string, string> ProviderConfig { get; init; } = [];
 }
 
@@ -24,5 +33,12 @@ public record UpdateAccountRequest
     public List<string> Domains { get; init; } = [];
     public bool Enabled { get; init; } = true;
     public int Priority { get; init; } = 0;
+
+    /// <summary>
+    /// Optional per-capability grants. Omit the block, or any flag within it, to grant
+    /// everything the provider supports.
+    /// </summary>
+    public AccountPermissions? Permissions { get; init; }
+
     public Dictionary<string, string> ProviderConfig { get; init; } = [];
 }

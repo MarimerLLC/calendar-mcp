@@ -166,6 +166,8 @@ public class AddOutlookComAccountCommand : AsyncCommand<AddOutlookComAccountComm
                 { "clientId", clientId }
             };
 
+            var permissions = PermissionPrompt.Prompt("outlook.com", providerConfig);
+
             var newAccount = new Dictionary<string, object>
             {
                 { "id", accountId },
@@ -174,7 +176,8 @@ public class AddOutlookComAccountCommand : AsyncCommand<AddOutlookComAccountComm
                 { "enabled", true },
                 { "priority", priority },
                 { "domains", domainList },
-                { "providerConfig", providerConfig }
+                { "providerConfig", providerConfig },
+                { "permissions", PermissionPrompt.ToConfigNode(permissions) }
             };
 
             if (existingIndex >= 0)
@@ -209,6 +212,7 @@ public class AddOutlookComAccountCommand : AsyncCommand<AddOutlookComAccountComm
             table.AddRow("Account ID", accountId);
             table.AddRow("Display Name", displayName);
             table.AddRow("Provider", "outlook.com");
+            table.AddRow("Permissions", PermissionPrompt.Describe(permissions, "outlook.com", providerConfig));
             table.AddRow("Tenant", tenantId);
             table.AddRow("Client ID", clientId);
             table.AddRow("Domains", string.Join(", ", domainList));

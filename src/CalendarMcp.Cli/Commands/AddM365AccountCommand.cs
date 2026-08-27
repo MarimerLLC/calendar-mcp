@@ -166,6 +166,8 @@ public class AddM365AccountCommand : AsyncCommand<AddM365AccountCommand.Settings
                 { "Scopes", string.Join(",", scopes) }
             };
 
+            var permissions = PermissionPrompt.Prompt("microsoft365", providerConfig);
+
             var newAccount = new Dictionary<string, object>
             {
                 { "Id", accountId },
@@ -174,7 +176,8 @@ public class AddM365AccountCommand : AsyncCommand<AddM365AccountCommand.Settings
                 { "Enabled", true },
                 { "Priority", priority },
                 { "Domains", domainList },
-                { "ProviderConfig", providerConfig }
+                { "ProviderConfig", providerConfig },
+                { "Permissions", PermissionPrompt.ToConfigNode(permissions) }
             };
 
             if (existingIndex >= 0)
@@ -209,6 +212,7 @@ public class AddM365AccountCommand : AsyncCommand<AddM365AccountCommand.Settings
             table.AddRow("Account ID", accountId);
             table.AddRow("Display Name", displayName);
             table.AddRow("Provider", "microsoft365");
+            table.AddRow("Permissions", PermissionPrompt.Describe(permissions, "microsoft365", providerConfig));
             table.AddRow("Tenant ID", tenantId);
             table.AddRow("Client ID", clientId);
             table.AddRow("Domains", string.Join(", ", domainList));

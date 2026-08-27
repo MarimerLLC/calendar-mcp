@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Providers;
 using CalendarMcp.Core.Security;
+using CalendarMcp.Core.Services;
 
 namespace CalendarMcp.HttpServer.BlazorAdmin;
 
@@ -19,8 +20,56 @@ public abstract class AccountFormBase
 
     public int Priority { get; set; } = 0;
 
+    // Per-capability grants. All default to true so an unmodified form keeps the historical
+    // "account can do everything its provider supports" behaviour.
+    public bool EmailRead { get; set; } = true;
+    public bool EmailSend { get; set; } = true;
+    public bool CalendarRead { get; set; } = true;
+    public bool CalendarWrite { get; set; } = true;
+    public bool ContactsRead { get; set; } = true;
+    public bool ContactsWrite { get; set; } = true;
+
     public List<string> ParseDomains() =>
         Domains.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+    /// <summary>Builds the account this form describes. Used both to save and, via
+    /// <see cref="ProviderCapabilities"/>, to decide which permission toggles are meaningful.</summary>
+    public abstract AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null);
+
+    public AccountPermissions ToPermissions() => new()
+    {
+        EmailRead = EmailRead,
+        EmailSend = EmailSend,
+        CalendarRead = CalendarRead,
+        CalendarWrite = CalendarWrite,
+        ContactsRead = ContactsRead,
+        ContactsWrite = ContactsWrite
+    };
+
+    public void LoadPermissions(AccountPermissions permissions)
+    {
+        EmailRead = permissions.EmailRead;
+        EmailSend = permissions.EmailSend;
+        CalendarRead = permissions.CalendarRead;
+        CalendarWrite = permissions.CalendarWrite;
+        ContactsRead = permissions.ContactsRead;
+        ContactsWrite = permissions.ContactsWrite;
+    }
+
+    /// <summary>
+    /// What the currently-selected provider (and, for JSON, the paths entered so far) can do.
+    /// Toggles for capabilities the provider lacks are hidden rather than shown as dead controls.
+    /// </summary>
+    public IReadOnlyList<AccountCapability> ProviderCapabilities() =>
+        AccountCapabilities.GetProviderCapabilities(ToAccountInfo());
+
+    /// <summary>True when the provider offers the capability at all.</summary>
+    public bool Supports(string capability) =>
+        ProviderCapabilities().Any(c => c.Name == capability);
+
+    /// <summary>True when the provider offers the capability and it isn't read-only there.</summary>
+    public bool SupportsWrite(string capability) =>
+        ProviderCapabilities().Any(c => c.Name == capability && !c.ReadOnly);
 }
 
 /// <summary>
@@ -68,7 +117,7 @@ public class CreateAccountFormModel : AccountFormBase
     public string SentFolder { get; set; } = ImapProviderService.DefaultSent;
     public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
 
-    public AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null)
+    public override AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null)
     {
         var providerConfig = BuildProviderConfig(passwordProtector);
         return new AccountInfo
@@ -79,6 +128,7 @@ public class CreateAccountFormModel : AccountFormBase
             Domains = ParseDomains(),
             Enabled = Enabled,
             Priority = Priority,
+            Permissions = ToPermissions(),
             ProviderConfig = providerConfig
         };
     }
@@ -219,6 +269,8 @@ public class EditAccountFormModel : AccountFormBase
             Priority = account.Priority
         };
 
+        model.LoadPermissions(account.Permissions);
+
         var config = account.ProviderConfig;
         var provider = account.Provider.ToLowerInvariant();
 
@@ -276,7 +328,7 @@ public class EditAccountFormModel : AccountFormBase
         return model;
     }
 
-    public AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null)
+    public override AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null)
     {
         return new AccountInfo
         {
@@ -286,6 +338,7 @@ public class EditAccountFormModel : AccountFormBase
             Domains = ParseDomains(),
             Enabled = Enabled,
             Priority = Priority,
+            Permissions = ToPermissions(),
             ProviderConfig = BuildProviderConfig(passwordProtector)
         };
     }

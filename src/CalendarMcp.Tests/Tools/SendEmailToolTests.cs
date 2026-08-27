@@ -77,7 +77,7 @@ public class SendEmailToolTests
 
         var ex = await Assert.ThrowsExactlyAsync<McpException>(
             () => tool.SendEmail(new List<string> { "to@unknown.com" }, "Subject", "Body"));
-        Assert.AreEqual("No enabled account available to send email", ex.Message);
+        StringAssert.Contains(ex.Message, "No enabled account permits sending email");
         regExp.Verify();
     }
 
