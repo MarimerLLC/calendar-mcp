@@ -50,10 +50,18 @@ The installer will be uploaded as a release asset.
 
 ### Changing Version
 
-Edit `CalendarMcp-Setup.iss`:
-```iss
-#define MyAppVersion "1.0.0"
+The version is **not** set in `CalendarMcp-Setup.iss`. The script reads it from the
+built payload at compile time with `GetFileVersion`, so the installer always matches
+the version the binaries were actually built with.
+
+To change it, edit `VersionPrefix` in `Directory.Build.props` at the repo root:
+```xml
+<VersionPrefix>1.5.0</VersionPrefix>
 ```
+
+Then rebuild the payload so the new version is stamped into the binaries. Compiling
+without a payload in `..\release\calendar-mcp-win-x64\` fails with an explicit message
+rather than silently producing a wrongly-versioned installer.
 
 ### Adding Icon
 

@@ -6,7 +6,16 @@
 ; 2. Run: iscc CalendarMcp-Setup.iss
 
 #define MyAppName "Calendar MCP"
-#define MyAppVersion "1.0.0"
+
+; The version is read from the built payload rather than hardcoded here, so it always
+; tracks VersionPrefix in Directory.Build.props. PayloadDir is the same directory the
+; [Files] section installs from, so if the version resolves the payload is present.
+#define PayloadDir "..\release\calendar-mcp-win-x64"
+#define PayloadExe PayloadDir + "\CalendarMcp.Cli.exe"
+#if !FileExists(PayloadExe)
+  #error Payload not found. Publish the win-x64 build into ..\release\calendar-mcp-win-x64 before compiling this installer.
+#endif
+#define MyAppVersion GetFileVersion(PayloadExe)
 #define MyAppPublisher "Calendar MCP Project"
 #define MyAppURL "https://github.com/MarimerLLC/calendar-mcp"
 #define MyAppExeName "CalendarMcp.Cli.exe"
@@ -21,6 +30,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}/issues
 AppUpdatesURL={#MyAppURL}/releases
+VersionInfoVersion={#MyAppVersion}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
@@ -44,7 +54,7 @@ Name: "addtopath"; Description: "Add Calendar MCP to system PATH"; GroupDescript
 
 [Files]
 ; All files from the build output directory
-Source: "..\release\calendar-mcp-win-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 
 [Icons]
