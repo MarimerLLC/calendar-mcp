@@ -172,6 +172,8 @@ public class AddGoogleAccountCommand : AsyncCommand<AddGoogleAccountCommand.Sett
                 { "clientSecret", clientSecret }
             };
 
+            var permissions = PermissionPrompt.Prompt("google", providerConfig);
+
             var newAccount = new Dictionary<string, object>
             {
                 { "id", accountId },
@@ -180,7 +182,8 @@ public class AddGoogleAccountCommand : AsyncCommand<AddGoogleAccountCommand.Sett
                 { "enabled", true },
                 { "priority", priority },
                 { "domains", domainList },
-                { "providerConfig", providerConfig }
+                { "providerConfig", providerConfig },
+                { "permissions", PermissionPrompt.ToConfigNode(permissions) }
             };
 
             if (existingIndex >= 0)
@@ -215,6 +218,7 @@ public class AddGoogleAccountCommand : AsyncCommand<AddGoogleAccountCommand.Sett
             table.AddRow("Account ID", accountId);
             table.AddRow("Display Name", displayName);
             table.AddRow("Provider", "google");
+            table.AddRow("Permissions", PermissionPrompt.Describe(permissions, "google", providerConfig));
             table.AddRow("Client ID", $"{clientId[..20]}...");
             table.AddRow("Domains", string.Join(", ", domainList));
             table.AddRow("Priority", priority.ToString());

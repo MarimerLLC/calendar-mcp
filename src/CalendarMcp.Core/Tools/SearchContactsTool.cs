@@ -35,10 +35,20 @@ public sealed class SearchContactsTool(
             validAccounts = (await accountRegistry.GetAllAccountsAsync()).ToList();
             if (validAccounts.Count == 0)
                 throw new McpException("No accounts found");
+
+            // Skip accounts without contact-read permission (and providers with no contacts
+            // at all) rather than fanning out into a NotSupportedException.
+            validAccounts = ToolGuard.FilterByPermission(
+                validAccounts, AccountPermission.ContactsRead, logger, "search_contacts");
+            if (validAccounts.Count == 0)
+                throw ToolGuard.NoPermittedAccounts(AccountPermission.ContactsRead);
         }
         else
         {
-            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+            validAccounts = new List<AccountInfo>
+            {
+                await ToolGuard.RequireAccountAsync(accountRegistry, accountId, AccountPermission.ContactsRead)
+            };
         }
 
         try

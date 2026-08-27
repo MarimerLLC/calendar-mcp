@@ -17,11 +17,31 @@ Calendar-MCP aggregates email, calendar, and contact information from multiple p
 | ICS Calendar Feeds | -- | Read-only | -- | None (public URLs) |
 | JSON Calendar Files | -- | Read-only | -- | None (local files) |
 
+### Per-Account Permissions
+
+Each account carries its own independent grants, so you can hand an assistant exactly as much
+access as a task needs — read one mailbox but never send from it, interact with a calendar but
+never touch email, and so on. Two Gmail accounts can be scoped completely differently.
+
+| Permission | Grants |
+|---|---|
+| `emailRead` | Read and manage mail: get, search, details, attachments, delete, move, mark read |
+| `emailSend` | Send mail, including mailto unsubscribes |
+| `calendarRead` | List calendars and read events |
+| `calendarWrite` | Create, update, delete, and respond to events |
+| `contactsRead` | Read and search contacts |
+| `contactsWrite` | Create, update, and delete contacts |
+
+Everything is granted by default, and grants are intersected with what the provider can actually
+do — granting `calendarRead` on an IMAP account still yields no calendar. Set them when adding
+an account via the CLI, in the admin web UI, or directly in `appsettings.json`. See
+[Account Permissions](docs/configuration.md#account-permissions).
+
 ### MCP Tools
 
 The server exposes these tools to AI assistants:
 
-- **list_accounts** — List all configured accounts
+- **list_accounts** — List all configured accounts, with each one's capabilities and permissions
 - **get_emails** / **search_emails** — Read and search email across accounts
 - **get_email_details** — Get full email content
 - **get_contextual_email_summary** — AI-powered topic clustering and persona analysis

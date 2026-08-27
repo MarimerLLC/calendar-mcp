@@ -85,6 +85,42 @@ public class EncryptedFileDataStore : IDataStore
 }
 ```
 
+## Per-Account Permissions
+
+Beyond OAuth scopes, each configured account carries a `Permissions` block that gates which MCP
+tools may touch it. This is enforced in the server, independently of what the provider token
+would allow, so an over-scoped OAuth grant can still be narrowed at the account level.
+
+```json
+"Permissions": {
+  "emailRead": true,
+  "emailSend": false,
+  "calendarRead": false,
+  "calendarWrite": false,
+  "contactsRead": false,
+  "contactsWrite": false
+}
+```
+
+Properties worth knowing for a threat model:
+
+- **Grants are per account**, not per provider type. Two accounts on the same provider are scoped
+  independently.
+- **Enforcement is central.** Every tool resolves its account through `ToolGuard`, which consults
+  `AccountCapabilities.IsAllowed` before any provider call is made. A denied operation never
+  reaches the provider.
+- **Grants are intersected with provider capability.** `IsAllowed` returns false when the provider
+  has no such capability (calendar on IMAP) or is read-only for it (writes on an ICS feed), no
+  matter what the config says. `list_accounts` advertises this effective result, so an assistant
+  is never told about access it doesn't have.
+- **Defaults are permissive.** An omitted block grants everything, preserving behaviour for configs
+  written before the feature existed. Least-privilege setups must set the flags explicitly.
+- **This is not a substitute for narrow OAuth scopes.** Permissions stop this server from making
+  the call; the underlying token may still be broadly scoped. For defence in depth, narrow the app
+  registration's scopes as well — see [M365 setup](M365-SETUP.md) and [Google setup](GOOGLE-SETUP.md).
+
+Full flag reference: [Account Permissions](configuration.md#account-permissions).
+
 ## Multi-Tenant Isolation
 
 ### Per-Account Token Caches

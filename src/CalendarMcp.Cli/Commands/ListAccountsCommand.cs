@@ -83,6 +83,7 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
             table.AddColumn("[bold]Provider[/]");
             table.AddColumn("[bold]Enabled[/]");
             table.AddColumn("[bold]Status[/]");
+            table.AddColumn("[bold]Permissions[/]");
             table.AddColumn("[bold]Domains[/]");
 
             await AnsiConsole.Status()
@@ -115,6 +116,7 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
                             provider,
                             enabledStr,
                             statusStr,
+                            DescribePermissions(account, id, provider),
                             domains
                         );
                     }
@@ -132,6 +134,63 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
             AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Renders the account's effective permissions — its grants intersected with what the
+    /// provider supports — so a revoked capability is visible without opening the config file.
+    /// </summary>
+    private static string DescribePermissions(Dictionary<string, JsonElement> account, string accountId, string provider)
+    {
+        var providerConfig = new Dictionary<string, string>();
+        if (TryGetElement(account, out var providerConfigElem, "ProviderConfig", "providerConfig"))
+        {
+            providerConfig = providerConfigElem.Deserialize<Dictionary<string, string>>()
+                ?? new Dictionary<string, string>();
+        }
+
+        var accountInfo = new AccountInfo
+        {
+            Id = accountId,
+            DisplayName = "",
+            Provider = provider,
+            ProviderConfig = providerConfig,
+            Permissions = ReadPermissions(account)
+        };
+
+        var granted = AccountPermissions.AllPermissions
+            .Where(p => AccountCapabilities.IsAllowed(accountInfo, p))
+            .Select(AccountPermissions.ToPropertyName)
+            .ToList();
+
+        return granted.Count > 0 ? string.Join(", ", granted) : "[red]none[/]";
+    }
+
+    /// <summary>
+    /// Reads the optional Permissions block. Flags the file omits default to granted, so
+    /// configs written before permissions existed still show every capability.
+    /// </summary>
+    private static AccountPermissions ReadPermissions(Dictionary<string, JsonElement> account)
+    {
+        if (!TryGetElement(account, out var elem, "Permissions", "permissions")
+            || elem.ValueKind != JsonValueKind.Object)
+        {
+            return AccountPermissions.All;
+        }
+
+        var permissions = AccountPermissions.All;
+        foreach (var permission in AccountPermissions.AllPermissions)
+        {
+            var camel = AccountPermissions.ToPropertyName(permission);
+            var pascal = char.ToUpperInvariant(camel[0]) + camel[1..];
+
+            if (!elem.TryGetProperty(pascal, out var value) && !elem.TryGetProperty(camel, out value))
+                continue;
+
+            if (value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                permissions = permissions.With(permission, value.GetBoolean());
+        }
+        return permissions;
     }
 
     /// <summary>

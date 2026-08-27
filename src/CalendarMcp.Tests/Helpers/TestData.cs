@@ -10,7 +10,8 @@ internal static class TestData
         string provider = "microsoft365",
         bool enabled = true,
         List<string>? domains = null,
-        Dictionary<string, string>? providerConfig = null)
+        Dictionary<string, string>? providerConfig = null,
+        AccountPermissions? permissions = null)
     {
         return new AccountInfo
         {
@@ -19,6 +20,7 @@ internal static class TestData
             Provider = provider,
             Enabled = enabled,
             Domains = domains ?? ["example.com"],
+            Permissions = permissions ?? AccountPermissions.All,
             ProviderConfig = providerConfig ?? new Dictionary<string, string>
             {
                 ["TenantId"] = "test-tenant",

@@ -57,6 +57,13 @@ public sealed class BulkMoveEmailsTool(
                         return new BulkResultItem(item.EmailId, item.AccountId, false, $"Account '{item.AccountId}' not found");
                     }
 
+                    // Per-item rather than up-front, so one scoped-out account doesn't fail the batch.
+                    if (!AccountCapabilities.IsAllowed(account, AccountPermission.EmailRead))
+                    {
+                        return new BulkResultItem(item.EmailId, item.AccountId, false,
+                            $"Account '{item.AccountId}' does not permit {AccountPermissions.Describe(AccountPermission.EmailRead)}");
+                    }
+
                     var provider = providerFactory.GetProvider(account.Provider);
                     await provider.MoveEmailAsync(item.AccountId, item.EmailId, destination, CancellationToken.None);
                     return new BulkResultItem(item.EmailId, item.AccountId, true, null);

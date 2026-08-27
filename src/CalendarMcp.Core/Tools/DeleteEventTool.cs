@@ -31,14 +31,19 @@ public sealed class DeleteEventTool(
         Models.AccountInfo account;
         if (!string.IsNullOrEmpty(accountId))
         {
-            account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+            account = await ToolGuard.RequireAccountAsync(
+                accountRegistry, accountId, Models.AccountPermission.CalendarWrite);
         }
         else
         {
+            // Fall back to the first account that actually permits the write, so a
+            // scoped-out account at the head of the list doesn't hijack the operation.
             var accounts = await accountRegistry.GetAllAccountsAsync();
-            var first = accounts.FirstOrDefault();
+            var candidates = ToolGuard.FilterByPermission(
+                accounts, Models.AccountPermission.CalendarWrite, logger, "delete_event");
+            var first = candidates.FirstOrDefault();
             if (first == null)
-                throw new McpException("No enabled account available to delete event");
+                throw new McpException("No enabled account permits delete event");
             account = first;
         }
 

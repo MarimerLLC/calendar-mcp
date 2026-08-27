@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text.Json;
+using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
@@ -41,7 +42,8 @@ public sealed class GetEmailAttachmentTool(
         if (normalizedMode is not ("stash" or "inline"))
             throw new McpException($"mode '{mode}' is invalid; use 'stash' or 'inline'.");
 
-        var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+        var account = await ToolGuard.RequireAccountAsync(
+            accountRegistry, accountId, AccountPermission.EmailRead);
 
         try
         {

@@ -242,10 +242,42 @@ public sealed class AccountConfigurationService : IAccountConfigurationService
             ["Enabled"] = account.Enabled,
             ["Priority"] = account.Priority,
             ["Domains"] = new JsonArray(account.Domains.Select(d => JsonValue.Create(d)).ToArray<JsonNode?>()),
+            ["Permissions"] = PermissionsToNode(account.Permissions),
             ["ProviderConfig"] = DictionaryToNode(account.ProviderConfig)
         };
         return obj;
     }
+
+    private static JsonObject PermissionsToNode(AccountPermissions permissions)
+    {
+        var obj = new JsonObject();
+        foreach (var permission in AccountPermissions.AllPermissions)
+            obj[AccountPermissions.ToPropertyName(permission)] = permissions.IsGranted(permission);
+        return obj;
+    }
+
+    /// <summary>
+    /// Reads the optional Permissions block. Any flag the file omits defaults to granted, so
+    /// configs written before permissions existed keep every capability they had.
+    /// </summary>
+    private static AccountPermissions GetPermissionsProperty(JsonObject? obj)
+    {
+        var node = obj?["Permissions"]?.AsObject() ?? obj?["permissions"]?.AsObject();
+        if (node is null)
+            return AccountPermissions.All;
+
+        var permissions = AccountPermissions.All;
+        foreach (var permission in AccountPermissions.AllPermissions)
+        {
+            var granted = GetBoolProperty(node, ToPascal(AccountPermissions.ToPropertyName(permission)));
+            if (granted is not null)
+                permissions = permissions.With(permission, granted.Value);
+        }
+        return permissions;
+    }
+
+    private static string ToPascal(string camelName) =>
+        char.ToUpperInvariant(camelName[0]) + camelName[1..];
 
     private static JsonObject DictionaryToNode(Dictionary<string, string> dict)
     {
@@ -280,6 +312,7 @@ public sealed class AccountConfigurationService : IAccountConfigurationService
             var enabled = GetBoolProperty(obj, "Enabled") ?? true;
             var priority = GetIntProperty(obj, "Priority") ?? 0;
             var domains = GetStringListProperty(obj, "Domains");
+            var permissions = GetPermissionsProperty(obj);
             var providerConfig = GetStringDictProperty(obj, "ProviderConfig");
 
             results.Add(new AccountInfo
@@ -290,6 +323,7 @@ public sealed class AccountConfigurationService : IAccountConfigurationService
                 Enabled = enabled,
                 Priority = priority,
                 Domains = domains,
+                Permissions = permissions,
                 ProviderConfig = providerConfig
             });
         }

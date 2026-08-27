@@ -148,6 +148,8 @@ public class AddIcsAccountCommand : AsyncCommand<AddIcsAccountCommand.Settings>
                 { "CacheTtlMinutes", cacheTtlMinutes.ToString() }
             };
 
+            var permissions = PermissionPrompt.Prompt("ics", providerConfig);
+
             var newAccount = new Dictionary<string, object>
             {
                 { "Id", accountId },
@@ -156,7 +158,8 @@ public class AddIcsAccountCommand : AsyncCommand<AddIcsAccountCommand.Settings>
                 { "Enabled", true },
                 { "Priority", priority },
                 { "Domains", new List<string>() },
-                { "ProviderConfig", providerConfig }
+                { "ProviderConfig", providerConfig },
+                { "Permissions", PermissionPrompt.ToConfigNode(permissions) }
             };
 
             if (existingIndex >= 0)
@@ -191,6 +194,7 @@ public class AddIcsAccountCommand : AsyncCommand<AddIcsAccountCommand.Settings>
             table.AddRow("Account ID", accountId);
             table.AddRow("Display Name", displayName);
             table.AddRow("Provider", "ics");
+            table.AddRow("Permissions", PermissionPrompt.Describe(permissions, "ics", providerConfig));
             table.AddRow("ICS URL", icsUrl.Length > 60 ? icsUrl[..57] + "..." : icsUrl);
             table.AddRow("Cache TTL", $"{cacheTtlMinutes} minutes");
             table.AddRow("Priority", priority.ToString());

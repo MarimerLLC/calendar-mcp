@@ -36,6 +36,13 @@ public class AccountInfo
     public int Priority { get; init; } = 0;
     
     /// <summary>
+    /// Which capabilities this account grants to MCP tools. Defaults to everything the
+    /// provider supports; turn individual flags off to scope an account down (e.g. read
+    /// email but never send, or calendar only).
+    /// </summary>
+    public AccountPermissions Permissions { get; init; } = new();
+
+    /// <summary>
     /// Provider-specific configuration (tenant ID, client ID, etc.).
     /// Keys are compared case-insensitively so callers can use either camelCase
     /// or PascalCase without coordination.

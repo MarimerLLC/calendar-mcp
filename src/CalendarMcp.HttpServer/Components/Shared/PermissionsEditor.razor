@@ -1,0 +1,154 @@
+@using CalendarMcp.HttpServer.BlazorAdmin
+@using CalendarMcp.Core.Services
+
+@*
+    Per-account capability grants. Only toggles the selected provider can actually honour are
+    rendered — an IMAP account has no calendar to grant, and an ICS feed is read-only, so
+    showing those switches would promise something the provider can't deliver.
+*@
+
+<div class="card mb-3">
+    <div class="card-header py-2">
+        <i class="bi bi-shield-lock me-1"></i>
+        <span class="fw-semibold">Permissions</span>
+        <span class="text-muted small ms-2">What this account allows the AI assistant to do</span>
+    </div>
+    <div class="card-body">
+        @if (!_anyToggles)
+        {
+            <p class="text-muted small mb-0">
+                This provider exposes no configurable permissions.
+            </p>
+        }
+        else
+        {
+            <div class="row">
+                @if (Model.Supports(AccountCapabilities.Email))
+                {
+                    <div class="col-md-4 mb-2">
+                        <div class="fw-semibold small text-uppercase text-muted mb-1">Email</div>
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" @bind-Value="Model.EmailRead" id="perm-email-read" />
+                            <label class="form-check-label" for="perm-email-read">
+                                Read &amp; manage
+                                <span class="d-block text-muted small">
+                                    Read, search, download attachments, delete, move, mark read
+                                </span>
+                            </label>
+                        </div>
+                        @if (Model.SupportsWrite(AccountCapabilities.Email))
+                        {
+                            <div class="form-check">
+                                <InputCheckbox class="form-check-input" @bind-Value="Model.EmailSend" id="perm-email-send" />
+                                <label class="form-check-label" for="perm-email-send">
+                                    Send
+                                    <span class="d-block text-muted small">Send mail and mailto unsubscribes</span>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (Model.Supports(AccountCapabilities.Calendar))
+                {
+                    <div class="col-md-4 mb-2">
+                        <div class="fw-semibold small text-uppercase text-muted mb-1">Calendar</div>
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" @bind-Value="Model.CalendarRead" id="perm-cal-read" />
+                            <label class="form-check-label" for="perm-cal-read">
+                                Read
+                                <span class="d-block text-muted small">List calendars and read events</span>
+                            </label>
+                        </div>
+                        @if (Model.SupportsWrite(AccountCapabilities.Calendar))
+                        {
+                            <div class="form-check">
+                                <InputCheckbox class="form-check-input" @bind-Value="Model.CalendarWrite" id="perm-cal-write" />
+                                <label class="form-check-label" for="perm-cal-write">
+                                    Write
+                                    <span class="d-block text-muted small">Create, update, delete, respond to events</span>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (Model.Supports(AccountCapabilities.Contacts))
+                {
+                    <div class="col-md-4 mb-2">
+                        <div class="fw-semibold small text-uppercase text-muted mb-1">Contacts</div>
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" @bind-Value="Model.ContactsRead" id="perm-contacts-read" />
+                            <label class="form-check-label" for="perm-contacts-read">
+                                Read
+                                <span class="d-block text-muted small">Read and search contacts</span>
+                            </label>
+                        </div>
+                        @if (Model.SupportsWrite(AccountCapabilities.Contacts))
+                        {
+                            <div class="form-check">
+                                <InputCheckbox class="form-check-input" @bind-Value="Model.ContactsWrite" id="perm-contacts-write" />
+                                <label class="form-check-label" for="perm-contacts-write">
+                                    Write
+                                    <span class="d-block text-muted small">Create, update, delete contacts</span>
+                                </label>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="d-flex gap-2 mt-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="GrantAll">
+                    Grant all
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" @onclick="RevokeAll">
+                    Revoke all
+                </button>
+            </div>
+
+            @if (!_anyGranted)
+            {
+                <div class="alert alert-warning py-2 px-3 mt-3 mb-0 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    No permissions are granted. Every tool will refuse this account.
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public AccountFormBase Model { get; set; } = default!;
+
+    private bool _anyToggles =>
+        Model.Supports(AccountCapabilities.Email)
+        || Model.Supports(AccountCapabilities.Calendar)
+        || Model.Supports(AccountCapabilities.Contacts);
+
+    // Only counts permissions the provider can honour — an ICS feed's always-false
+    // calendarWrite shouldn't keep the "nothing granted" warning hidden.
+    private bool _anyGranted =>
+        AccountCapabilities.GetCapabilities(Model.ToAccountInfo()).Count > 0;
+
+    private void GrantAll()
+    {
+        Model.EmailRead = true;
+        Model.EmailSend = true;
+        Model.CalendarRead = true;
+        Model.CalendarWrite = true;
+        Model.ContactsRead = true;
+        Model.ContactsWrite = true;
+    }
+
+    private void RevokeAll()
+    {
+        Model.EmailRead = false;
+        Model.EmailSend = false;
+        Model.CalendarRead = false;
+        Model.CalendarWrite = false;
+        Model.ContactsRead = false;
+        Model.ContactsWrite = false;
+    }
+}

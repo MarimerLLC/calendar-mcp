@@ -38,10 +38,20 @@ public sealed class SearchEmailsTool(
             validAccounts = (await accountRegistry.GetAllAccountsAsync()).ToList();
             if (validAccounts.Count == 0)
                 throw new McpException("No accounts found");
+
+            // Skip accounts that don't permit email reads — the caller asked for "all
+            // accounts", and a scoped-out account simply isn't part of that set.
+            validAccounts = ToolGuard.FilterByPermission(
+                validAccounts, AccountPermission.EmailRead, logger, "search_emails");
+            if (validAccounts.Count == 0)
+                throw ToolGuard.NoPermittedAccounts(AccountPermission.EmailRead);
         }
         else
         {
-            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+            validAccounts = new List<AccountInfo>
+            {
+                await ToolGuard.RequireAccountAsync(accountRegistry, accountId, AccountPermission.EmailRead)
+            };
         }
 
         try

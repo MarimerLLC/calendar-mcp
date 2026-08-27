@@ -31,16 +31,19 @@ public sealed class ListCalendarsTool(
             if (validAccounts.Count == 0)
                 throw new McpException("No accounts found");
 
-            // Skip email-only accounts (e.g. IMAP) — listing calendars on them would throw
-            // NotSupportedException. An explicit accountId is left untouched so a direct
-            // request still surfaces the provider error.
-            foreach (var skipped in validAccounts.Where(a => !AccountCapabilities.HasCalendar(a)))
-                logger.LogInformation("Skipping account {AccountId} in list_calendars: no calendar capability", skipped.Id);
-            validAccounts = validAccounts.Where(AccountCapabilities.HasCalendar).ToList();
+            // Skip accounts that can't or may not be read: email-only providers (e.g. IMAP),
+            // where listing calendars would throw NotSupportedException, and accounts whose
+            // calendar-read permission is revoked.
+            validAccounts = ToolGuard.FilterByPermission(
+                validAccounts, AccountPermission.CalendarRead, logger, "list_calendars");
         }
         else
         {
-            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+            // An explicit accountId gets a hard error rather than a silent skip.
+            validAccounts = new List<AccountInfo>
+            {
+                await ToolGuard.RequireAccountAsync(accountRegistry, accountId, AccountPermission.CalendarRead)
+            };
         }
 
         try

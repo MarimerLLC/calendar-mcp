@@ -366,6 +366,8 @@ public class AddJsonAccountCommand : AsyncCommand<AddJsonAccountCommand.Settings
             var existingIndex = accounts.FindIndex(a =>
                 a.TryGetValue("Id", out var id) && id?.ToString() == accountId);
 
+            var permissions = PermissionPrompt.Prompt("json", providerConfig);
+
             var newAccount = new Dictionary<string, object>
             {
                 { "id", accountId },
@@ -374,7 +376,8 @@ public class AddJsonAccountCommand : AsyncCommand<AddJsonAccountCommand.Settings
                 { "enabled", true },
                 { "priority", priority },
                 { "domains", new List<string>() },
-                { "providerConfig", providerConfig }
+                { "providerConfig", providerConfig },
+                { "permissions", PermissionPrompt.ToConfigNode(permissions) }
             };
 
             if (existingIndex >= 0)
@@ -409,6 +412,7 @@ public class AddJsonAccountCommand : AsyncCommand<AddJsonAccountCommand.Settings
             table.AddRow("Account ID", accountId);
             table.AddRow("Display Name", displayName);
             table.AddRow("Provider", "json");
+            table.AddRow("Permissions", PermissionPrompt.Describe(permissions, "json", providerConfig));
             table.AddRow("Source", source);
 
             if (source == "local")

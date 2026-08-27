@@ -61,6 +61,14 @@ set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
         "Enabled": true,
         "Priority": 1,
         "Domains": ["company.com"],
+        "Permissions": {
+          "emailRead": true,
+          "emailSend": false,
+          "calendarRead": true,
+          "calendarWrite": true,
+          "contactsRead": true,
+          "contactsWrite": false
+        },
         "ProviderConfig": {
           "TenantId": "12345678-1234-1234-1234-123456789abc",
           "ClientId": "87654321-4321-4321-4321-cba987654321"
@@ -163,6 +171,62 @@ set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
 - `enabled` (default: true): Enable/disable account
 - `priority` (default: 999): Priority for ambiguous routing decisions
 - `domains`: Email domains for smart routing (e.g., ["company.com"])
+- `permissions`: Per-account capability grants — see [Account Permissions](#account-permissions)
+
+## Account Permissions
+
+Every account carries an optional `Permissions` block controlling which MCP tools may touch it.
+This is **per account, not per provider type**: two Gmail accounts have entirely independent
+blocks, so one can be read-only while the other has full access.
+
+```json
+"Permissions": {
+  "emailRead": true,
+  "emailSend": false,
+  "calendarRead": false,
+  "calendarWrite": false,
+  "contactsRead": false,
+  "contactsWrite": false
+}
+```
+
+| Flag | Grants |
+|---|---|
+| `emailRead` | Read and manage mail: get, search, details, attachments, delete, move, mark read |
+| `emailSend` | Send mail, including mailto unsubscribes |
+| `calendarRead` | List calendars and read events |
+| `calendarWrite` | Create, update, delete, and respond to events |
+| `contactsRead` | Read and search contacts |
+| `contactsWrite` | Create, update, and delete contacts |
+
+Notes:
+
+- **Defaults to everything.** Omit the block, or any flag inside it, and that capability is
+  granted. Configs written before this feature existed keep working unchanged.
+- **Intersected with the provider.** A grant can't conjure a capability the provider lacks:
+  `calendarRead` on an IMAP account is still denied, and `calendarWrite` on a read-only ICS feed
+  is still denied. `list_accounts` reports the *effective* result.
+- **Mailbox management sits under `emailRead`**, not `emailSend`. `emailSend` is strictly about
+  putting new mail into the world on the account's behalf.
+- Both `PascalCase` and `camelCase` flag names are accepted on read; the CLI and admin UI write
+  `camelCase`.
+
+To grant an account read-only access to email and nothing else:
+
+```json
+"Permissions": {
+  "emailRead": true,
+  "emailSend": false,
+  "calendarRead": false,
+  "calendarWrite": false,
+  "contactsRead": false,
+  "contactsWrite": false
+}
+```
+
+Set them interactively with the `add-*-account` CLI commands, or in the admin web UI under
+**Permissions** on the add/edit account form. `calendar-mcp-cli list-accounts` shows each
+account's effective permissions.
 
 ### Google Workspace / Gmail Accounts
 
