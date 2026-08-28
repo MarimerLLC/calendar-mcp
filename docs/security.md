@@ -4,6 +4,38 @@
 
 Calendar-MCP handles sensitive data including emails, calendar events, and authentication tokens. Security is built into the design from the ground up.
 
+## Transport Security (HTTP server)
+
+The HTTP server exposes three surfaces with independent protection:
+
+| Surface | Protection |
+|---|---|
+| `/` (MCP protocol), `/attachments/*` | MCP API key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` |
+| `/admin/*` (REST API) | Admin token — `CALENDAR_MCP_ADMIN_TOKEN` |
+| `/admin/ui/*` (Blazor console) | Session cookie issued at login |
+| `/health`, `/health/ready` | Anonymous (Kubernetes probes) |
+
+### MCP API Keys
+
+- **Hashed at rest.** Only a SHA-256 of each key is written to `mcp-keys.json`. The secret is
+  displayed once at creation and cannot be recovered, so a leaked key file grants nothing.
+- **Fixed-time comparison.** Validation uses `CryptographicOperations.FixedTimeEquals` against
+  every active key with no early exit, so response latency reveals neither how close a guess
+  was nor which key matched.
+- **Individually revocable.** Each key carries a label and id. Revoking one leaves the others
+  working, and revoked keys are retained for audit rather than deleted. Revocation is currently
+  performed by editing `mcp-keys.json` and restarting; a management UI is planned.
+- **Enforced by default.** `CalendarMcp:Mcp:RequireApiKey` defaults to `true`. If no key exists
+  at startup, one is generated and logged rather than leaving the endpoint open.
+- **Refuses plaintext transport.** With enforcement on, a non-loopback `http://`
+  `ExternalBaseUrl` stops the server from starting, since the key would cross the wire in clear
+  text.
+
+An API key authorizes access to *every* account the server is configured with. Per-account
+limits are a separate layer — see [Per-Account Permissions](#per-account-permissions) below.
+
+See [Configuration](configuration.md#mcp-endpoint-api-keys-http-server) for setup.
+
 ## Authentication & Authorization
 
 ### OAuth 2.0 Flow

@@ -511,6 +511,135 @@ For setup walkthrough including Gmail app passwords, see `docs/IMAP-SETUP.md`.
 
 ## Security Considerations
 
+### MCP Endpoint API Keys (HTTP server)
+
+The HTTP server's MCP and attachment endpoints require an API key. Requests must carry it as
+either header:
+
+```
+Authorization: Bearer cmcp_...
+X-Api-Key: cmcp_...
+```
+
+Keys are stored in `mcp-keys.json` in the data directory, hashed with SHA-256 — the secret
+itself is shown once and is not recoverable, so a leaked key file yields no working credentials.
+
+**First start**: if no key exists, the server generates one and writes it to the log at
+`Warning` level. Copy it from the log; it is never printed again.
+
+```
+====================================================================
+No MCP API key was configured, so one has been generated for you.
+Copy it now - it is hashed at rest and will never be shown again.
+    MCP API key: cmcp_TwkWmK4OT1jKPy79xIx_LTYuU4UPUzlsXUo6ywA9kIA
+    Key id:      k_RpvfwHMWyRk
+====================================================================
+```
+
+**Supplying your own key** — useful for Kubernetes Secrets and docker-compose, where the key
+should come from the deployment rather than the data volume:
+
+```bash
+export CALENDAR_MCP_MCP_KEY="your-key-here"
+```
+
+An environment key is always accepted and is never written to `mcp-keys.json`. Rotate it by
+changing the environment variable. Setting it also suppresses first-start key generation.
+
+**Rotating a generated key**: the admin console does not yet manage keys. For now, stop the
+server, edit `mcp-keys.json`, and start it again — the file is read once at startup. Adding a
+`"revokedUtc"` timestamp to an entry disables that key while keeping it for audit; deleting the
+entry removes it outright. Removing every entry makes the server generate a fresh key on the
+next start and log it.
+
+```json
+{
+  "keys": [
+    {
+      "id": "k_RpvfwHMWyRk",
+      "label": "Auto-generated at first start",
+      "hash": "PL1PNhJdllsgh4Rb0CnMFJCMQhNYpo/IoaO0nuExcAk=",
+      "createdUtc": "2026-08-28T04:43:13.1580083+00:00",
+      "revokedUtc": "2026-09-01T12:00:00.0000000+00:00"
+    }
+  ]
+}
+```
+
+**Settings**:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `CalendarMcp:Mcp:RequireApiKey` | `true` | When `false`, the MCP and attachment endpoints accept any caller that can reach them. |
+
+```json
+{
+  "CalendarMcp": {
+    "Mcp": { "RequireApiKey": false }
+  }
+}
+```
+
+Only disable enforcement when the server is confined to a private network. Never expose the
+server publicly — including via a Tailscale Funnel endpoint — with enforcement off.
+
+**Transport**: a key is only as private as the channel carrying it. If
+`CalendarMcp:ExternalBaseUrl` is set to a non-loopback `http://` URL while key enforcement is
+on, the server refuses to start rather than leak keys in clear text. Terminate TLS in front of
+the server (a Tailscale Funnel endpoint already does).
+
+The `/health` and `/health/ready` probes stay anonymous, and the `/admin` API continues to use
+`CALENDAR_MCP_ADMIN_TOKEN` — see [Security](security.md).
+
+#### Connecting a client
+
+The MCP endpoint is the server root (`/`), so the URL is just the server's base address.
+
+**Claude Code**:
+
+```bash
+claude mcp add --transport http calendar-mcp https://your-server.example.com/ \
+  --header "Authorization: Bearer cmcp_..."
+```
+
+**VS Code** (`.vscode/mcp.json`):
+
+```json
+{
+  "servers": {
+    "calendar-mcp": {
+      "type": "http",
+      "url": "https://your-server.example.com/",
+      "headers": { "Authorization": "Bearer cmcp_..." }
+    }
+  }
+}
+```
+
+**Any client without custom-header support** can use the `mcp-remote` bridge:
+
+```json
+{
+  "mcpServers": {
+    "calendar-mcp": {
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote", "https://your-server.example.com/",
+        "--header", "Authorization: Bearer cmcp_..."
+      ]
+    }
+  }
+}
+```
+
+Client support for remote MCP servers and custom headers varies and changes quickly — check
+your client's own documentation if these shapes don't match what it expects.
+
+**Troubleshooting a 401**: the response body names the accepted headers, and the server logs
+`Rejected MCP request with an invalid API key` at `Warning` level with the request path and
+remote IP. A missing header produces the same 401 but no log entry, since an unauthenticated
+probe is not treated as a failure.
+
 ### Sensitive Data Protection
 
 **DO NOT store in appsettings.json**:

@@ -118,6 +118,9 @@ Account setup guides:
 
 See the [Claude Desktop Setup Guide](docs/CLAUDE-DESKTOP-SETUP.md) for all platforms and troubleshooting.
 
+Connecting to the **HTTP server** instead of a local subprocess requires an API key header — see
+[Connecting a client](docs/configuration.md#connecting-a-client).
+
 ## Deployment Options
 
 ### Stdio Server (Local)
@@ -141,7 +144,17 @@ docker build -t calendar-mcp-http .
 docker run -p 8080:8080 -v calendar-mcp-data:/app/data calendar-mcp-http
 ```
 
-See the HTTP transport documentation for Kubernetes and other container orchestration setups.
+The MCP endpoint requires an API key. On first start the server generates one and prints it to
+the log — copy it from there, as it is hashed at rest and never shown again. Clients send it as
+`Authorization: Bearer <key>` or `X-Api-Key: <key>`; to supply your own key instead, set
+`CALENDAR_MCP_MCP_KEY`.
+
+- [MCP endpoint API keys](docs/configuration.md#mcp-endpoint-api-keys-http-server) — settings, key rotation, and disabling enforcement
+- [Connecting a client](docs/configuration.md#connecting-a-client) — Claude Code, VS Code, and `mcp-remote` examples
+- [Transport security](docs/security.md#transport-security-http-server) — what protects each endpoint
+
+Manifests for Kubernetes are in [`k8s/`](k8s/), and a Compose file is at
+[`docker-compose.yml`](docker-compose.yml).
 
 ## Building from Source
 

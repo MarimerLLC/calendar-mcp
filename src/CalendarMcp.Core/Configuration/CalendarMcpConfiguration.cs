@@ -23,6 +23,26 @@ public class CalendarMcpConfiguration
     /// Can also be set via CALENDARMCP__EXTERNALBASEURL environment variable.
     /// </summary>
     public string? ExternalBaseUrl { get; set; }
+
+    /// <summary>
+    /// Settings for the MCP protocol endpoint itself (as opposed to the accounts it serves).
+    /// </summary>
+    public McpEndpointConfiguration Mcp { get; set; } = new();
+}
+
+/// <summary>
+/// Transport-level settings for the MCP and attachment endpoints.
+/// </summary>
+public class McpEndpointConfiguration
+{
+    /// <summary>
+    /// Whether MCP and attachment requests must present a valid API key.
+    ///
+    /// Defaults to true. Setting it to false leaves the endpoints open to anyone who can reach
+    /// them, which is only defensible when the server is confined to a private network — it is
+    /// never safe for a publicly reachable deployment such as a Tailscale Funnel endpoint.
+    /// </summary>
+    public bool RequireApiKey { get; set; } = true;
 }
 
 /// <summary>

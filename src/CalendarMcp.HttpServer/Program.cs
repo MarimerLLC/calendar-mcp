@@ -1,9 +1,12 @@
 using System.Text.RegularExpressions;
 using CalendarMcp.Auth;
 using CalendarMcp.Core.Configuration;
+using CalendarMcp.Core.Security;
 using CalendarMcp.HttpServer.Admin;
 using CalendarMcp.HttpServer.BlazorAdmin;
 using CalendarMcp.HttpServer.Endpoints;
+using CalendarMcp.HttpServer.Security;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -102,6 +105,12 @@ public class Program
         builder.Services.AddSingleton<DeviceCodeAuthManager>();
         builder.Services.AddSingleton<GoogleOAuthManager>();
 
+        // API keys guarding the MCP + attachment endpoints. Registered explicitly (rather than
+        // relying on constructor defaults) so the optional path/bootstrap arguments stay
+        // available to tests.
+        builder.Services.AddSingleton<IMcpKeyStore>(sp =>
+            new FileMcpKeyStore(sp.GetRequiredService<ILogger<FileMcpKeyStore>>()));
+
         // Background sweeper for the attachment store (uploads land here only
         // in HTTP mode, so eviction is HTTP-side too).
         builder.Services.AddHostedService<AttachmentEvictionService>();
@@ -120,9 +129,19 @@ public class Program
                 options.Cookie.HttpOnly = true;
                 options.Cookie.SameSite = SameSiteMode.Lax;
                 options.LoginPath = "/admin/ui/login";
-            });
+            })
+            .AddScheme<AuthenticationSchemeOptions, McpApiKeyHandler>(
+                McpApiKeyHandler.SchemeName, _ => { });
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddScoped<AuthenticationStateProvider, AdminAuthenticationStateProvider>();
+
+        // Policy guarding the MCP protocol and attachment endpoints. Naming the scheme
+        // explicitly keeps it independent of the cookie default used by the admin UI, and
+        // leaves room to add an MCP OAuth scheme alongside it later.
+        builder.Services.AddAuthorizationBuilder()
+            .AddPolicy(McpApiKeyHandler.PolicyName, policy => policy
+                .AddAuthenticationSchemes(McpApiKeyHandler.SchemeName)
+                .RequireAuthenticatedUser());
 
         // Configure MCP server with HTTP/SSE transport and register tools
         builder.Services
@@ -207,12 +226,17 @@ public class Program
         app.MapOpenApi();
         app.MapScalarApiReference();
 
-        // Map MCP protocol endpoints (HTTP/SSE)
-        app.MapMcp();
+        // Map MCP protocol endpoints (HTTP/SSE) and the attachment endpoints that serve them.
+        // Both carry the same API key policy: an MCP client that can call tools can also stage
+        // the attachments those tools send.
+        var mcpEndpoints = app.MapMcp();
+        var attachmentEndpoints = app.MapAttachmentEndpoints();
 
-        // Map attachment upload endpoint (sibling of /mcp; same network-level
-        // protection — Tailscale ACLs / reverse proxy).
-        app.MapAttachmentEndpoints();
+        if (builder.Configuration.GetValue("CalendarMcp:Mcp:RequireApiKey", true))
+        {
+            mcpEndpoints.RequireAuthorization(McpApiKeyHandler.PolicyName);
+            attachmentEndpoints.RequireAuthorization(McpApiKeyHandler.PolicyName);
+        }
 
         // Map admin API endpoints
         app.MapAdminEndpoints();
@@ -226,6 +250,10 @@ public class Program
         // Blazor Server components
         app.MapRazorComponents<CalendarMcp.HttpServer.Components.App>()
             .AddInteractiveServerRenderMode();
+
+        // Validate MCP protection and mint a first key if needed. Runs before Start() so a
+        // misconfiguration stops the server instead of quietly leaving the endpoint open.
+        app.ConfigureMcpProtection();
 
         app.Start();
 
