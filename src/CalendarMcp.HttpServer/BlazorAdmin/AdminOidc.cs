@@ -4,6 +4,7 @@ using CalendarMcp.Core.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
@@ -48,7 +49,22 @@ public static class AdminOidc
     public static AuthenticationBuilder AddAdminOidcProviders(this AuthenticationBuilder builder)
     {
         foreach (var scheme in KnownSchemes)
+        {
             builder.AddOpenIdConnect(scheme, _ => { });
+
+            // Without this the reconfiguration above never actually happens after startup.
+            // IOptionsMonitor caches named options and only rebuilds them when a change token
+            // fires; AdminAuthConfiguration gets one from Configure<T>(section), but
+            // OpenIdConnectOptions has none of its own. The result is that whatever was built
+            // on the first request — inert options, on a server with no provider yet — stays
+            // cached for the life of the process, so a provider added later appears configured
+            // everywhere except in the handler that has to use it.
+            var capturedScheme = scheme;
+            builder.Services.AddSingleton<IOptionsChangeTokenSource<OpenIdConnectOptions>>(sp =>
+                new ConfigurationChangeTokenSource<OpenIdConnectOptions>(
+                    capturedScheme,
+                    sp.GetRequiredService<IConfiguration>().GetSection("AdminAuth")));
+        }
 
         builder.Services.ConfigureOptions<ConfigureAdminOidcOptions>();
         return builder;
@@ -64,17 +80,20 @@ public sealed class ConfigureAdminOidcOptions : IConfigureNamedOptions<OpenIdCon
     private readonly IOptionsMonitor<AdminAuthConfiguration> _adminAuth;
     private readonly IOptionsMonitor<CalendarMcpConfiguration> _serverConfig;
     private readonly AdminSignInProcessor _signIn;
+    private readonly PasswordProtector _protector;
     private readonly ILogger<ConfigureAdminOidcOptions> _logger;
 
     public ConfigureAdminOidcOptions(
         IOptionsMonitor<AdminAuthConfiguration> adminAuth,
         IOptionsMonitor<CalendarMcpConfiguration> serverConfig,
         AdminSignInProcessor signIn,
+        PasswordProtector protector,
         ILogger<ConfigureAdminOidcOptions> logger)
     {
         _adminAuth = adminAuth;
         _serverConfig = serverConfig;
         _signIn = signIn;
+        _protector = protector;
         _logger = logger;
     }
 
@@ -128,7 +147,23 @@ public sealed class ConfigureAdminOidcOptions : IConfigureNamedOptions<OpenIdCon
 
         options.Authority = provider.Authority;
         options.ClientId = provider.ClientId;
-        options.ClientSecret = provider.ClientSecret;
+        // Unprotect passes plaintext through unchanged, so a secret set by hand or supplied
+        // through an environment variable keeps working alongside one the settings page
+        // encrypted before storing it.
+        try
+        {
+            options.ClientSecret = _protector.Unprotect(provider.ClientSecret!);
+        }
+        catch (Exception ex)
+        {
+            // A protected value that will not decrypt means the DataProtection keyring changed
+            // under it. Failing the scheme is better than sending a garbled secret to the
+            // provider and getting an opaque error back.
+            _logger.LogError(ex,
+                "Could not decrypt the {Scheme} client secret. Re-enter it in the admin console.", name);
+            ConfigureInert(name, options);
+            return;
+        }
 
         options.ResponseType = OpenIdConnectResponseType.Code;
         options.UsePkce = true;

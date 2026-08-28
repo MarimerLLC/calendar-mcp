@@ -23,8 +23,8 @@ The HTTP server exposes three surfaces with independent protection:
   every active key with no early exit, so response latency reveals neither how close a guess
   was nor which key matched.
 - **Individually revocable.** Each key carries a label and id. Revoking one leaves the others
-  working, and revoked keys are retained for audit rather than deleted. Revocation is currently
-  performed by editing `mcp-keys.json` and restarting; a management UI is planned.
+  working, and revoked keys are retained for audit rather than deleted. Create and revoke keys
+  from **MCP Keys** in the admin console; revocation takes effect immediately.
 - **Enforced by default.** `CalendarMcp:Mcp:RequireApiKey` defaults to `true`. If no key exists
   at startup, one is generated and logged rather than leaving the endpoint open.
 - **Refuses plaintext transport.** With enforcement on, a non-loopback `http://`
@@ -58,7 +58,11 @@ verified email addresses.
   alongside a provider-verified identity.
 - **Break-glass token login.** The admin token can log in to the console while no provider is
   configured, and is hidden automatically once one is. It is compared in fixed time. Override
-  with `AdminAuth:AllowTokenLogin`.
+  with `AdminAuth:AllowTokenLogin`, or from **Settings** in the console.
+- **Client secrets encrypted at rest.** A secret entered through the console is protected with
+  DataProtection before being written to `appsettings.json`, using the keyring in the data
+  directory. Secrets set by hand or through environment variables remain plaintext and keep
+  working, so both forms are accepted.
 
 Anyone who signs in to the console has full administrative control of every configured account.
 The allow-list is the whole authorization model — there are no console roles.

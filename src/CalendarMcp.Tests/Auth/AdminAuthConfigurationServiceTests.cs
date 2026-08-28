@@ -146,6 +146,138 @@ public class AdminAuthConfigurationServiceTests
     }
 
     [TestMethod]
+    public async Task SetProvider_WritesAllThreeValues()
+    {
+        await CreateService().SetProviderAsync("google", "https://accounts.google.com", "cid", "secret");
+
+        var bound = BindAdminAuth();
+        var provider = bound.GetProvider("google");
+
+        Assert.IsNotNull(provider);
+        Assert.AreEqual("https://accounts.google.com", provider.Authority);
+        Assert.AreEqual("cid", provider.ClientId);
+        Assert.AreEqual("secret", provider.ClientSecret);
+        Assert.IsTrue(provider.IsConfigured);
+    }
+
+    [TestMethod]
+    public async Task SetProvider_WithBlankSecret_KeepsTheStoredOne()
+    {
+        // The settings form never receives the stored secret, so saving the other fields must
+        // not wipe it.
+        var service = CreateService();
+        await service.SetProviderAsync("google", "https://accounts.google.com", "cid", "secret");
+
+        await service.SetProviderAsync("google", "https://accounts.google.com", "new-cid", clientSecret: null);
+
+        var provider = BindAdminAuth().GetProvider("google");
+        Assert.AreEqual("new-cid", provider!.ClientId);
+        Assert.AreEqual("secret", provider.ClientSecret);
+    }
+
+    [TestMethod]
+    public async Task SetProvider_ReplacesTheSecretWhenOneIsSupplied()
+    {
+        var service = CreateService();
+        await service.SetProviderAsync("google", "https://accounts.google.com", "cid", "old");
+
+        await service.SetProviderAsync("google", "https://accounts.google.com", "cid", "new");
+
+        Assert.AreEqual("new", BindAdminAuth().GetProvider("google")!.ClientSecret);
+    }
+
+    [TestMethod]
+    public async Task SetProvider_TrimsWhitespaceFromPastedValues()
+    {
+        // These get pasted out of a provider console, often with a stray newline.
+        await CreateService().SetProviderAsync("google", "  https://accounts.google.com \n", " cid ", "secret");
+
+        var provider = BindAdminAuth().GetProvider("google");
+        Assert.AreEqual("https://accounts.google.com", provider!.Authority);
+        Assert.AreEqual("cid", provider.ClientId);
+    }
+
+    [TestMethod]
+    public async Task SetProvider_LeavesOtherProvidersAlone()
+    {
+        var service = CreateService();
+        await service.SetProviderAsync("google", "https://accounts.google.com", "g-id", "g-secret");
+
+        await service.SetProviderAsync("microsoft", "https://login.microsoftonline.com/common/v2.0", "m-id", "m-secret");
+
+        var bound = BindAdminAuth();
+        Assert.AreEqual("g-id", bound.GetProvider("google")!.ClientId);
+        Assert.AreEqual("m-id", bound.GetProvider("microsoft")!.ClientId);
+    }
+
+    [TestMethod]
+    public async Task SetProvider_PreservesTheAllowList()
+    {
+        var service = CreateService();
+        await service.AddAllowedEmailAsync("someone@example.com");
+
+        await service.SetProviderAsync("google", "https://accounts.google.com", "cid", "secret");
+
+        CollectionAssert.AreEqual(
+            new[] { "someone@example.com" },
+            (await service.GetAllowedEmailsAsync()).ToArray());
+    }
+
+    [TestMethod]
+    public async Task RemoveProvider_RemovesItAndReportsWhetherItExisted()
+    {
+        var service = CreateService();
+        await service.SetProviderAsync("google", "https://accounts.google.com", "cid", "secret");
+
+        Assert.IsTrue(await service.RemoveProviderAsync("google"));
+        Assert.IsNull(BindAdminAuth().GetProvider("google"));
+        Assert.IsFalse(await service.RemoveProviderAsync("google"));
+    }
+
+    [TestMethod]
+    public async Task SetAllowTokenLogin_RoundTripsAllThreeStates()
+    {
+        var service = CreateService();
+
+        await service.SetAllowTokenLoginAsync(true);
+        Assert.IsTrue(BindAdminAuth().AllowTokenLogin);
+
+        await service.SetAllowTokenLoginAsync(false);
+        Assert.IsFalse(BindAdminAuth().AllowTokenLogin);
+
+        // Null must remove the key entirely, restoring the automatic behaviour rather than
+        // pinning it to a value.
+        await service.SetAllowTokenLoginAsync(null);
+        Assert.IsNull(BindAdminAuth().AllowTokenLogin);
+    }
+
+    [TestMethod]
+    public async Task ATokenLoginOverrideOfNull_RestoresAutomaticResolution()
+    {
+        var service = CreateService();
+        await service.SetProviderAsync("google", "https://accounts.google.com", "cid", "secret");
+        await service.SetAllowTokenLoginAsync(null);
+
+        // A provider is configured, so automatic resolution means token login is off.
+        Assert.IsFalse(BindAdminAuth().IsTokenLoginAllowed());
+    }
+
+    [TestMethod]
+    public async Task SetProvider_RejectsABlankScheme()
+    {
+        await Assert.ThrowsExactlyAsync<ArgumentException>(
+            () => CreateService().SetProviderAsync("  ", "https://x", "cid", "secret"));
+    }
+
+    private AdminAuthConfiguration BindAdminAuth()
+    {
+        var configuration = new ConfigurationBuilder().AddJsonFile(ConfigPath).Build();
+        var bound = new AdminAuthConfiguration();
+        configuration.GetSection("AdminAuth").Bind(bound);
+        return bound;
+    }
+
+    [TestMethod]
     public async Task AllowedEmails_AreReadableByTheConfigurationBinder()
     {
         // The claim flow's write only takes effect because the running server re-reads this file

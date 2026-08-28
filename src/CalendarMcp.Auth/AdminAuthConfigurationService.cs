@@ -110,6 +110,98 @@ public sealed class AdminAuthConfigurationService : IAdminAuthConfigurationServi
         }
     }
 
+    public async Task SetProviderAsync(
+        string scheme,
+        string authority,
+        string clientId,
+        string? clientSecret,
+        string? displayName = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(scheme))
+            throw new ArgumentException("A scheme name is required.", nameof(scheme));
+
+        await _fileLock.WaitAsync(ct);
+        try
+        {
+            var (root, _) = await ReadAsync(ct);
+            var adminAuth = root["AdminAuth"]!.AsObject();
+
+            if (adminAuth["Providers"] is not JsonObject providers)
+            {
+                providers = new JsonObject();
+                adminAuth["Providers"] = providers;
+            }
+
+            if (providers[scheme] is not JsonObject provider)
+            {
+                provider = new JsonObject();
+                providers[scheme] = provider;
+            }
+
+            provider["Authority"] = authority.Trim();
+            provider["ClientId"] = clientId.Trim();
+
+            // An empty secret means "unchanged". The settings form never receives the stored
+            // secret, so this is how it can save the other fields without destroying it.
+            if (!string.IsNullOrWhiteSpace(clientSecret))
+                provider["ClientSecret"] = clientSecret;
+
+            if (!string.IsNullOrWhiteSpace(displayName))
+                provider["DisplayName"] = displayName.Trim();
+
+            await WriteAsync(root, ct);
+            _logger.LogInformation("Updated the {Scheme} admin sign-in provider", scheme);
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
+
+    public async Task<bool> RemoveProviderAsync(string scheme, CancellationToken ct = default)
+    {
+        await _fileLock.WaitAsync(ct);
+        try
+        {
+            var (root, _) = await ReadAsync(ct);
+            var adminAuth = root["AdminAuth"]!.AsObject();
+
+            if (adminAuth["Providers"] is not JsonObject providers || !providers.Remove(scheme))
+                return false;
+
+            await WriteAsync(root, ct);
+            _logger.LogInformation("Removed the {Scheme} admin sign-in provider", scheme);
+            return true;
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
+
+    public async Task SetAllowTokenLoginAsync(bool? allow, CancellationToken ct = default)
+    {
+        await _fileLock.WaitAsync(ct);
+        try
+        {
+            var (root, _) = await ReadAsync(ct);
+            var adminAuth = root["AdminAuth"]!.AsObject();
+
+            if (allow is null)
+                adminAuth.Remove("AllowTokenLogin");
+            else
+                adminAuth["AllowTokenLogin"] = allow.Value;
+
+            await WriteAsync(root, ct);
+            _logger.LogInformation("Set AdminAuth:AllowTokenLogin to {Value}", allow?.ToString() ?? "automatic");
+        }
+        finally
+        {
+            _fileLock.Release();
+        }
+    }
+
     /// <summary>
     /// Navigates to <c>AdminAuth:AllowedEmails</c>, creating either level when missing so a
     /// config file written before this feature existed can still be claimed.

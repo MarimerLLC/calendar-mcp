@@ -1,4 +1,5 @@
 @using Microsoft.AspNetCore.Components.Routing
+@using System.Security.Claims
 
 <nav class="admin-sidebar d-flex flex-column bg-dark text-white p-3" style="width: 240px; min-height: 100vh;">
     <div class="mb-4">
@@ -19,12 +20,45 @@
                 <i class="bi bi-plus-circle me-2"></i> Add Account
             </NavLink>
         </li>
+        <li class="nav-item">
+            <NavLink class="nav-link text-white" href="admin/ui/keys">
+                <i class="bi bi-key me-2"></i> MCP Keys
+            </NavLink>
+        </li>
+        <li class="nav-item">
+            <NavLink class="nav-link text-white" href="admin/ui/settings">
+                <i class="bi bi-gear me-2"></i> Settings
+            </NavLink>
+        </li>
     </ul>
 
     <hr class="text-secondary" />
     <div class="mt-auto">
+        <AuthorizeView>
+            <Authorized>
+                <div class="small text-secondary mb-2 text-truncate" title="@SignedInAs(context.User)">
+                    <i class="bi bi-person-circle me-1"></i> @SignedInAs(context.User)
+                </div>
+            </Authorized>
+        </AuthorizeView>
         <a href="/admin/auth/logout" class="btn btn-outline-secondary btn-sm w-100">
             <i class="bi bi-box-arrow-right me-1"></i> Logout
         </a>
     </div>
 </nav>
+
+@code {
+    /// <summary>
+    /// Shows who is signed in and how. The provider matters: it is the difference between a
+    /// break-glass token session and a real identity, and that is worth being able to see.
+    /// </summary>
+    private static string SignedInAs(ClaimsPrincipal user)
+    {
+        var name = user.FindFirst(ClaimTypes.Email)?.Value
+                   ?? user.Identity?.Name
+                   ?? "signed in";
+
+        var provider = user.FindFirst("idp")?.Value;
+        return provider is null or "token" ? $"{name} (token)" : $"{name} ({provider})";
+    }
+}

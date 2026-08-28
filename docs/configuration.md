@@ -546,11 +546,15 @@ export CALENDAR_MCP_MCP_KEY="your-key-here"
 An environment key is always accepted and is never written to `mcp-keys.json`. Rotate it by
 changing the environment variable. Setting it also suppresses first-start key generation.
 
-**Rotating a generated key**: the admin console does not yet manage keys. For now, stop the
-server, edit `mcp-keys.json`, and start it again — the file is read once at startup. Adding a
-`"revokedUtc"` timestamp to an entry disables that key while keeping it for audit; deleting the
-entry removes it outright. Removing every entry makes the server generate a fresh key on the
-next start and log it.
+**Managing keys**: use **MCP Keys** in the admin console. Create one key per client so any of
+them can be revoked without disturbing the others; the console shows the key once at creation,
+along with a ready-to-paste snippet for Claude Code, VS Code, `mcp-remote`, or curl. Revoking
+takes effect immediately, and revoked keys are kept in the list for the record.
+
+Keys can also be edited directly in `mcp-keys.json`, though that file is read once at startup so
+a hand edit needs a restart. Adding a `"revokedUtc"` timestamp disables a key while keeping it
+for audit; deleting the entry removes it outright. Removing every entry makes the server
+generate a fresh key on the next start and log it.
 
 ```json
 {
@@ -727,9 +731,26 @@ already verified. Codes are case-insensitive and the dashes are optional.
 #### Bootstrapping with no provider yet
 
 There is a chicken-and-egg problem: configuring a provider through the console requires signing
-in. Until the settings UI exists, configure `AdminAuth:Providers` by editing `appsettings.json`
-or via environment variables (`CALENDAR_MCP_AdminAuth__Providers__google__ClientId=...`). The
-admin token remains available as a break-glass login while no provider is configured.
+in. The admin token is the way through it, and it is available as a login precisely while no
+provider is configured:
+
+1. Start the server with `CALENDAR_MCP_ADMIN_TOKEN` set and sign in with it.
+2. Go to **Settings → Sign-in providers**. The page shows the exact redirect URI to register
+   with the provider, built from `ExternalBaseUrl`.
+3. Paste in the Authority, Client ID, and Client secret, and save. It takes effect immediately —
+   no restart.
+4. Sign out and sign in with the provider. Token login turns itself off once a provider is
+   configured, unless you override it on the same page.
+
+`AdminAuth:Providers` can equally be set by editing `appsettings.json` or via environment
+variables (`CALENDAR_MCP_AdminAuth__Providers__google__ClientId=...`); the console writes the
+same settings.
+
+A client secret entered through the console is encrypted with DataProtection before being
+written, using the keyring in the data directory — the same mechanism that protects IMAP
+passwords. A secret set by hand or supplied through an environment variable stays plaintext and
+keeps working, so both forms are valid. Because the encryption is tied to that keyring, losing
+`{data}/keys` means re-entering the secret.
 
 #### What is enforced at sign-in
 
