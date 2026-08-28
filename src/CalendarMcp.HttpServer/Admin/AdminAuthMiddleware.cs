@@ -15,8 +15,18 @@ public class AdminAuthMiddleware
     private static readonly string[] ExemptPaths =
     [
         "/admin/ui/login",
+        "/admin/ui/claim",
         "/admin/auth/logout",
         "/admin/auth/google/callback"
+    ];
+
+    // Prefixes that must stay anonymous so a sign-in can complete: the endpoint that issues the
+    // OIDC challenge, and the callback the provider redirects back to. Requiring a session on
+    // either would make it impossible to ever establish one.
+    private static readonly string[] ExemptPrefixes =
+    [
+        "/admin/auth/login/",
+        "/admin/auth/signin/"
     ];
 
     public AdminAuthMiddleware(RequestDelegate next, IConfiguration configuration, ILogger<AdminAuthMiddleware> logger)
@@ -106,6 +116,13 @@ public class AdminAuthMiddleware
             if (path.Equals(exempt, StringComparison.OrdinalIgnoreCase))
                 return true;
         }
+
+        foreach (var prefix in ExemptPrefixes)
+        {
+            if (path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
         return false;
     }
 }

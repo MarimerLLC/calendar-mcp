@@ -640,6 +640,108 @@ your client's own documentation if these shapes don't match what it expects.
 remote IP. A missing header produces the same 401 but no log entry, since an unauthenticated
 probe is not treated as a failure.
 
+### Admin Console Sign-In (HTTP server)
+
+The Blazor admin console at `/admin/ui` can be protected by OIDC sign-in with Google or
+Microsoft, restricted to an allow-list of verified email addresses. Configuration lives in a
+top-level `AdminAuth` section — a sibling of `CalendarMcp`, not a child of it.
+
+```json
+{
+  "AdminAuth": {
+    "AllowedEmails": ["someone@example.com", "@example.com"],
+    "AllowTokenLogin": null,
+    "Providers": {
+      "google": {
+        "Authority": "https://accounts.google.com",
+        "ClientId": "....apps.googleusercontent.com",
+        "ClientSecret": "GOCSPX-..."
+      },
+      "microsoft": {
+        "Authority": "https://login.microsoftonline.com/common/v2.0",
+        "ClientId": "...",
+        "ClientSecret": "..."
+      }
+    }
+  }
+}
+```
+
+A provider is offered only when `Authority`, `ClientId`, and `ClientSecret` are all present;
+partial configuration is treated as absent so a half-finished setup fails closed. Because the
+config file is loaded with `reloadOnChange`, adding a provider takes effect without restarting
+the server.
+
+**Allow-list entries**: an exact address matches only itself; an entry beginning with `@`
+matches every address in that domain. Matching ignores case and surrounding whitespace.
+`@example.com` does not match `@notexample.com` or `@mail.example.com`.
+
+| Setting | Default | Effect |
+|---|---|---|
+| `AdminAuth:AllowedEmails` | empty | Who may sign in. Empty means unclaimed — see below. |
+| `AdminAuth:AllowTokenLogin` | `null` | `null` resolves to `true` while no provider is configured and `false` once one is. Set explicitly to override. |
+| `AdminAuth:Providers:<scheme>` | absent | `google` and `microsoft` are the recognized schemes. |
+
+#### Registering the redirect URI
+
+Each operator creates their own OAuth client; nothing is shipped with the product. The redirect
+URI to register with the provider is:
+
+```
+<ExternalBaseUrl>/admin/auth/signin/google
+<ExternalBaseUrl>/admin/auth/signin/microsoft
+```
+
+Set `CalendarMcp:ExternalBaseUrl` to the server's public origin (for a Tailscale Funnel
+endpoint, `https://<machine>.<tailnet>.ts.net`). When it is set, it is used verbatim as the
+redirect URI for both the authorization request and the token exchange, which is what keeps the
+value stable behind a TLS-terminating proxy. When it is not set, the URI is derived from the
+request instead.
+
+A Google client left in **Testing** mode is sufficient — add the allowed addresses as test
+users. Console sign-in requests only `openid email profile` and never offline access, so
+Testing mode's 7-day refresh-token expiry does not apply. (This is a separate OAuth client from
+the one used for mailbox access, which *does* need offline access.)
+
+#### First run: claiming the server
+
+While `AllowedEmails` is empty the server is unclaimed. Each start issues a one-time claim code,
+logs it, and writes it to `admin-claim-code.txt` in the data directory:
+
+```
+====================================================================
+No admin console allow-list is configured yet.
+Sign in with a provider, then enter this code to claim the server:
+    Claim code: MFCB-2K6G-3E72-9EP7
+====================================================================
+```
+
+Sign in with a provider; because no allow-list exists yet, you are sent to a claim page instead
+of the console. Entering the code adds your verified address to `AllowedEmails`, records you in
+`admin-users.json`, and signs you in. The code is then spent, and `AllowTokenLogin` resolves to
+`false` on the next page load if a provider is configured.
+
+The code on its own grants nothing — it is only accepted alongside an identity a provider has
+already verified. Codes are case-insensitive and the dashes are optional.
+
+#### Bootstrapping with no provider yet
+
+There is a chicken-and-egg problem: configuring a provider through the console requires signing
+in. Until the settings UI exists, configure `AdminAuth:Providers` by editing `appsettings.json`
+or via environment variables (`CALENDAR_MCP_AdminAuth__Providers__google__ClientId=...`). The
+admin token remains available as a break-glass login while no provider is configured.
+
+#### What is enforced at sign-in
+
+- The provider must supply an email address.
+- If the provider states `email_verified`, it must be true. Google states it; Entra generally
+  does not, and an absent claim is not treated as a failure — refusing on absence would lock
+  Entra out entirely.
+- The address must match the allow-list.
+- The provider's subject identifier is bound on first sign-in and must match on later ones. An
+  email address is not a permanent identifier, so this is what stops a reassigned address from
+  inheriting console access. Clear it by removing the user from `admin-users.json`.
+
 ### Sensitive Data Protection
 
 **DO NOT store in appsettings.json**:

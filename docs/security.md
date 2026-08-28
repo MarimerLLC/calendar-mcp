@@ -12,7 +12,7 @@ The HTTP server exposes three surfaces with independent protection:
 |---|---|
 | `/` (MCP protocol), `/attachments/*` | MCP API key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` |
 | `/admin/*` (REST API) | Admin token — `CALENDAR_MCP_ADMIN_TOKEN` |
-| `/admin/ui/*` (Blazor console) | Session cookie issued at login |
+| `/admin/ui/*` (Blazor console) | Session cookie, issued after OIDC sign-in or admin-token login |
 | `/health`, `/health/ready` | Anonymous (Kubernetes probes) |
 
 ### MCP API Keys
@@ -35,6 +35,35 @@ An API key authorizes access to *every* account the server is configured with. P
 limits are a separate layer — see [Per-Account Permissions](#per-account-permissions) below.
 
 See [Configuration](configuration.md#mcp-endpoint-api-keys-http-server) for setup.
+
+### Admin Console Sign-In
+
+The console accepts OIDC sign-in from Google or Microsoft, restricted to an allow-list of
+verified email addresses.
+
+- **Identity only.** Sign-in requests `openid email profile` and nothing else. Provider tokens
+  are not stored (`SaveTokens = false`), so the console session cannot be used to reach the
+  provider's APIs, and no refresh token is ever issued.
+- **Verified addresses only.** An explicit `email_verified: false` is disqualifying. An absent
+  claim is not — Entra generally omits it, and refusing on absence would exclude it entirely.
+- **Subject binding.** The provider's subject is pinned on first sign-in and required to match
+  afterwards. The allow-list is by email, and an email address can be reassigned to a different
+  person; without binding, that reassignment would inherit console access.
+- **No cookie for an unauthorized identity.** The allow-list check runs inside the OIDC
+  `OnTicketReceived` event, before any cookie is issued, so a refused sign-in leaves no session
+  behind.
+- **Claim-gated first run.** While the allow-list is empty, the first sign-in must also present
+  a one-time code from the startup log. This is what stops a publicly reachable server from
+  being claimed by whoever finds it first. The code alone grants nothing; it is only accepted
+  alongside a provider-verified identity.
+- **Break-glass token login.** The admin token can log in to the console while no provider is
+  configured, and is hidden automatically once one is. It is compared in fixed time. Override
+  with `AdminAuth:AllowTokenLogin`.
+
+Anyone who signs in to the console has full administrative control of every configured account.
+The allow-list is the whole authorization model — there are no console roles.
+
+See [Configuration](configuration.md#admin-console-sign-in-http-server) for setup.
 
 ## Authentication & Authorization
 

@@ -97,6 +97,13 @@ public class Program
         builder.Services.Configure<CalendarMcpConfiguration>(
             builder.Configuration.GetSection("CalendarMcp"));
 
+        // Admin console sign-in settings. Bound from a top-level section rather than from under
+        // CalendarMcp so the server's own identity settings stay separate from the mailbox
+        // accounts it serves. Configuration is loaded with reloadOnChange, so edits reach the
+        // running server through IOptionsMonitor without a restart.
+        builder.Services.Configure<AdminAuthConfiguration>(
+            builder.Configuration.GetSection("AdminAuth"));
+
         // Add Calendar MCP core services (providers, tools, account registry)
         builder.Services.AddCalendarMcpCore();
 
@@ -110,6 +117,15 @@ public class Program
         // available to tests.
         builder.Services.AddSingleton<IMcpKeyStore>(sp =>
             new FileMcpKeyStore(sp.GetRequiredService<ILogger<FileMcpKeyStore>>()));
+
+        // Admin console sign-in services.
+        builder.Services.AddSingleton<IAdminUserStore>(sp =>
+            new AdminUserStore(sp.GetRequiredService<ILogger<AdminUserStore>>()));
+        builder.Services.AddSingleton<IAdminClaimCodeService>(sp =>
+            new AdminClaimCodeService(sp.GetRequiredService<ILogger<AdminClaimCodeService>>()));
+        builder.Services.AddSingleton<PendingAdminSignInStore>();
+        builder.Services.AddSingleton<AdminSignInProcessor>();
+        builder.Services.AddSingleton<IAdminAuthConfigurationService, AdminAuthConfigurationService>();
 
         // Background sweeper for the attachment store (uploads land here only
         // in HTTP mode, so eviction is HTTP-side too).
@@ -131,7 +147,8 @@ public class Program
                 options.LoginPath = "/admin/ui/login";
             })
             .AddScheme<AuthenticationSchemeOptions, McpApiKeyHandler>(
-                McpApiKeyHandler.SchemeName, _ => { });
+                McpApiKeyHandler.SchemeName, _ => { })
+            .AddAdminOidcProviders();
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddScoped<AuthenticationStateProvider, AdminAuthenticationStateProvider>();
 
@@ -254,6 +271,7 @@ public class Program
         // Validate MCP protection and mint a first key if needed. Runs before Start() so a
         // misconfiguration stops the server instead of quietly leaving the endpoint open.
         app.ConfigureMcpProtection();
+        app.ConfigureAdminAuth();
 
         app.Start();
 
