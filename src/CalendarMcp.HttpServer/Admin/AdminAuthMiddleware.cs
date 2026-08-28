@@ -1,9 +1,13 @@
+using System.Security.Cryptography;
+using System.Text;
+
 namespace CalendarMcp.HttpServer.Admin;
 
 /// <summary>
 /// Middleware that validates the admin token for /admin endpoints.
 /// Token is configured via CALENDAR_MCP_ADMIN_TOKEN environment variable.
-/// Supports Bearer token, X-Admin-Token header, and .CalendarMcp.AdminAuth cookie.
+/// Supports Bearer token and the X-Admin-Token header for the REST API, and the console
+/// session cookie for the Blazor UI paths.
 /// </summary>
 public class AdminAuthMiddleware
 {
@@ -81,13 +85,6 @@ public class AdminAuthMiddleware
                 return;
             }
 
-            // Blazor SignalR hub negotiation must be allowed for authenticated users
-            if (path.StartsWith("/_blazor", StringComparison.OrdinalIgnoreCase))
-            {
-                await _next(context);
-                return;
-            }
-
             // Redirect unauthenticated Blazor UI requests to login
             context.Response.Redirect("/admin/ui/login");
             return;
@@ -97,7 +94,7 @@ public class AdminAuthMiddleware
         var token = context.Request.Headers.Authorization.FirstOrDefault()?.Replace("Bearer ", "")
             ?? context.Request.Headers["X-Admin-Token"].FirstOrDefault();
 
-        if (string.IsNullOrEmpty(token) || !string.Equals(token, _adminToken, StringComparison.Ordinal))
+        if (!TokenMatches(token))
         {
             _logger.LogWarning("Unauthorized admin API access attempt from {RemoteIp}",
                 context.Connection.RemoteIpAddress);
@@ -107,6 +104,22 @@ public class AdminAuthMiddleware
         }
 
         await _next(context);
+    }
+
+    /// <summary>
+    /// Fixed-time comparison against the configured admin token, so the token cannot be
+    /// recovered a character at a time from how quickly a request is rejected.
+    /// </summary>
+    private bool TokenMatches(string? presented)
+    {
+        if (string.IsNullOrEmpty(presented) || string.IsNullOrEmpty(_adminToken))
+            return false;
+
+        var presentedBytes = Encoding.UTF8.GetBytes(presented);
+        var expectedBytes = Encoding.UTF8.GetBytes(_adminToken);
+
+        return presentedBytes.Length == expectedBytes.Length &&
+               CryptographicOperations.FixedTimeEquals(presentedBytes, expectedBytes);
     }
 
     private static bool IsExemptPath(string path)

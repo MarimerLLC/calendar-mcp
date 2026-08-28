@@ -742,6 +742,24 @@ admin token remains available as a break-glass login while no provider is config
   email address is not a permanent identifier, so this is what stops a reassigned address from
   inheriting console access. Clear it by removing the user from `admin-users.json`.
 
+#### Removing an administrator
+
+Delete the address from `AdminAuth:AllowedEmails`. Open console sessions are rechecked once a
+minute, so access ends within about a minute rather than when the cookie expires — no restart
+needed. Also remove the entry from `admin-users.json` if you want their subject binding cleared,
+so a future sign-in for that address starts fresh.
+
+#### Session cookie and rate limits
+
+`CalendarMcp:ExternalBaseUrl` also drives session cookie hardening: an HTTPS origin gets a
+`Secure`, `__Host-`-prefixed cookie, while plain HTTP keeps a normal one so local development
+works. Switching that setting between HTTP and HTTPS renames the cookie and signs everyone out
+once.
+
+Sign-in is limited to 10 requests per minute per client address and the MCP endpoint to 240 per
+minute per key. Neither is configurable today. See
+[Security](security.md#rate-limiting).
+
 ### Sensitive Data Protection
 
 **DO NOT store in appsettings.json**:

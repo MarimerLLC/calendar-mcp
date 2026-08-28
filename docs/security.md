@@ -63,6 +63,41 @@ verified email addresses.
 Anyone who signs in to the console has full administrative control of every configured account.
 The allow-list is the whole authorization model — there are no console roles.
 
+### Session Handling
+
+- **Cookie hardening tracks the transport.** When `CalendarMcp:ExternalBaseUrl` declares an
+  HTTPS origin, the session cookie is named `__Host-CalendarMcp.AdminAuth` and marked `Secure`.
+  The `__Host-` prefix is browser-enforced: the cookie must have been set by that exact origin,
+  over HTTPS, with no `Domain` attribute — so a sibling host on a shared suffix such as
+  `ts.net` cannot overwrite it. Over plain HTTP the cookie keeps its original name and follows
+  the request, so local development still works.
+- **Always `HttpOnly`, `SameSite=Lax`.** Lax rather than Strict because the identity provider
+  redirects back as a top-level navigation, which Strict would strip the cookie from.
+- **Sliding 8-hour expiry.** An administrator working in the console is not signed out
+  mid-task; an abandoned session closes.
+- **Live sessions are revalidated every minute.** Removing someone from the allow-list, or
+  turning off token login, ends their open console circuit rather than waiting out the cookie.
+  Subject-binding changes end it too.
+
+Changing `ExternalBaseUrl` from HTTP to HTTPS changes the cookie name, which signs everyone out
+once. That is expected.
+
+### Rate Limiting
+
+Sign-in and the MCP endpoint are rate limited; everything else is unlimited.
+
+| Surface | Limit | Partitioned by |
+|---|---|---|
+| `/admin/ui/login`, `/admin/ui/claim`, `/admin/auth/*` | 10/minute | client address |
+| `/`, `/sse`, `/message`, `/attachments/*` | 240/minute | API key (hashed), or address when absent |
+
+Rejections return `429` with `Retry-After`. The limiter runs before authentication, so
+credential guessing is throttled before it reaches any validation work.
+
+The client address is whatever `UseForwardedHeaders` resolved. With the default `ForwardLimit`
+of 1, that is the entry appended by the nearest proxy rather than one a client can supply
+itself — but it does mean the limit is only as trustworthy as the proxy in front of the server.
+
 See [Configuration](configuration.md#admin-console-sign-in-http-server) for setup.
 
 ## Authentication & Authorization

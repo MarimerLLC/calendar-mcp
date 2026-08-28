@@ -138,19 +138,21 @@ public class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddRazorComponents()
             .AddInteractiveServerComponents();
+        // Cookie hardening depends on how the server is exposed, which is declared by
+        // ExternalBaseUrl. Read straight from configuration here: options are being built, so
+        // the DI container that would resolve IOptions does not exist yet.
+        var serverConfig = builder.Configuration.GetSection("CalendarMcp").Get<CalendarMcpConfiguration>()
+            ?? new CalendarMcpConfiguration();
+
         builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-            .AddCookie(options =>
-            {
-                options.Cookie.Name = ".CalendarMcp.AdminAuth";
-                options.Cookie.HttpOnly = true;
-                options.Cookie.SameSite = SameSiteMode.Lax;
-                options.LoginPath = "/admin/ui/login";
-            })
+            .AddCookie(options => AdminCookieOptions.Configure(options, serverConfig))
             .AddScheme<AuthenticationSchemeOptions, McpApiKeyHandler>(
                 McpApiKeyHandler.SchemeName, _ => { })
             .AddAdminOidcProviders();
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddScoped<AuthenticationStateProvider, AdminAuthenticationStateProvider>();
+
+        builder.Services.AddAdminRateLimiting();
 
         // Policy guarding the MCP protocol and attachment endpoints. Naming the scheme
         // explicitly keeps it independent of the cookie default used by the admin UI, and
@@ -225,6 +227,11 @@ public class Program
         forwardedHeadersOptions.KnownProxies.Clear();
         app.UseForwardedHeaders(forwardedHeadersOptions);
         app.MapStaticAssets();
+
+        // Ahead of authentication so credential-guessing is throttled before it reaches any
+        // validation work.
+        app.UseRateLimiter();
+
         app.UseAuthentication();
         app.UseAuthorization();
 

@@ -142,11 +142,9 @@
         await httpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             principal,
-            new AuthenticationProperties
-            {
-                IsPersistent = true,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
-            });
+            // No explicit ExpiresUtc: setting one pins the lifetime and disables the sliding
+            // expiration configured on the cookie options.
+            new AuthenticationProperties { IsPersistent = true });
 
         Navigation.NavigateTo("/admin/ui", forceLoad: true);
     }
