@@ -11,9 +11,14 @@
     <PackageReference Include="MSTest.TestAdapter" Version="3.8.3" />
     <PackageReference Include="MSTest.TestFramework" Version="3.8.3" />
     <PackageReference Include="Rocks" Version="10.0.0" />
+    <!-- Binds the AdminAuth section the way the running server does, so the shape the
+         claim flow writes is verified against the real configuration pipeline. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../CalendarMcp.Core/CalendarMcp.Core.csproj" />
     <ProjectReference Include="../CalendarMcp.Auth/CalendarMcp.Auth.csproj" />
+    <ProjectReference Include="../CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj" />
   </ItemGroup>
 </Project>

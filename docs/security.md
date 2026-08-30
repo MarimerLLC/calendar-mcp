@@ -4,6 +4,106 @@
 
 Calendar-MCP handles sensitive data including emails, calendar events, and authentication tokens. Security is built into the design from the ground up.
 
+## Transport Security (HTTP server)
+
+The HTTP server exposes three surfaces with independent protection:
+
+| Surface | Protection |
+|---|---|
+| `/` (MCP protocol), `/attachments/*` | MCP API key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` |
+| `/admin/*` (REST API) | Admin token — `CALENDAR_MCP_ADMIN_TOKEN` |
+| `/admin/ui/*` (Blazor console) | Session cookie, issued after OIDC sign-in or admin-token login |
+| `/health`, `/health/ready` | Anonymous (Kubernetes probes) |
+
+### MCP API Keys
+
+- **Hashed at rest.** Only a SHA-256 of each key is written to `mcp-keys.json`. The secret is
+  displayed once at creation and cannot be recovered, so a leaked key file grants nothing.
+- **Fixed-time comparison.** Validation uses `CryptographicOperations.FixedTimeEquals` against
+  every active key with no early exit, so response latency reveals neither how close a guess
+  was nor which key matched.
+- **Individually revocable.** Each key carries a label and id. Revoking one leaves the others
+  working, and revoked keys are retained for audit rather than deleted. Create and revoke keys
+  from **MCP Keys** in the admin console; revocation takes effect immediately.
+- **Enforced by default.** `CalendarMcp:Mcp:RequireApiKey` defaults to `true`. If no key exists
+  at startup, one is generated and logged rather than leaving the endpoint open.
+- **Refuses plaintext transport.** With enforcement on, a non-loopback `http://`
+  `ExternalBaseUrl` stops the server from starting, since the key would cross the wire in clear
+  text.
+
+An API key authorizes access to *every* account the server is configured with. Per-account
+limits are a separate layer — see [Per-Account Permissions](#per-account-permissions) below.
+
+See [Configuration](configuration.md#mcp-endpoint-api-keys-http-server) for setup.
+
+### Admin Console Sign-In
+
+The console accepts OIDC sign-in from Google or Microsoft, restricted to an allow-list of
+verified email addresses.
+
+- **Identity only.** Sign-in requests `openid email profile` and nothing else. Provider tokens
+  are not stored (`SaveTokens = false`), so the console session cannot be used to reach the
+  provider's APIs, and no refresh token is ever issued.
+- **Verified addresses only.** An explicit `email_verified: false` is disqualifying. An absent
+  claim is not — Entra generally omits it, and refusing on absence would exclude it entirely.
+- **Subject binding.** The provider's subject is pinned on first sign-in and required to match
+  afterwards. The allow-list is by email, and an email address can be reassigned to a different
+  person; without binding, that reassignment would inherit console access.
+- **No cookie for an unauthorized identity.** The allow-list check runs inside the OIDC
+  `OnTicketReceived` event, before any cookie is issued, so a refused sign-in leaves no session
+  behind.
+- **Claim-gated first run.** While the allow-list is empty, the first sign-in must also present
+  a one-time code from the startup log. This is what stops a publicly reachable server from
+  being claimed by whoever finds it first. The code alone grants nothing; it is only accepted
+  alongside a provider-verified identity.
+- **Break-glass token login.** The admin token can log in to the console while no provider is
+  configured, and is hidden automatically once one is. It is compared in fixed time. Override
+  with `AdminAuth:AllowTokenLogin`, or from **Settings** in the console.
+- **Client secrets encrypted at rest.** A secret entered through the console is protected with
+  DataProtection before being written to `appsettings.json`, using the keyring in the data
+  directory. Secrets set by hand or through environment variables remain plaintext and keep
+  working, so both forms are accepted.
+
+Anyone who signs in to the console has full administrative control of every configured account.
+The allow-list is the whole authorization model — there are no console roles.
+
+### Session Handling
+
+- **Cookie hardening tracks the transport.** When `CalendarMcp:ExternalBaseUrl` declares an
+  HTTPS origin, the session cookie is named `__Host-CalendarMcp.AdminAuth` and marked `Secure`.
+  The `__Host-` prefix is browser-enforced: the cookie must have been set by that exact origin,
+  over HTTPS, with no `Domain` attribute — so a sibling host on a shared suffix such as
+  `ts.net` cannot overwrite it. Over plain HTTP the cookie keeps its original name and follows
+  the request, so local development still works.
+- **Always `HttpOnly`, `SameSite=Lax`.** Lax rather than Strict because the identity provider
+  redirects back as a top-level navigation, which Strict would strip the cookie from.
+- **Sliding 8-hour expiry.** An administrator working in the console is not signed out
+  mid-task; an abandoned session closes.
+- **Live sessions are revalidated every minute.** Removing someone from the allow-list, or
+  turning off token login, ends their open console circuit rather than waiting out the cookie.
+  Subject-binding changes end it too.
+
+Changing `ExternalBaseUrl` from HTTP to HTTPS changes the cookie name, which signs everyone out
+once. That is expected.
+
+### Rate Limiting
+
+Sign-in and the MCP endpoint are rate limited; everything else is unlimited.
+
+| Surface | Limit | Partitioned by |
+|---|---|---|
+| `/admin/ui/login`, `/admin/ui/claim`, `/admin/auth/*` | 10/minute | client address |
+| `/`, `/sse`, `/message`, `/attachments/*` | 240/minute | API key (hashed), or address when absent |
+
+Rejections return `429` with `Retry-After`. The limiter runs before authentication, so
+credential guessing is throttled before it reaches any validation work.
+
+The client address is whatever `UseForwardedHeaders` resolved. With the default `ForwardLimit`
+of 1, that is the entry appended by the nearest proxy rather than one a client can supply
+itself — but it does mean the limit is only as trustworthy as the proxy in front of the server.
+
+See [Configuration](configuration.md#admin-console-sign-in-http-server) for setup.
+
 ## Authentication & Authorization
 
 ### OAuth 2.0 Flow

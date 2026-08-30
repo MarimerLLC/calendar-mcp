@@ -1,0 +1,332 @@
+@page "/admin/ui/settings"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using CalendarMcp.Auth
+@using CalendarMcp.Core.Configuration
+@using CalendarMcp.Core.Security
+@using CalendarMcp.HttpServer.BlazorAdmin
+@using Microsoft.Extensions.Options
+@inject IAdminAuthConfigurationService AdminAuthConfig
+@inject IOptionsMonitor<AdminAuthConfiguration> AdminAuth
+@inject IOptionsMonitor<CalendarMcpConfiguration> ServerConfig
+@inject IAdminUserStore AdminUsers
+@inject PasswordProtector PasswordProtector
+
+<h1 class="mb-4"><i class="bi bi-gear me-2"></i>Console Settings</h1>
+
+@if (_message is not null)
+{
+    <div class="alert alert-success alert-dismissible">
+        <i class="bi bi-check-circle me-1"></i> @_message
+        <button type="button" class="btn-close" @onclick="() => _message = null"></button>
+    </div>
+}
+@if (_error is not null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        <i class="bi bi-exclamation-triangle me-1"></i> @_error
+        <button type="button" class="btn-close" @onclick="() => _error = null"></button>
+    </div>
+}
+
+@if (string.IsNullOrWhiteSpace(ServerConfig.CurrentValue.ExternalBaseUrl))
+{
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <strong>ExternalBaseUrl is not set.</strong>
+        Set <code>CalendarMcp:ExternalBaseUrl</code> to this server's public address before
+        registering a provider — it is what the redirect URI below is built from, and it also
+        controls session cookie hardening.
+    </div>
+}
+
+<!-- Sign-in providers -->
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-shield-lock me-1"></i>Sign-in providers</div>
+    <div class="card-body">
+        <ul class="nav nav-tabs mb-3">
+            @foreach (var scheme in AdminOidc.KnownSchemes)
+            {
+                <li class="nav-item">
+                    <button class="nav-link @(scheme == _scheme ? "active" : "")"
+                            @onclick="() => SelectScheme(scheme)">
+                        @AdminOidc.DisplayName(scheme, AdminAuth.CurrentValue)
+                        @if (AdminAuth.CurrentValue.GetProvider(scheme)?.IsConfigured == true)
+                        {
+                            <i class="bi bi-check-circle-fill text-success ms-1"></i>
+                        }
+                    </button>
+                </li>
+            }
+        </ul>
+
+        <div class="mb-3">
+            <label class="form-label">Redirect URI to register with @AdminOidc.DisplayName(_scheme, AdminAuth.CurrentValue)</label>
+            <div class="input-group">
+                <input class="form-control font-monospace" readonly value="@RedirectUri" />
+            </div>
+            <div class="form-text">
+                Paste this into the provider's authorized redirect URIs. It must match exactly,
+                including the scheme and any trailing path.
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label for="authority" class="form-label">Authority</label>
+            <input id="authority" class="form-control font-monospace" @bind="_authority"
+                   placeholder="@DefaultAuthority(_scheme)" />
+            <div class="form-text">The OIDC issuer. Discovery finds every endpoint from this.</div>
+        </div>
+
+        <div class="mb-3">
+            <label for="clientId" class="form-label">Client ID</label>
+            <input id="clientId" class="form-control font-monospace" @bind="_clientId" />
+        </div>
+
+        <div class="mb-3">
+            <label for="clientSecret" class="form-label">Client secret</label>
+            <input id="clientSecret" type="password" class="form-control" @bind="_clientSecret"
+                   placeholder="@(_hasStoredSecret ? "Stored — leave blank to keep" : "")" />
+            <div class="form-text">
+                Encrypted before it is written to disk. It is never sent back to this page, so
+                leaving it blank keeps the stored value.
+            </div>
+        </div>
+
+        <button class="btn btn-primary" @onclick="SaveProviderAsync" disabled="@_busy">
+            <i class="bi bi-save me-1"></i>Save provider
+        </button>
+        @if (AdminAuth.CurrentValue.GetProvider(_scheme)?.IsConfigured == true)
+        {
+            <button class="btn btn-outline-danger ms-2" @onclick="RemoveProviderAsync" disabled="@_busy">
+                <i class="bi bi-trash me-1"></i>Remove
+            </button>
+        }
+    </div>
+</div>
+
+<!-- Allowed administrators -->
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-people me-1"></i>Who may sign in</div>
+    <div class="card-body">
+        @if (_allowedEmails.Count == 0)
+        {
+            <div class="alert alert-warning py-2">
+                <i class="bi bi-exclamation-triangle me-1"></i>
+                The allow-list is empty. The next sign-in will go through the claim flow.
+            </div>
+        }
+        else
+        {
+            <table class="table table-sm align-middle">
+                <tbody>
+                    @foreach (var entry in _allowedEmails)
+                    {
+                        <tr>
+                            <td class="font-monospace">
+                                @entry
+                                @if (entry.StartsWith('@'))
+                                {
+                                    <span class="badge text-bg-secondary ms-2">whole domain</span>
+                                }
+                            </td>
+                            <td class="text-muted small">@LastSeen(entry)</td>
+                            <td class="text-end">
+                                <button class="btn btn-sm btn-outline-danger"
+                                        @onclick="() => RemoveEmailAsync(entry)" disabled="@_busy">
+                                    Remove
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+
+        <div class="input-group" style="max-width: 460px;">
+            <input class="form-control" @bind="_newEmail"
+                   placeholder="someone@example.com or @@example.com" />
+            <button class="btn btn-outline-primary" @onclick="AddEmailAsync" disabled="@_busy">
+                <i class="bi bi-plus-lg me-1"></i>Add
+            </button>
+        </div>
+        <div class="form-text">
+            Removing someone ends their open session within about a minute — no restart needed.
+        </div>
+    </div>
+</div>
+
+<!-- Break-glass token login -->
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-key me-1"></i>Admin token login</div>
+    <div class="card-body">
+        <p class="text-muted">
+            The admin token can be used as a password on the login page. It is the break-glass
+            path for when no provider is configured, and turns itself off once one is.
+            Currently <strong>@(AdminAuth.CurrentValue.IsTokenLoginAllowed() ? "enabled" : "disabled")</strong>.
+        </p>
+        <div class="btn-group">
+            <button class="btn @(AdminAuth.CurrentValue.AllowTokenLogin is null ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="() => SetTokenLoginAsync(null)" disabled="@_busy">Automatic</button>
+            <button class="btn @(AdminAuth.CurrentValue.AllowTokenLogin == true ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="() => SetTokenLoginAsync(true)" disabled="@_busy">Always on</button>
+            <button class="btn @(AdminAuth.CurrentValue.AllowTokenLogin == false ? "btn-primary" : "btn-outline-primary")"
+                    @onclick="() => SetTokenLoginAsync(false)" disabled="@_busy">Always off</button>
+        </div>
+        <div class="form-text">
+            Turning it off while no provider works will lock you out of the console until you
+            edit <code>appsettings.json</code> directly.
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _scheme = AdminOidc.GoogleScheme;
+    private string _authority = "";
+    private string _clientId = "";
+    private string _clientSecret = "";
+    private bool _hasStoredSecret;
+
+    private List<string> _allowedEmails = [];
+    private string _newEmail = "";
+
+    private string? _message;
+    private string? _error;
+    private bool _busy;
+
+    private string RedirectUri
+    {
+        get
+        {
+            var baseUrl = ServerConfig.CurrentValue.ExternalBaseUrl;
+            return string.IsNullOrWhiteSpace(baseUrl)
+                ? $"(set ExternalBaseUrl){AdminOidc.CallbackPath(_scheme)}"
+                : $"{baseUrl.TrimEnd('/')}{AdminOidc.CallbackPath(_scheme)}";
+        }
+    }
+
+    private static string DefaultAuthority(string scheme) => scheme switch
+    {
+        AdminOidc.GoogleScheme => "https://accounts.google.com",
+        AdminOidc.MicrosoftScheme => "https://login.microsoftonline.com/common/v2.0",
+        _ => ""
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        SelectScheme(_scheme);
+        await ReloadEmailsAsync();
+    }
+
+    private void SelectScheme(string scheme)
+    {
+        _scheme = scheme;
+        var provider = AdminAuth.CurrentValue.GetProvider(scheme);
+
+        _authority = provider?.Authority ?? DefaultAuthority(scheme);
+        _clientId = provider?.ClientId ?? "";
+        _clientSecret = "";
+        _hasStoredSecret = !string.IsNullOrWhiteSpace(provider?.ClientSecret);
+    }
+
+    private async Task ReloadEmailsAsync() =>
+        _allowedEmails = [.. await AdminAuthConfig.GetAllowedEmailsAsync()];
+
+    private string LastSeen(string entry)
+    {
+        var user = AdminUsers.Find(entry);
+        return user is null ? "" : $"last signed in {user.LastSeenUtc.LocalDateTime:g} via {user.Provider}";
+    }
+
+    private async Task SaveProviderAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_authority) || string.IsNullOrWhiteSpace(_clientId))
+        {
+            _error = "Authority and Client ID are both required.";
+            return;
+        }
+
+        if (!_hasStoredSecret && string.IsNullOrWhiteSpace(_clientSecret))
+        {
+            _error = "A client secret is required the first time you save this provider.";
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            var secret = string.IsNullOrWhiteSpace(_clientSecret)
+                ? null
+                : PasswordProtector.Protect(_clientSecret);
+
+            await AdminAuthConfig.SetProviderAsync(_scheme, _authority, _clientId, secret);
+
+            _clientSecret = "";
+            _hasStoredSecret = true;
+            _message = $"Saved the {AdminOidc.DisplayName(_scheme, AdminAuth.CurrentValue)} provider. " +
+                       "It takes effect immediately — no restart needed.";
+        });
+    }
+
+    private async Task RemoveProviderAsync() =>
+        await RunAsync(async () =>
+        {
+            await AdminAuthConfig.RemoveProviderAsync(_scheme);
+            SelectScheme(_scheme);
+            _message = "Provider removed.";
+        });
+
+    private async Task AddEmailAsync()
+    {
+        var candidate = _newEmail;
+        if (AdminEmailAllowList.Normalize(candidate) is null)
+        {
+            _error = "Enter an email address, or @example.com for a whole domain.";
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            _message = await AdminAuthConfig.AddAllowedEmailAsync(candidate)
+                ? $"Added {candidate}."
+                : $"{candidate} was already on the list.";
+            _newEmail = "";
+            await ReloadEmailsAsync();
+        });
+    }
+
+    private async Task RemoveEmailAsync(string entry) =>
+        await RunAsync(async () =>
+        {
+            await AdminAuthConfig.RemoveAllowedEmailAsync(entry);
+            await ReloadEmailsAsync();
+            _message = _allowedEmails.Count == 0
+                ? $"Removed {entry}. The allow-list is now empty — the next sign-in will need a claim code."
+                : $"Removed {entry}.";
+        });
+
+    private async Task SetTokenLoginAsync(bool? allow) =>
+        await RunAsync(async () =>
+        {
+            await AdminAuthConfig.SetAllowTokenLoginAsync(allow);
+            _message = "Token login setting saved.";
+        });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _message = null;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

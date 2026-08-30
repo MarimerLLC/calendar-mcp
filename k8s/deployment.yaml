@@ -28,7 +28,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: calendar-mcp
-          image: docker.io/rockylhotka/calendar-mcp-http:1.5.0
+          image: docker.io/rockylhotka/calendar-mcp-http:1.6.0
           ports:
             - containerPort: 8080
               name: http
@@ -38,6 +38,14 @@ spec:
                 secretKeyRef:
                   name: calendar-mcp-secrets
                   key: admin-token
+            # Optional: supply the MCP endpoint API key from the Secret rather than letting the
+            # server generate one onto the PVC at first start. Uncomment together with the
+            # mcp-api-key entry in secret.yaml.
+            # - name: CALENDAR_MCP_MCP_KEY
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: calendar-mcp-secrets
+            #       key: mcp-api-key
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://alloy.loki.svc.cluster.local:4317"
             - name: OTEL_SERVICE_NAME

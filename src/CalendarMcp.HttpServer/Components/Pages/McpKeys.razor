@@ -1,0 +1,264 @@
+@page "/admin/ui/keys"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using CalendarMcp.Core.Configuration
+@using CalendarMcp.Core.Security
+@using Microsoft.Extensions.Options
+@inject IMcpKeyStore KeyStore
+@inject IOptionsMonitor<CalendarMcpConfiguration> ServerConfig
+
+<h1 class="mb-4"><i class="bi bi-key me-2"></i>MCP API Keys</h1>
+
+@if (!ServerConfig.CurrentValue.Mcp.RequireApiKey)
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <strong>Key enforcement is disabled.</strong>
+        <code>CalendarMcp:Mcp:RequireApiKey</code> is <code>false</code>, so the MCP endpoint
+        accepts any caller that can reach it and the keys below are not being checked.
+    </div>
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        <i class="bi bi-exclamation-triangle me-1"></i> @_error
+        <button type="button" class="btn-close" @onclick="() => _error = null"></button>
+    </div>
+}
+
+@if (_newSecret is not null)
+{
+    <div class="card border-success mb-4">
+        <div class="card-header bg-success-subtle">
+            <i class="bi bi-check-circle me-1"></i>Key created — copy it now
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                This is the only time the key is shown. It is hashed before storage and cannot
+                be recovered; if you lose it, revoke it and create another.
+            </p>
+
+            <label class="form-label">Key</label>
+            <input class="form-control font-monospace mb-3" readonly value="@_newSecret" />
+
+            <label class="form-label">Add it to a client</label>
+            <ul class="nav nav-tabs mb-2">
+                @foreach (var (id, label) in Snippets)
+                {
+                    <li class="nav-item">
+                        <button class="nav-link @(id == _snippet ? "active" : "")"
+                                @onclick="() => _snippet = id">@label</button>
+                    </li>
+                }
+            </ul>
+            <pre class="bg-body-secondary p-3 rounded"><code>@SnippetText</code></pre>
+
+            <button class="btn btn-outline-secondary btn-sm" @onclick="() => _newSecret = null">
+                Done
+            </button>
+        </div>
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-plus-circle me-1"></i>Create a key</div>
+    <div class="card-body">
+        <div class="input-group" style="max-width: 520px;">
+            <input class="form-control" @bind="_newLabel"
+                   placeholder="What will use this key? e.g. Claude Desktop - laptop" />
+            <button class="btn btn-primary" @onclick="CreateAsync" disabled="@_busy">
+                <i class="bi bi-plus-lg me-1"></i>Create
+            </button>
+        </div>
+        <div class="form-text">
+            Give each client its own key, so one can be revoked without disturbing the others.
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><i class="bi bi-list-ul me-1"></i>Existing keys</div>
+    <div class="card-body">
+        @if (_keys.Count == 0)
+        {
+            <p class="text-muted mb-0">No keys yet.</p>
+        }
+        else
+        {
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Label</th>
+                        <th>Created</th>
+                        <th>Last used</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var key in _keys)
+                    {
+                        <tr class="@(key.IsActive ? "" : "opacity-50")">
+                            <td>
+                                @key.Label
+                                <div class="text-muted small font-monospace">@key.Id</div>
+                            </td>
+                            <td class="small">@key.CreatedUtc.LocalDateTime.ToString("g")</td>
+                            <td class="small">
+                                @if (key.LastUsedUtc is null)
+                                {
+                                    <span class="text-muted">never</span>
+                                }
+                                else
+                                {
+                                    @key.LastUsedUtc.Value.LocalDateTime.ToString("g")
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (key.IsActive)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => RevokeAsync(key)" disabled="@_busy">
+                                        Revoke
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary">
+                                        revoked @key.RevokedUtc!.Value.LocalDateTime.ToString("g")
+                                    </span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="form-text mb-0">
+                Revoked keys are kept for the record and stop working immediately. "Last used" is
+                written lazily, so it can lag real activity by a few minutes.
+            </p>
+        }
+    </div>
+</div>
+
+@code {
+    private List<McpApiKey> _keys = [];
+    private string _newLabel = "";
+    private string? _newSecret;
+    private string _snippet = "claude-code";
+    private string? _error;
+    private bool _busy;
+
+    private static readonly (string Id, string Label)[] Snippets =
+    [
+        ("claude-code", "Claude Code"),
+        ("vscode", "VS Code"),
+        ("mcp-remote", "mcp-remote"),
+        ("curl", "curl")
+    ];
+
+    private string ServerUrl
+    {
+        get
+        {
+            var baseUrl = ServerConfig.CurrentValue.ExternalBaseUrl;
+            return string.IsNullOrWhiteSpace(baseUrl)
+                ? "https://your-server.example.com/"
+                : baseUrl.TrimEnd('/') + "/";
+        }
+    }
+
+    private string SnippetText => _snippet switch
+    {
+        "claude-code" =>
+            $"""
+            claude mcp add --transport http calendar-mcp {ServerUrl} \
+              --header "Authorization: Bearer {_newSecret}"
+            """,
+        "vscode" =>
+            $$"""
+            {
+              "servers": {
+                "calendar-mcp": {
+                  "type": "http",
+                  "url": "{{ServerUrl}}",
+                  "headers": { "Authorization": "Bearer {{_newSecret}}" }
+                }
+              }
+            }
+            """,
+        "mcp-remote" =>
+            $$"""
+            {
+              "mcpServers": {
+                "calendar-mcp": {
+                  "command": "npx",
+                  "args": [
+                    "-y", "mcp-remote", "{{ServerUrl}}",
+                    "--header", "Authorization: Bearer {{_newSecret}}"
+                  ]
+                }
+              }
+            }
+            """,
+        // Doubled delimiters so the JSON body's own braces stay literal.
+        _ =>
+            $$"""
+            curl -H "Authorization: Bearer {{_newSecret}}" \
+                 -H "Accept: application/json, text/event-stream" \
+                 -H "Content-Type: application/json" \
+                 -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+                 {{ServerUrl}}
+            """
+    };
+
+    protected override void OnInitialized() => Reload();
+
+    private void Reload() => _keys = [.. KeyStore.List()];
+
+    private void CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newLabel))
+        {
+            _error = "Give the key a label so you can tell it apart later.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (_, secret) = KeyStore.Create(_newLabel);
+            _newSecret = secret;
+            _newLabel = "";
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void RevokeAsync(McpApiKey key)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            KeyStore.Revoke(key.Id);
+            Reload();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

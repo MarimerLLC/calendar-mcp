@@ -19,6 +19,10 @@ services:
     environment:
       # Required: Admin API authentication token
       - CALENDAR_MCP_ADMIN_TOKEN=${CALENDAR_MCP_ADMIN_TOKEN:-changeme}
+      # Optional: MCP endpoint API key. Leave unset and the server generates one on first
+      # start and logs it (docker compose logs calendar-mcp). Set it here to control the key
+      # from the deployment instead — it is then never written to the data volume.
+      # - CALENDAR_MCP_MCP_KEY=${CALENDAR_MCP_MCP_KEY}
       # Optional: OpenTelemetry endpoint for observability
       # - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
     restart: unless-stopped

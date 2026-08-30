@@ -1,0 +1,140 @@
+@page "/admin/ui/claim"
+@attribute [AllowAnonymous]
+@layout LoginLayout
+@using CalendarMcp.Auth
+@using CalendarMcp.Core.Security
+@using CalendarMcp.Core.Configuration
+@using CalendarMcp.HttpServer.BlazorAdmin
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.Extensions.Options
+@inject IOptionsMonitor<AdminAuthConfiguration> AdminAuth
+@inject IAdminClaimCodeService ClaimCode
+@inject IAdminAuthConfigurationService AdminAuthConfig
+@inject IAdminUserStore AdminUsers
+@inject PendingAdminSignInStore Pending
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
+
+<div class="d-flex justify-content-center align-items-center vh-100 bg-light">
+    <div class="card shadow-sm" style="width: 460px;">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <i class="bi bi-shield-lock display-4 text-primary"></i>
+                <h3 class="mt-2">Claim this server</h3>
+            </div>
+
+            @if (_pending is null)
+            {
+                <div class="alert alert-warning py-2 mb-3">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    This sign-in attempt has expired or is not valid.
+                </div>
+                <a href="/admin/ui/login" class="btn btn-primary w-100">Back to sign in</a>
+            }
+            else
+            {
+                <p class="text-muted">
+                    You signed in as <strong>@_pending.Email</strong> via
+                    @AdminOidc.DisplayName(_pending.Provider, AdminAuth.CurrentValue).
+                    This server has no administrators yet. Enter the claim code from the server's
+                    startup log to make this account the first one.
+                </p>
+
+                @if (_errorMessage is not null)
+                {
+                    <div class="alert alert-danger py-2">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        @_errorMessage
+                    </div>
+                }
+
+                <EditForm Model="Input" method="post" OnValidSubmit="HandleClaimAsync" FormName="claim">
+                    <div class="mb-3">
+                        <label for="code" class="form-label">Claim code</label>
+                        <InputText @bind-Value="Input!.Code" class="form-control font-monospace" id="code"
+                                   placeholder="XXXX-XXXX-XXXX-XXXX" required autofocus="true"
+                                   autocomplete="off" />
+                        <div class="form-text">Case does not matter, and the dashes are optional.</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-shield-check me-1"></i> Claim server
+                    </button>
+                </EditForm>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _errorMessage;
+    private PendingAdminSignIn? _pending;
+
+    [SupplyParameterFromForm]
+    private ClaimInput? Input { get; set; }
+
+    [SupplyParameterFromQuery(Name = "pending")]
+    private string? PendingToken { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        Input ??= new();
+
+        // Peek rather than consume: the identity must survive a mistyped code so the person can
+        // try again without starting the whole provider round trip over.
+        _pending = Pending.Peek(PendingToken);
+    }
+
+    private async Task HandleClaimAsync()
+    {
+        var httpContext = HttpContextAccessor.HttpContext;
+        if (httpContext is null) return;
+
+        var pending = Pending.Peek(PendingToken);
+        if (pending is null)
+        {
+            _pending = null;
+            return;
+        }
+
+        if (!ClaimCode.Validate(Input!.Code))
+        {
+            _errorMessage = "That claim code is not correct.";
+            return;
+        }
+
+        // Re-check that the server is still unclaimed. Two people could reach this page from the
+        // same startup, and the allow-list write is what decides which of them wins.
+        var existing = await AdminAuthConfig.GetAllowedEmailsAsync();
+        if (existing.Count > 0)
+        {
+            _errorMessage = "This server has already been claimed. Sign in again.";
+            ClaimCode.Consume();
+            return;
+        }
+
+        await AdminAuthConfig.AddAllowedEmailAsync(pending.Email);
+        AdminUsers.RecordSignIn(pending.Email, pending.Provider, pending.Subject);
+
+        // Spend the code and the pending identity only once the claim has actually succeeded.
+        ClaimCode.Consume();
+        Pending.Consume(PendingToken);
+
+        var principal = AdminSignInProcessor.BuildAdminPrincipal(
+            pending.Email, pending.Provider, pending.Subject);
+
+        await httpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            principal,
+            // No explicit ExpiresUtc: setting one pins the lifetime and disables the sliding
+            // expiration configured on the cookie options.
+            new AuthenticationProperties { IsPersistent = true });
+
+        Navigation.NavigateTo("/admin/ui", forceLoad: true);
+    }
+
+    private sealed class ClaimInput
+    {
+        public string Code { get; set; } = "";
+    }
+}

@@ -2,9 +2,15 @@
 @attribute [AllowAnonymous]
 @layout LoginLayout
 @using System.Security.Claims
+@using System.Security.Cryptography
+@using System.Text
+@using CalendarMcp.Core.Configuration
+@using CalendarMcp.HttpServer.BlazorAdmin
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Authentication.Cookies
+@using Microsoft.Extensions.Options
 @inject IConfiguration Configuration
+@inject IOptionsMonitor<AdminAuthConfiguration> AdminAuth
 @inject NavigationManager Navigation
 @inject IHttpContextAccessor HttpContextAccessor
 
@@ -25,40 +31,81 @@
                 </div>
             }
 
-            <EditForm Model="Input" method="post" OnValidSubmit="HandleLoginAsync" FormName="login">
-                <div class="mb-3">
-                    <label for="token" class="form-label">Admin Token</label>
-                    <InputText @bind-Value="Input!.Token" type="password" class="form-control" id="token"
-                               placeholder="Enter admin token" required autofocus="true" />
+            @if (_providers.Count > 0)
+            {
+                @foreach (var scheme in _providers)
+                {
+                    <a href="@AdminOidc.ChallengePath(scheme)" class="btn btn-outline-primary w-100 mb-2">
+                        <i class="bi bi-box-arrow-in-right me-1"></i>
+                        Sign in with @AdminOidc.DisplayName(scheme, AdminAuth.CurrentValue)
+                    </a>
+                }
+            }
+
+            @if (_tokenLoginAllowed)
+            {
+                @if (_providers.Count > 0)
+                {
+                    <div class="text-center text-muted my-3"><small>or</small></div>
+                }
+
+                <EditForm Model="Input" method="post" OnValidSubmit="HandleLoginAsync" FormName="login">
+                    <div class="mb-3">
+                        <label for="token" class="form-label">Admin Token</label>
+                        <InputText @bind-Value="Input!.Token" type="password" class="form-control" id="token"
+                                   placeholder="Enter admin token" required autofocus="true" />
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
+                    </button>
+                </EditForm>
+            }
+            else if (_providers.Count == 0)
+            {
+                <div class="alert alert-warning py-2 mb-0">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    No sign-in method is configured. Set <code>AdminAuth:Providers</code> or
+                    <code>AdminAuth:AllowTokenLogin</code> and restart.
                 </div>
-                <button type="submit" class="btn btn-primary w-100">
-                    <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
-                </button>
-            </EditForm>
+            }
         </div>
     </div>
 </div>
 
 @code {
     private string? _errorMessage;
+    private List<string> _providers = [];
+    private bool _tokenLoginAllowed;
 
     [SupplyParameterFromForm]
     private LoginInput? Input { get; set; }
 
-    protected override void OnParametersSet()
-    {
-        Input ??= new();
-    }
-
     [SupplyParameterFromQuery(Name = "error")]
     private string? Error { get; set; }
 
-    protected override void OnInitialized()
+    protected override void OnParametersSet()
     {
-        if (Error == "invalid")
+        Input ??= new();
+
+        var config = AdminAuth.CurrentValue;
+        _providers = config.ConfiguredProviderSchemes().ToList();
+        _tokenLoginAllowed = config.IsTokenLoginAllowed();
+
+        _errorMessage = Error switch
         {
-            _errorMessage = "Invalid admin token. Please try again.";
-        }
+            null or "" => _errorMessage,
+            "invalid" => "Invalid admin token. Please try again.",
+            "notallowed" => "That account is not authorized to use this console.",
+            "unverified" => "Your identity provider reports that email address as unverified.",
+            "noemail" => "Your identity provider did not supply an email address.",
+            "subject" => "That email address is already bound to a different provider account.",
+            "unclaimable" => "This server has no allow-list and no claim code is outstanding. Restart it to issue one.",
+            "unconfigured" => "That sign-in provider is not configured.",
+            "unknownprovider" => "Unknown sign-in provider.",
+            "provider" => "Sign-in failed at the identity provider. Please try again.",
+            "claimexpired" => "That sign-in attempt expired. Please sign in again.",
+            _ => "Sign-in failed. Please try again."
+        };
     }
 
     private async Task HandleLoginAsync()
@@ -66,12 +113,17 @@
         var httpContext = HttpContextAccessor.HttpContext;
         if (httpContext is null) return;
 
+        if (!AdminAuth.CurrentValue.IsTokenLoginAllowed())
+        {
+            _errorMessage = "Token login is disabled on this server.";
+            return;
+        }
+
         var expectedToken = Environment.GetEnvironmentVariable("CALENDAR_MCP_ADMIN_TOKEN")
             ?? Configuration.GetValue<string>("CalendarMcp:AdminToken");
 
         // In dev mode (no token configured), allow any login
-        if (!string.IsNullOrEmpty(expectedToken) &&
-            !string.Equals(Input!.Token, expectedToken, StringComparison.Ordinal))
+        if (!string.IsNullOrEmpty(expectedToken) && !TokensMatch(Input!.Token, expectedToken))
         {
             _errorMessage = "Invalid admin token. Please try again.";
             return;
@@ -80,7 +132,8 @@
         var claims = new List<Claim>
         {
             new(ClaimTypes.Name, "admin"),
-            new(ClaimTypes.Role, "Administrator")
+            new(ClaimTypes.Role, "Administrator"),
+            new(AdminOidc.ProviderClaimType, "token")
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
@@ -89,13 +142,27 @@
         await httpContext.SignInAsync(
             CookieAuthenticationDefaults.AuthenticationScheme,
             principal,
-            new AuthenticationProperties
-            {
-                IsPersistent = true,
-                ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
-            });
+            // No explicit ExpiresUtc: setting one pins the lifetime and disables the sliding
+            // expiration configured on the cookie options.
+            new AuthenticationProperties { IsPersistent = true });
 
         Navigation.NavigateTo("/admin/ui", forceLoad: true);
+    }
+
+    /// <summary>
+    /// Fixed-time comparison so the token cannot be recovered a character at a time from how
+    /// long the page takes to reject it.
+    /// </summary>
+    private static bool TokensMatch(string? presented, string expected)
+    {
+        if (string.IsNullOrEmpty(presented))
+            return false;
+
+        var presentedBytes = Encoding.UTF8.GetBytes(presented);
+        var expectedBytes = Encoding.UTF8.GetBytes(expected);
+
+        return presentedBytes.Length == expectedBytes.Length &&
+               CryptographicOperations.FixedTimeEquals(presentedBytes, expectedBytes);
     }
 
     private sealed class LoginInput

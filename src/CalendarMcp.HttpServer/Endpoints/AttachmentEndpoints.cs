@@ -4,7 +4,11 @@ namespace CalendarMcp.HttpServer.Endpoints;
 
 public static class AttachmentEndpoints
 {
-    public static IEndpointRouteBuilder MapAttachmentEndpoints(this IEndpointRouteBuilder routes)
+    /// <summary>
+    /// Maps the attachment endpoints and returns the group, so the caller can attach the same
+    /// authorization policy that guards the MCP endpoint.
+    /// </summary>
+    public static RouteGroupBuilder MapAttachmentEndpoints(this IEndpointRouteBuilder routes)
     {
         var group = routes.MapGroup("/attachments")
             .WithTags("Attachments")
@@ -30,7 +34,7 @@ public static class AttachmentEndpoints
             .Produces(StatusCodes.Status204NoContent)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        return routes;
+        return group;
     }
 
     private static IResult DownloadAsync(
