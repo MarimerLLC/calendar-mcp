@@ -20,7 +20,10 @@ public class CalendarMcpConfiguration
     /// <summary>
     /// External base URL for OAuth redirect URIs (e.g. "https://calendar-mcp.tail920062.ts.net").
     /// When set, this overrides auto-detection from request headers.
-    /// Can also be set via CALENDARMCP__EXTERNALBASEURL environment variable.
+    /// Normally set in appsettings.json. The environment-variable form is
+    /// CALENDAR_MCP_CalendarMcp__ExternalBaseUrl: configuration is loaded with
+    /// AddEnvironmentVariables("CALENDAR_MCP_"), so the prefix is stripped and the
+    /// remainder still has to name the CalendarMcp section.
     /// </summary>
     public string? ExternalBaseUrl { get; set; }
 

@@ -45,8 +45,33 @@ set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
 ```
 
 ### Additional Environment Variable Overrides
-- Prefix: `CALENDAR_MCP_`
-- Example: `CALENDAR_MCP_Router__Backend=ollama`
+
+Configuration is loaded with `AddEnvironmentVariables("CALENDAR_MCP_")`, so any setting can be
+overridden by an environment variable built from its full configuration path:
+
+- Prefix with `CALENDAR_MCP_`.
+- Separate each level of nesting with a double underscore (`__`).
+- **Include the top-level section name.** The prefix replaces nothing but itself, so a setting
+  inside the `CalendarMcp` section still needs `CalendarMcp` in the variable name.
+
+```bash
+# CalendarMcp:ExternalBaseUrl
+export CALENDAR_MCP_CalendarMcp__ExternalBaseUrl="https://example.ts.net"
+
+# CalendarMcp:Mcp:RequireApiKey
+export CALENDAR_MCP_CalendarMcp__Mcp__RequireApiKey=false
+
+# AdminAuth:Providers:google:ClientId  (AdminAuth is its own top-level section)
+export CALENDAR_MCP_AdminAuth__Providers__google__ClientId="...apps.googleusercontent.com"
+```
+
+Note that `Program.cs` calls `Configuration.Sources.Clear()` before registering its sources, so
+the ASP.NET Core default providers are not present. Unprefixed variables such as
+`CalendarMcp__ExternalBaseUrl` are never read.
+
+A few settings are read directly with `Environment.GetEnvironmentVariable` rather than through
+the configuration system, and so are named exactly as written: `CALENDAR_MCP_CONFIG`,
+`CALENDAR_MCP_MCP_KEY`, and `CALENDAR_MCP_ADMIN_TOKEN`.
 
 ## Complete Configuration Example
 
@@ -792,7 +817,7 @@ minute per key. Neither is configurable today. See
 **Use environment variables instead**:
 ```bash
 export CALENDAR_MCP_Router__ApiKey="sk-..."
-export CALENDAR_MCP_Accounts__0__Configuration__ClientSecret="GOCSPX-..."
+export CALENDAR_MCP_CalendarMcp__Accounts__0__ProviderConfig__clientSecret="GOCSPX-..."
 ```
 
 **Or use encrypted configuration sections** (future enhancement):
