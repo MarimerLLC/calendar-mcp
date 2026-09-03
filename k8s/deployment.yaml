@@ -1,4 +1,4 @@
-# Calendar MCP HTTP Server - Kubernetes Deployment
+# Adjutant HTTP Server - Kubernetes Deployment
 # All resources here are pinned to the calendar-mcp namespace, so these commands
 # do not depend on the namespace your kubectl context happens to default to.
 # Prerequisites:

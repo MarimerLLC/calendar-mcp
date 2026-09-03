@@ -6,7 +6,7 @@ namespace CalendarMcp.Core.Configuration;
 
 /// <summary>
 /// Registers ASP.NET DataProtection with a keystore persisted under the
-/// Calendar MCP data directory. Each host (HttpServer, StdioServer, Cli)
+/// Adjutant data directory. Each host (HttpServer, StdioServer, Cli)
 /// calls this so any host can encrypt or decrypt values produced by another,
 /// as long as they share the same data directory (which is the contract
 /// established by <see cref="ConfigurationPaths.GetDataDirectory"/>).

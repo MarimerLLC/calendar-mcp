@@ -8,12 +8,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CalendarMcp.Core.Configuration;
 
 /// <summary>
-/// Extension methods for configuring Calendar MCP services
+/// Extension methods for configuring Adjutant services
 /// </summary>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
-    /// Adds Calendar MCP core services to the dependency injection container
+    /// Adds Adjutant core services to the dependency injection container
     /// </summary>
     public static IServiceCollection AddCalendarMcpCore(this IServiceCollection services)
     {

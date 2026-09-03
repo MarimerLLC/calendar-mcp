@@ -1,6 +1,6 @@
-# Calendar MCP Installer
+# Adjutant Installer
 
-This directory contains the Windows installer configuration for Calendar MCP.
+This directory contains the Windows installer configuration for Adjutant.
 
 ## Files
 
@@ -13,7 +13,7 @@ This directory contains the Windows installer configuration for Calendar MCP.
 ### Prerequisites
 
 1. Install [Inno Setup](https://jrsoftware.org/isinfo.php) (free)
-2. Build the Calendar MCP projects in Release mode
+2. Build the Adjutant projects in Release mode
 3. Ensure release binaries are in `../release/calendar-mcp-win-x64/`
 
 ### Build Process
@@ -41,7 +41,7 @@ The installer will be uploaded as a release asset.
 
 ## Installer Features
 
-- **Installation Directory**: Default to `C:\Program Files\Calendar MCP\`
+- **Installation Directory**: Default to `C:\Program Files\Adjutant\`
 - **PATH Addition**: Optional - adds installation directory to system PATH
 - **Start Menu Shortcuts**: Creates shortcuts for CLI tool
 - **Uninstaller**: Automatic uninstaller with PATH cleanup
@@ -73,7 +73,7 @@ rather than silently producing a wrongly-versioned installer.
 
 Edit the `[Tasks]` section in `CalendarMcp-Setup.iss`:
 ```iss
-Name: "addtopath"; Description: "Add Calendar MCP to system PATH"; Flags: checkedonce
+Name: "addtopath"; Description: "Add Adjutant to system PATH"; Flags: checkedonce
 ```
 
 ## Testing

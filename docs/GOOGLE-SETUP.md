@@ -1,6 +1,6 @@
 # Google Workspace / Gmail Setup Guide
 
-This guide walks through setting up Google Workspace or Gmail authentication for the Calendar MCP server.
+This guide walks through setting up Google Workspace or Gmail authentication for the Adjutant server.
 
 ## Overview
 

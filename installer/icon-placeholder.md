@@ -4,7 +4,7 @@ This directory should contain `calendar-mcp-icon.ico` for the Windows installer.
 
 ## Creating an Icon
 
-1. Design or obtain a 256x256 PNG image representing Calendar MCP
+1. Design or obtain a 256x256 PNG image representing Adjutant
 2. Convert to ICO format using an online tool or software like:
    - [ConvertICO](https://convertico.com/)
    - GIMP

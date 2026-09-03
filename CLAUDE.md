@@ -1,4 +1,4 @@
-# Project: Calendar MCP
+# Project: Adjutant
 
 ## Environment Notes
 

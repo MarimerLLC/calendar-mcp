@@ -1,6 +1,6 @@
 # Attachments
 
-Attachments are the most non-obvious part of Calendar MCP because the
+Attachments are the most non-obvious part of Adjutant because the
 bytes generally **do not transit through the agent**. Two pathways
 exist; pick by direction.
 

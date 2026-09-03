@@ -1,10 +1,10 @@
-# Calendar MCP CLI
+# Adjutant CLI
 
-Command-line tool for managing Calendar MCP accounts and authentication.
+Command-line tool for managing Adjutant accounts and authentication.
 
 ## Overview
 
-The Calendar MCP CLI tool provides commands to:
+The Adjutant CLI tool provides commands to:
 - Add and authenticate Microsoft 365 accounts
 - Add and authenticate Outlook.com personal accounts
 - Add and authenticate Google accounts (Gmail, Google Workspace, custom domains)
@@ -247,7 +247,7 @@ Before using the CLI for Microsoft accounts, you need to create an Azure AD App 
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Navigate to **Azure Active Directory** > **App registrations** > **New registration**
 3. Configure:
-   - **Name:** Calendar MCP (or your preferred name)
+   - **Name:** Adjutant (or your preferred name)
    - **Supported account types:** 
      - M365 only: "Accounts in this organizational directory only"
      - Outlook.com only: "Personal Microsoft accounts only"
@@ -280,7 +280,7 @@ Before using the CLI for Google accounts, you need to create OAuth 2.0 credentia
 5. Click **Create Credentials** > **OAuth client ID**
 6. Configure:
    - **Application type:** Desktop app
-   - **Name:** Calendar MCP (or your preferred name)
+   - **Name:** Adjutant (or your preferred name)
 7. After creation, note the:
    - **Client ID** - Use this as ClientId
    - **Client Secret** - Use this as ClientSecret

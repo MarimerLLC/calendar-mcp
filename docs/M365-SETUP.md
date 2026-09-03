@@ -1,6 +1,6 @@
 # M365 Authentication Setup Guide
 
-This guide walks through setting up Microsoft 365 and Outlook.com authentication for the Calendar MCP server.
+This guide walks through setting up Microsoft 365 and Outlook.com authentication for the Adjutant server.
 
 ## Overview
 
@@ -270,11 +270,11 @@ add-m365-account  # Enter: tenant2-account, tenant2-id, tenant2-client-id
 
 ## IT Administrator Guide: Entra App Registration
 
-This section provides comprehensive guidance for IT administrators setting up Calendar MCP in their organization.
+This section provides comprehensive guidance for IT administrators setting up Adjutant in their organization.
 
 ### Overview for IT Administrators
 
-Calendar MCP is a Model Context Protocol (MCP) server that enables AI assistants like Claude to access email and calendar data. It requires OAuth authentication via Azure AD (Entra ID) app registrations.
+Adjutant is a Model Context Protocol (MCP) server that enables AI assistants like Claude to access email and calendar data. It requires OAuth authentication via Azure AD (Entra ID) app registrations.
 
 **Key Points:**
 - Uses OAuth 2.0 with delegated permissions (user context)
@@ -421,7 +421,7 @@ Users will need the **Client ID** to configure their installation.
 4. Click **Save**
 
 **Why this is needed:**
-Calendar MCP uses the OAuth 2.0 Device Code Flow or Interactive Browser Flow, which requires public client flow support for desktop applications.
+Adjutant uses the OAuth 2.0 Device Code Flow or Interactive Browser Flow, which requires public client flow support for desktop applications.
 
 #### Step 7: Configure Conditional Access (Optional)
 
@@ -429,7 +429,7 @@ For enhanced security, configure Conditional Access policies:
 
 1. Go to **Azure AD** → **Security** → **Conditional Access**
 2. Create a new policy:
-   - **Users**: Target specific users or groups using Calendar MCP
+   - **Users**: Target specific users or groups using Adjutant
    - **Cloud apps**: Select your Calendar-MCP app
    - **Conditions**: Configure based on your security requirements (location, device, etc.)
    - **Grant**: Require MFA, compliant device, etc.
@@ -440,13 +440,13 @@ Create internal documentation for users:
 
 **Information to provide to users:**
 ```
-Calendar MCP Setup - Internal
+Adjutant Setup - Internal
 
 Client ID: [Your Client ID]
 Tenant ID: [Your Tenant ID] (for single-tenant only)
 
 Installation:
-1. Download Calendar MCP from [internal location]
+1. Download Adjutant from [internal location]
 2. Run: CalendarMcp.Cli add-m365-account
 3. Enter the above Client ID and Tenant ID when prompted
 4. Sign in with your company Microsoft 365 account
@@ -502,14 +502,14 @@ Enable audit logging:
 
 #### 5. Data Residency and Compliance
 
-**Data stored by Calendar MCP:**
+**Data stored by Adjutant:**
 - **OAuth tokens**: Stored locally on user's machine (encrypted)
 - **Email/calendar data**: Retrieved in real-time, not stored persistently
 - **Configuration**: Stored in user's appsettings.json
 
 **Compliance considerations:**
 - GDPR: Users control their own data
-- HIPAA: Ensure Calendar MCP isn't used for PHI
+- HIPAA: Ensure Adjutant isn't used for PHI
 - Industry-specific: Review based on your requirements
 
 #### 6. Least Privilege Principle
@@ -529,7 +529,7 @@ Only grant permissions needed for current functionality:
 
 ### Revoking Access
 
-If you need to revoke Calendar MCP access for security reasons:
+If you need to revoke Adjutant access for security reasons:
 
 #### Revoke for All Users
 
@@ -608,7 +608,7 @@ Remove-AzureADServiceAppRoleAssignment -ObjectId $userId -AppRoleAssignmentId $s
 - Audit log retention (Premium): **Paid** (Azure AD Premium P1/P2)
 - Conditional Access (Premium): **Paid** (Azure AD Premium P1)
 
-**No per-user costs** for using Calendar MCP with existing Azure AD.
+**No per-user costs** for using Adjutant with existing Azure AD.
 
 ### Support and Resources
 
@@ -617,7 +617,7 @@ Remove-AzureADServiceAppRoleAssignment -ObjectId $userId -AppRoleAssignmentId $s
 - [Delegated Permissions Reference](https://learn.microsoft.com/en-us/graph/permissions-reference)
 - [Conditional Access Policies](https://learn.microsoft.com/en-us/azure/active-directory/conditional-access/)
 
-**For Calendar MCP:**
+**For Adjutant:**
 - [GitHub Repository](https://github.com/MarimerLLC/calendar-mcp)
 - [Issue Tracker](https://github.com/MarimerLLC/calendar-mcp/issues)
 - [Security Policy](https://github.com/MarimerLLC/calendar-mcp/security)

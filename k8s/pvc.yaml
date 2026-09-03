@@ -1,4 +1,4 @@
-# Persistent Volume Claim for Calendar MCP data (config, tokens, logs)
+# Persistent Volume Claim for Adjutant data (config, tokens, logs)
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

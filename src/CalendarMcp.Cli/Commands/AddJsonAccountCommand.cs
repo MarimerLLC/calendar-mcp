@@ -28,7 +28,7 @@ public class AddJsonAccountCommand : AsyncCommand<AddJsonAccountCommand.Settings
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        AnsiConsole.Write(new FigletText("Calendar MCP")
+        AnsiConsole.Write(new FigletText("Adjutant")
             .Centered()
             .Color(Color.Blue));
 
@@ -448,7 +448,7 @@ public class AddJsonAccountCommand : AsyncCommand<AddJsonAccountCommand.Settings
             AnsiConsole.WriteLine();
 
             AnsiConsole.MarkupLine("[green]Account added successfully![/]");
-            AnsiConsole.MarkupLine("[dim]You can now use this account with the Calendar MCP server.[/]");
+            AnsiConsole.MarkupLine("[dim]You can now use this account with the Adjutant server.[/]");
 
             return 0;
         }

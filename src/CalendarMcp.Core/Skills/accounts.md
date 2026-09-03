@@ -1,6 +1,6 @@
 # Accounts
 
-Every tool in Calendar MCP operates against one or more configured
+Every tool in Adjutant operates against one or more configured
 accounts. Understanding the account model is prerequisite to anything
 else you do here.
 

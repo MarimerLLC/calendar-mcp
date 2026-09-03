@@ -52,7 +52,7 @@ This is the easiest method and does not require installing .NET on your system.
    - Click "Run anyway"
 3. Follow the installation wizard:
    - Accept the license agreement
-   - Choose installation directory (default: `C:\Program Files\Calendar MCP`)
+   - Choose installation directory (default: `C:\Program Files\Adjutant`)
    - Choose whether to add to PATH (recommended)
 4. Click "Install"
 5. Wait for installation to complete
@@ -71,7 +71,7 @@ This is the easiest method and does not require installing .NET on your system.
 CalendarMcp.Cli --version
 
 # If not in PATH, use full path:
-"C:\Program Files\Calendar MCP\CalendarMcp.Cli.exe" --version
+"C:\Program Files\Adjutant\CalendarMcp.Cli.exe" --version
 ```
 
 #### Manual Installation (All Platforms)
@@ -217,7 +217,7 @@ Once you've installed the binaries and configured your accounts, you need to set
 
 See the detailed [Claude Desktop Setup Guide](CLAUDE-DESKTOP-SETUP.md) for:
 - Locating the MCP configuration file
-- Adding Calendar MCP server configuration
+- Adding Adjutant server configuration
 - Testing the connection
 - Troubleshooting
 
@@ -228,7 +228,7 @@ See the detailed [Claude Desktop Setup Guide](CLAUDE-DESKTOP-SETUP.md) for:
    - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
    - **Linux**: `~/.config/claude/claude_desktop_config.json`
 
-2. Add the Calendar MCP server configuration:
+2. Add the Adjutant server configuration:
 
 ```json
 {

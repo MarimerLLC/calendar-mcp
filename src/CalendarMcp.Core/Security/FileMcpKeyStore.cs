@@ -21,8 +21,8 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
     /// secrets rather than using the admin UI (k8s Secret, docker-compose env).</summary>
     public const string BootstrapEnvVariable = "CALENDAR_MCP_MCP_KEY";
 
-    /// <summary>Prefix on every generated secret, so a leaked string is recognizable as a
-    /// Calendar MCP credential in logs and secret scanners.</summary>
+    /// <summary>Prefix on every generated secret, so a leaked string is recognizable as an
+    /// Adjutant credential in logs and secret scanners.</summary>
     public const string SecretPrefix = "cmcp_";
 
     /// <summary>

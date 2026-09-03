@@ -1,11 +1,11 @@
-; Calendar MCP Windows Installer Script
+; Adjutant Windows Installer Script
 ; This script creates a Windows installer using Inno Setup
 ;
 ; To build the installer:
 ; 1. Install Inno Setup (https://jrsoftware.org/isinfo.php)
 ; 2. Run: iscc CalendarMcp-Setup.iss
 
-#define MyAppName "Calendar MCP"
+#define MyAppName "Adjutant"
 
 ; The version is read from the built payload rather than hardcoded here, so it always
 ; tracks VersionPrefix in Directory.Build.props. PayloadDir is the same directory the
@@ -16,7 +16,7 @@
   #error Payload not found. Publish the win-x64 build into ..\release\calendar-mcp-win-x64 before compiling this installer.
 #endif
 #define MyAppVersion GetFileVersion(PayloadExe)
-#define MyAppPublisher "Calendar MCP Project"
+#define MyAppPublisher "Adjutant Project"
 #define MyAppURL "https://github.com/MarimerLLC/calendar-mcp"
 #define MyAppExeName "CalendarMcp.Cli.exe"
 #define MyAppServerExeName "CalendarMcp.StdioServer.exe"
@@ -50,7 +50,7 @@ ArchitecturesInstallIn64BitMode=x64
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "addtopath"; Description: "Add Calendar MCP to system PATH"; GroupDescription: "Additional options:"; Flags: checkedonce
+Name: "addtopath"; Description: "Add Adjutant to system PATH"; GroupDescription: "Additional options:"; Flags: checkedonce
 
 [Files]
 ; All files from the build output directory
@@ -123,7 +123,7 @@ begin
 end;
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Open Calendar MCP CLI"; Flags: nowait postinstall skipifsilent unchecked
+Filename: "{app}\{#MyAppExeName}"; Description: "Open Adjutant CLI"; Flags: nowait postinstall skipifsilent unchecked
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}"

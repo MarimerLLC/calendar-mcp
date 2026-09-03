@@ -34,7 +34,7 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        AnsiConsole.Write(new FigletText("Calendar MCP")
+        AnsiConsole.Write(new FigletText("Adjutant")
             .Centered()
             .Color(Color.Blue));
 
