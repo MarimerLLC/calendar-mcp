@@ -32,7 +32,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: calendar-mcp
-          image: docker.io/rockylhotka/calendar-mcp-http:1.6.0
+          image: docker.io/rockylhotka/calendar-mcp-http:1.7.0
           ports:
             - containerPort: 8080
               name: http
