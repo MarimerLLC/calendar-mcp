@@ -1,10 +1,10 @@
-Calendar MCP Installer
+Adjutant Installer
 ======================
 
-Thank you for installing Calendar MCP!
+Thank you for installing Adjutant!
 
 This installer will:
-- Install the Calendar MCP CLI tool and MCP Server
+- Install the Adjutant CLI tool and MCP Server
 - Optionally add the installation directory to your system PATH
 - Create shortcuts in your Start Menu
 
@@ -26,7 +26,7 @@ AFTER INSTALLATION
 
 2. Configure your AI assistant (e.g., Claude Desktop):
    - See the installation documentation for details
-   - Default installation path: C:\Program Files\Calendar MCP\
+   - Default installation path: C:\Program Files\Adjutant\
 
 3. Documentation:
    - Installation Guide: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/INSTALLATION.md

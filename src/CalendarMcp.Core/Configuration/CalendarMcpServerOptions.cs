@@ -19,7 +19,7 @@ public static class CalendarMcpServerOptions
         "attachments, end-to-end scenarios, and per-provider behavior.";
 
     private const string Instructions = """
-        Calendar MCP exposes email, calendar, and contacts tools across multiple
+        Adjutant exposes email, calendar, and contacts tools across multiple
         personal-information providers. Capabilities vary per configured account.
 
         Start by calling `list_accounts` to discover which accounts are configured
@@ -50,7 +50,7 @@ public static class CalendarMcpServerOptions
         options.ServerInfo = new Implementation
         {
             Name = "calendar-mcp",
-            Title = "Calendar MCP",
+            Title = "Adjutant",
             Version = GetVersion(),
             Description = Description,
         };

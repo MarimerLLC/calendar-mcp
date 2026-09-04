@@ -4,7 +4,7 @@ This guide walks you through configuring Claude Desktop to use the Calendar & Em
 
 ## Prerequisites
 
-- Calendar MCP server installed (see [INSTALLATION.md](INSTALLATION.md))
+- Adjutant server installed (see [INSTALLATION.md](INSTALLATION.md))
 - At least one email/calendar account configured
 - Claude Desktop installed on your system
 
@@ -172,7 +172,7 @@ Open Claude Desktop and try asking:
 Do you have access to my calendar and email?
 ```
 
-Claude should confirm that it can access the Calendar MCP server.
+Claude should confirm that it can access the Adjutant server.
 
 ### Test Email Access
 
@@ -210,7 +210,7 @@ When am I free next week?
 
 ### "MCP server not found" or "No calendar access"
 
-**Issue:** Claude can't connect to the Calendar MCP server.
+**Issue:** Claude can't connect to the Adjutant server.
 
 **Solutions:**
 1. Verify the `command` path is correct

@@ -1,4 +1,4 @@
-# Calendar MCP - Prototype Implementation Summary
+# Adjutant - Prototype Implementation Summary
 
 ## What Was Created
 

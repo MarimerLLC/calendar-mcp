@@ -32,7 +32,7 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
     {
-        AnsiConsole.Write(new FigletText("Calendar MCP")
+        AnsiConsole.Write(new FigletText("Adjutant")
             .Centered()
             .Color(Color.Blue));
 

@@ -3,7 +3,7 @@ using CalendarMcp.Core.Models;
 namespace CalendarMcp.Core.Configuration;
 
 /// <summary>
-/// Root configuration for Calendar MCP
+/// Root configuration for Adjutant
 /// </summary>
 public class CalendarMcpConfiguration
 {

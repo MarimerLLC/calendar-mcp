@@ -1,10 +1,14 @@
-using CalendarMcp.Core.Configuration;
 using CalendarMcp.Core.Services;
 
 namespace CalendarMcp.HttpServer.Admin;
 
 /// <summary>
 /// Maps health check endpoints for Kubernetes liveness and readiness probes.
+///
+/// Both endpoints are deliberately anonymous — the kubelet presents no credential — which means
+/// everything they return is public the moment the server is exposed. They therefore report a
+/// state, never a detail: no paths, no counts, no exception text. The probes key on the status
+/// code, so nothing is lost by keeping the bodies this thin.
 /// </summary>
 public static class HealthEndpoints
 {
@@ -17,34 +21,31 @@ public static class HealthEndpoints
             timestamp = DateTimeOffset.UtcNow
         }));
 
-        // Readiness probe - are services initialized?
-        app.MapGet("/health/ready", async (IAccountRegistry accountRegistry) =>
+        // Readiness probe - are services initialized? The account registry is still queried,
+        // because reaching it is the readiness signal; only the answer stays private.
+        app.MapGet("/health/ready", async (IAccountRegistry accountRegistry, ILoggerFactory loggerFactory) =>
         {
             try
             {
-                var accounts = await accountRegistry.GetAllAccountsAsync();
-                var accountList = accounts.ToList();
+                await accountRegistry.GetAllAccountsAsync();
 
                 return Results.Ok(new
                 {
                     status = "ready",
-                    timestamp = DateTimeOffset.UtcNow,
-                    accounts = new
-                    {
-                        total = accountList.Count,
-                        enabled = accountList.Count(a => a.Enabled)
-                    },
-                    configDirectory = ConfigurationPaths.GetDataDirectory(),
-                    configFileExists = File.Exists(ConfigurationPaths.GetConfigFilePath())
+                    timestamp = DateTimeOffset.UtcNow
                 });
             }
             catch (Exception ex)
             {
+                // Logged rather than returned: the message can carry a config path or a
+                // provider's response, and this endpoint answers unauthenticated callers.
+                loggerFactory.CreateLogger("CalendarMcp.Health")
+                    .LogError(ex, "Readiness probe failed");
+
                 return Results.Json(new
                 {
                     status = "not_ready",
-                    timestamp = DateTimeOffset.UtcNow,
-                    error = ex.Message
+                    timestamp = DateTimeOffset.UtcNow
                 }, statusCode: 503);
             }
         });

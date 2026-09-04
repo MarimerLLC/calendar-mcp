@@ -1,6 +1,6 @@
 # Email
 
-Calendar MCP exposes email tools that work uniformly across Microsoft
+Adjutant exposes email tools that work uniformly across Microsoft
 365, Google, Outlook.com, IMAP/SMTP, and (read-only) JSON-file accounts.
 
 ## Two-stage retrieval

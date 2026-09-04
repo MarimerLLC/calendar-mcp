@@ -108,7 +108,7 @@ Account setup guides:
 {
   "mcpServers": {
     "calendar-mcp": {
-      "command": "C:\\Program Files\\Calendar MCP\\CalendarMcp.StdioServer.exe",
+      "command": "C:\\Program Files\\Adjutant\\CalendarMcp.StdioServer.exe",
       "args": [],
       "env": {}
     }

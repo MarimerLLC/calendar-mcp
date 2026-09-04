@@ -1,7 +1,7 @@
 namespace CalendarMcp.Core.Configuration;
 
 /// <summary>
-/// Provides consistent configuration and data paths for Calendar MCP.
+/// Provides consistent configuration and data paths for Adjutant.
 /// All user-specific data (config, tokens, logs) is stored in %LOCALAPPDATA%/CalendarMcp.
 /// </summary>
 public static class ConfigurationPaths
@@ -17,7 +17,7 @@ public static class ConfigurationPaths
     public const string AppName = "CalendarMcp";
 
     /// <summary>
-    /// Gets the base data directory for Calendar MCP.
+    /// Gets the base data directory for Adjutant.
     /// Priority:
     /// 1. CALENDAR_MCP_CONFIG environment variable (if set)
     /// 2. %LOCALAPPDATA%/CalendarMcp (Windows) or ~/.local/share/CalendarMcp (Linux/Mac)

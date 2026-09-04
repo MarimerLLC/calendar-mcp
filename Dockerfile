@@ -1,4 +1,4 @@
-# Calendar MCP HTTP Server - Multi-stage Docker build
+# Adjutant HTTP Server - Multi-stage Docker build
 # Build: docker build -t calendar-mcp-http .
 # Run:   docker run -p 8080:8080 -v calendar-mcp-data:/app/data calendar-mcp-http
 

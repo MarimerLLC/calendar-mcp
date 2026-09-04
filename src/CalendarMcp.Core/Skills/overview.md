@@ -1,6 +1,6 @@
-# Calendar MCP — Overview
+# Adjutant — Overview
 
-Calendar MCP gives a single MCP interface to email, calendar, and contacts
+Adjutant gives a single MCP interface to email, calendar, and contacts
 across multiple personal-information providers. The same tools work against
 every configured account; capabilities vary per provider.
 

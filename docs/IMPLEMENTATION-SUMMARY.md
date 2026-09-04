@@ -2,7 +2,7 @@
 
 ## Overview
 
-Successfully implemented the complete authentication process for Microsoft 365 accounts in the Calendar MCP project. Users can now:
+Successfully implemented the complete authentication process for Microsoft 365 accounts in the Adjutant project. Users can now:
 
 1. Run a CLI tool to authenticate with Microsoft 365
 2. Tokens are stored locally with per-account isolation
