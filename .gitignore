@@ -497,3 +497,4 @@ $RECYCLE.BIN/
 
 # Editor/backup files
 *.bak
+.claude/plans/

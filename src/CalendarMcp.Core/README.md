@@ -139,7 +139,7 @@ Based on the multi-head architecture pattern:
 
 ## Dependencies
 
-- ModelContextProtocol 0.4.1-preview.1
+- ModelContextProtocol 2.2.0
 - Microsoft.Graph 5.68.0
 - Microsoft.Identity.Client 4.66.2
 - Google.Apis.Gmail.v1 1.69.0.3742
