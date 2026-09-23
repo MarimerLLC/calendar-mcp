@@ -34,7 +34,9 @@ accounts. Returns `id, accountId, subject, from, receivedDateTime, isRead, hasAt
 
 Full-text search across subject and body. Date filters are ISO-8601
 (`2026-02-01`). Fans out across all accounts when `accountId` is
-omitted. Same return shape as `get_emails`.
+omitted. Same return shape as `get_emails`. On Microsoft accounts the
+search covers every folder (Sent Items, Deleted Items, …), not just the
+inbox — see the duplicate-copies pitfall below.
 
 ### `get_email_details(accountId, emailId)`
 
@@ -183,3 +185,11 @@ search_emails(query="unsubscribe", count=50)
   dependent; not all providers support this through these tools).
 - **Threading**: there is no thread-aware tool. To handle a reply
   thread, you operate on individual messages.
+- **Duplicate copies in search results**: `search_emails` on Microsoft
+  accounts searches all folders, so a self-addressed message (or anything
+  you sent to a list you're on) comes back twice — the Sent Items copy and
+  the inbox copy — with the same subject but different `id`s. Results carry
+  no folder field; the sent copy's `from` is your own address. When moving
+  or deleting by search results, act on every matching `id` (or pick the
+  right copy deliberately) — acting on the first hit may leave the other
+  copy behind.
