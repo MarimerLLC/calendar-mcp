@@ -28,7 +28,7 @@ public class UpdateEventToolTests
         provExp.Setups.UpdateEventAsync(
             "acc-1", "cal-1", "ev-1",
             Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
-            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<bool?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.CompletedTask);
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -63,5 +63,51 @@ public class UpdateEventToolTests
             () => tool.UpdateEvent("nonexistent", "cal-1", "ev-1"));
         Assert.AreEqual("Account 'nonexistent' not found", ex.Message);
         regExp.Verify();
+    }
+
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task UpdateEvent_IsAllDayWithoutStartAndEnd_ThrowsMcpException(bool isAllDay)
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new UpdateEventTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<UpdateEventTool>.Instance);
+
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.UpdateEvent("acc-1", "cal-1", "ev-1", start: Start, isAllDay: isAllDay));
+
+        Assert.AreEqual("isAllDay requires both start and end.", ex.Message);
+    }
+
+    [TestMethod]
+    public async Task UpdateEvent_AllDay_PassesNormalizedDatesToProvider()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.UpdateEventAsync(
+            "acc-1", "cal-1", "ev-1",
+            Arg.Any<string?>(), (DateTime?)new DateTime(2025, 6, 1), (DateTime?)new DateTime(2025, 6, 2),
+            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), (bool?)true, Arg.Any<CancellationToken>())
+            .ReturnValue(Task.CompletedTask);
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new UpdateEventTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<UpdateEventTool>.Instance);
+
+        // Start and End share a date (10:00-11:00), so this becomes a one-day event.
+        await tool.UpdateEvent("acc-1", "cal-1", "ev-1", start: Start, end: End, isAllDay: true);
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
     }
 }

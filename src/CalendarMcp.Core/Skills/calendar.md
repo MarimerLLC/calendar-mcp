@@ -47,9 +47,13 @@ start_date/end_date, location, attendees, isAllDay, organizer`.
 
 Full event including description/body. All four parameters are required.
 
-### `create_event(subject, start, end, accountId?, calendarId?, location?, attendees?[], body?, timeZone)`
+### `create_event(subject, start, end, accountId?, calendarId?, location?, attendees?[], body?, timeZone, isAllDay?)`
 
 - `start` and `end` are ISO 8601 (e.g. `2026-05-14T10:00:00`).
+- `isAllDay=true` creates an all-day event. Pass dates (`yyyy-MM-dd`);
+  `end` is **exclusive** — a one-day event on 2026-10-01 is
+  `start="2026-10-01", end="2026-10-02"`. Times of day are ignored, and an
+  `end` on the same date as `start` is treated as one day.
 - Pair them with `timeZone` (IANA). Without `timeZone`, the times are
   interpreted in server local time — usually wrong.
 - Omitting `accountId` uses the first configured account, which is
@@ -58,10 +62,14 @@ Full event including description/body. All four parameters are required.
 - Omitting `calendarId` uses the account's default calendar.
 - `attendees` is an array of email addresses.
 
-### `update_event(accountId, calendarId, eventId, subject?, start?, end?, location?, attendees?[], timeZone?)`
+### `update_event(accountId, calendarId, eventId, subject?, start?, end?, location?, attendees?[], timeZone?, isAllDay?)`
 
 All except identifiers are optional; pass only what you want to change.
 When updating `start` or `end`, also pass `timeZone`.
+`isAllDay=true`/`false` converts the event to all-day/timed and requires
+both `start` and `end` (dates, end exclusive, when `true`). **When moving
+an existing all-day event, pass `isAllDay=true`** — otherwise the new
+times are sent as timed values.
 
 ### `delete_event(accountId, calendarId, eventId)`
 
@@ -132,6 +140,19 @@ create_event(
 )
 ```
 
+All-day (one day, end exclusive):
+
+```
+create_event(
+  accountId="work-m365",
+  subject="Team offsite",
+  start="2026-10-01",
+  end="2026-10-02",
+  timeZone="America/Chicago",
+  isAllDay=true
+)
+```
+
 ### Move a meeting
 
 ```
@@ -169,9 +190,8 @@ multi-account availability, fan out and merge.
   one-day event on 2026-09-23 has `end_date` 2026-09-24), and
   `start_local`/`end_local` are local midnight in the requested zone.
   Bucket them by `start_date`; don't derive the day by converting
-  `start_utc` yourself. To create one, pass start/end as
-  midnight-to-midnight in the user's zone — `isAllDay` is returned but
-  not a creation parameter.
+  `start_utc` yourself. To create one, pass `isAllDay=true` with date-only
+  `start`/`end` (end exclusive) to `create_event`.
 - **Recurring events**: not directly supported via tool parameters in
   the current version. `get_calendar_events` returns expanded
   occurrences; `create_event` creates single instances.
