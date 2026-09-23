@@ -1,5 +1,6 @@
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
+using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
@@ -158,7 +159,7 @@ public class OutlookComProviderService : IOutlookComProviderService
                 // $orderby is not supported with $search — sort client-side instead
                 config.QueryParameters.Top = (fromDate.HasValue || toDate.HasValue) ? count * 3 : count;
                 config.QueryParameters.Select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "bodyPreview"];
-                config.QueryParameters.Search = $"\"{query}\"";
+                config.QueryParameters.Search = GraphSearchQueryBuilder.Build(query);
             }, cancellationToken);
 
             var result = new List<EmailMessage>();

@@ -1,5 +1,6 @@
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
+using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
@@ -184,7 +185,7 @@ public class M365ProviderService : IM365ProviderService
                 // Use $search for text search across subject, body, sender
                 // Note: $filter and $orderby cannot be combined with $search on messages
                 // Date filtering will be done client-side if needed
-                config.QueryParameters.Search = $"\"{searchQuery}\"";
+                config.QueryParameters.Search = GraphSearchQueryBuilder.Build(searchQuery);
             }, cancellationToken);
 
             var result = new List<EmailMessage>();
