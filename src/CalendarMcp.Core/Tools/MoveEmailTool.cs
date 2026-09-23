@@ -57,7 +57,7 @@ public sealed class MoveEmailTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in move_email tool");
-            throw new McpException("Failed to move email.", ex);
+            throw ToolGuard.Failure("move email", ex);
         }
     }
 }

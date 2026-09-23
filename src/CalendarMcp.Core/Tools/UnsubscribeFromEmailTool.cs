@@ -79,7 +79,7 @@ public sealed class UnsubscribeFromEmailTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in unsubscribe_from_email tool");
-            throw new McpException("Failed to unsubscribe.", ex);
+            throw ToolGuard.Failure("unsubscribe", ex);
         }
     }
 

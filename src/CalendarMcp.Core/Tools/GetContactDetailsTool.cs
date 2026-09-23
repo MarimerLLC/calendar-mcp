@@ -73,7 +73,7 @@ public sealed class GetContactDetailsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_contact_details tool");
-            throw new McpException("Failed to get contact details.", ex);
+            throw ToolGuard.Failure("get contact details", ex);
         }
     }
 }

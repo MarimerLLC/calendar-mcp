@@ -70,7 +70,7 @@ public class IcsProviderServiceTests
         var provider = new IcsProviderService(NullLogger<IcsProviderService>.Instance, regExp.Instance(),
             new FakeHttpClientFactory(new FailingHandler()));
 
-        var ex = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => provider.GetCalendarEventsAsync("acc-ics"));
+        var ex = await Assert.ThrowsExactlyAsync<ProviderOperationException>(() => provider.GetCalendarEventsAsync("acc-ics"));
         StringAssert.Contains(ex.Message, "icsUrl");
     }
 

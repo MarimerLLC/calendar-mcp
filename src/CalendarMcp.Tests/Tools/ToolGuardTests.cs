@@ -79,4 +79,38 @@ public class ToolGuardTests
 
         Assert.AreEqual("Failed to retrieve contacts from this account.", message);
     }
+
+    [TestMethod]
+    public void DescribeAccountFailure_GraphError_IncludesProviderMessage()
+    {
+        var error = new ODataError
+        {
+            ResponseStatusCode = 400,
+            Error = new MainError { Code = "ErrorInvalidRequest", Message = "The request is malformed." }
+        };
+
+        var message = ToolGuard.DescribeAccountFailure(error, "emails");
+
+        StringAssert.StartsWith(message, "Failed to retrieve emails from this account: ");
+        StringAssert.Contains(message, "The request is malformed");
+    }
+
+    [TestMethod]
+    public void Failure_KnownProviderError_AppendsSummaryAndKeepsInner()
+    {
+        var error = new ProviderOperationException("IMAP folder 'Receipts' not found.");
+
+        var ex = ToolGuard.Failure("move email", error);
+
+        Assert.AreEqual("Failed to move email: IMAP folder 'Receipts' not found.", ex.Message);
+        Assert.AreSame(error, ex.InnerException);
+    }
+
+    [TestMethod]
+    public void Failure_UnrecognizedError_KeepsGenericMessage()
+    {
+        var ex = ToolGuard.Failure("send email", new InvalidOperationException("secret internal detail"));
+
+        Assert.AreEqual("Failed to send email.", ex.Message);
+    }
 }

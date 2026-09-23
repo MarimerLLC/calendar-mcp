@@ -100,7 +100,7 @@ public sealed class ListCalendarsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in list_calendars tool");
-            throw new McpException("Failed to list calendars.", ex);
+            throw ToolGuard.Failure("list calendars", ex);
         }
     }
 }

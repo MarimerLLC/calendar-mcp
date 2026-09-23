@@ -69,7 +69,7 @@ public sealed class BulkMarkEmailsAsReadTool(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Error marking email {EmailId} in account {AccountId}", item.EmailId, item.AccountId);
-                    return new BulkResultItem(item.EmailId, item.AccountId, false, "Failed to mark email.");
+                    return new BulkResultItem(item.EmailId, item.AccountId, false, ToolGuard.DescribeItemFailure("mark email", ex));
                 }
                 finally
                 {
@@ -97,7 +97,7 @@ public sealed class BulkMarkEmailsAsReadTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in bulk_mark_emails_as_read tool");
-            throw new McpException("Failed to bulk mark emails.", ex);
+            throw ToolGuard.Failure("bulk mark emails", ex);
         }
     }
 

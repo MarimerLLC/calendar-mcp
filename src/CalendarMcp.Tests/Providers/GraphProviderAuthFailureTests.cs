@@ -97,7 +97,7 @@ public class GraphProviderAuthFailureTests
 
         foreach (var provider in Providers(Registry(account), NoCachedToken()))
         {
-            var ex = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => provider.GetEmailsAsync("acc-1"));
+            var ex = await Assert.ThrowsExactlyAsync<ProviderOperationException>(() => provider.GetEmailsAsync("acc-1"));
             StringAssert.Contains(ex.Message, "clientId");
         }
     }
@@ -107,7 +107,7 @@ public class GraphProviderAuthFailureTests
     {
         foreach (var provider in Providers(Registry(null), NoCachedToken()))
         {
-            var ex = await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => provider.ListCalendarsAsync("acc-1"));
+            var ex = await Assert.ThrowsExactlyAsync<ProviderOperationException>(() => provider.ListCalendarsAsync("acc-1"));
             StringAssert.Contains(ex.Message, "not found");
         }
     }

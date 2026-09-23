@@ -71,7 +71,7 @@ public sealed class BulkMoveEmailsTool(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Error moving email {EmailId} in account {AccountId}", item.EmailId, item.AccountId);
-                    return new BulkResultItem(item.EmailId, item.AccountId, false, "Failed to move email.");
+                    return new BulkResultItem(item.EmailId, item.AccountId, false, ToolGuard.DescribeItemFailure("move email", ex));
                 }
                 finally
                 {
@@ -99,7 +99,7 @@ public sealed class BulkMoveEmailsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in bulk_move_emails tool");
-            throw new McpException("Failed to bulk move emails.", ex);
+            throw ToolGuard.Failure("bulk move emails", ex);
         }
     }
 

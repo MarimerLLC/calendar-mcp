@@ -54,7 +54,7 @@ public sealed class DeleteEmailTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in delete_email tool");
-            throw new McpException("Failed to delete email.", ex);
+            throw ToolGuard.Failure("delete email", ex);
         }
     }
 }

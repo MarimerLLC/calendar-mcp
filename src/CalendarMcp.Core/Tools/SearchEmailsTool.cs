@@ -112,7 +112,7 @@ public sealed class SearchEmailsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in search_emails tool");
-            throw new McpException("Failed to search emails.", ex);
+            throw ToolGuard.Failure("search emails", ex);
         }
     }
 }

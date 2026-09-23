@@ -24,7 +24,7 @@ file static class JsonFileHelper
         if (doc.RootElement.TryGetProperty("value", out var valueElement))
             return JsonSerializer.Deserialize<List<T>>(valueElement.GetRawText(), options) ?? [];
 
-        throw new InvalidOperationException("JSON must be a direct array or an object with a 'value' array property.");
+        throw new ProviderOperationException("JSON must be a direct array or an object with a 'value' array property.");
     }
 }
 
@@ -70,7 +70,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
     {
         var account = await _accountRegistry.GetAccountAsync(accountId);
         if (account == null)
-            throw new InvalidOperationException($"Account '{accountId}' not found in registry.");
+            throw new ProviderOperationException($"Account '{accountId}' not found in registry.");
 
         var cacheTtl = GetCacheTtl(account);
 
@@ -88,7 +88,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
             var jsonContent = await LoadJsonContentAsync(account, cancellationToken);
 
             var entries = JsonSerializer.Deserialize<List<JsonCalendarEntry>>(jsonContent, JsonOptions)
-                ?? throw new InvalidOperationException($"JSON calendar file for '{accountId}' deserialized to null. Check that the file contains a JSON array.");
+                ?? throw new ProviderOperationException($"JSON calendar file for '{accountId}' deserialized to null. Check that the file contains a JSON array.");
 
             var newCached = new CachedJsonData(entries, DateTime.UtcNow);
             _cache[accountId] = newCached;
@@ -117,7 +117,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
     private async Task<string> LoadJsonContentAsync(AccountInfo account, CancellationToken cancellationToken)
     {
         var content = await LoadFileBySourceAsync(account, "filePath", "oneDrivePath", cancellationToken);
-        return content ?? throw new InvalidOperationException(
+        return content ?? throw new ProviderOperationException(
             $"Account '{account.Id}' is missing the calendar file path in providerConfig. " +
             "Add 'filePath' (local) or 'oneDrivePath' (OneDrive) to providerConfig.");
     }
@@ -153,7 +153,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
             return await FetchFromOneDriveAsync(account, oneDrivePath, cancellationToken);
         }
 
-        throw new InvalidOperationException(
+        throw new ProviderOperationException(
             $"Unknown JSON source '{source}' for account '{account.Id}'. Expected 'local' or 'onedrive'.");
     }
 
@@ -175,7 +175,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
             isReusedCredentials = true;
             var refAccount = await _accountRegistry.GetAccountAsync(refAccountId);
             if (refAccount == null)
-                throw new InvalidOperationException(
+                throw new ProviderOperationException(
                     $"Account '{account.Id}' references auth account '{refAccountId}' which was not found. " +
                     "Check the 'authAccountId' in providerConfig.");
 
@@ -190,7 +190,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         }
 
         if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(tenantId))
-            throw new InvalidOperationException(
+            throw new ProviderOperationException(
                 $"Missing clientId or tenantId for OneDrive access on account '{account.Id}'. " +
                 (isReusedCredentials
                     ? $"The referenced auth account '{refAccountId}' does not have clientId/tenantId configured."

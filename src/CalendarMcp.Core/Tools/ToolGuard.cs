@@ -1,7 +1,6 @@
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
-using Microsoft.Graph.Models.ODataErrors;
 using ModelContextProtocol;
 
 namespace CalendarMcp.Core.Tools;
@@ -103,6 +102,25 @@ internal static class ToolGuard
             "Use list_accounts to see each account's permissions.");
 
     /// <summary>
+    /// Builds the exception a tool throws when a provider call fails: <c>"Failed to {action}."</c>,
+    /// followed by a sanitized summary of the provider error when there is one (Graph code and
+    /// message, Google reason, IMAP/SMTP response, <see cref="ProviderOperationException"/>
+    /// message) and a retry hint for transient failures. Unrecognized exceptions add nothing, so
+    /// their messages stay server-side.
+    /// </summary>
+    public static McpException Failure(string action, Exception ex) =>
+        new(DescribeItemFailure(action, ex), ex);
+
+    /// <summary>
+    /// The <see cref="Failure"/> message as a string, for a bulk tool's per-item <c>error</c>.
+    /// </summary>
+    public static string DescribeItemFailure(string action, Exception ex)
+    {
+        var detail = ProviderErrorFormatter.Format(ex);
+        return detail is null ? $"Failed to {action}." : $"Failed to {action}: {detail}";
+    }
+
+    /// <summary>
     /// Builds a short, client-safe description of why reading <paramref name="what"/> from one
     /// account failed, for a fan-out tool's per-account <c>warnings</c> entry. Distinguishes
     /// "re-authenticate" (actionable by the user) from provider API and network errors so a
@@ -115,37 +133,14 @@ internal static class ToolGuard
             case AccountAuthenticationRequiredException:
                 return ex.Message;
 
-            // Google refreshes tokens transparently mid-request; a rejected refresh surfaces here.
-            case Google.Apis.Auth.OAuth2.Responses.TokenResponseException:
-                return "The provider rejected this account's stored credential. Re-authenticate it with " +
-                       "'calendar-mcp-cli reauth <accountId>' or from the admin UI.";
-
-            case ODataError odata:
-                var code = odata.Error?.Code;
-                var detail = string.IsNullOrEmpty(code) ? "" : $" ({code})";
-                var message = $"Microsoft Graph returned HTTP {odata.ResponseStatusCode}{detail} while retrieving {what}.";
-                if (odata.ResponseStatusCode is 401 or 403)
-                    message += " The account's consented scopes may be insufficient; re-authenticating it may be required.";
-                return message;
-
-            case Google.GoogleApiException google:
-                var status = (int)google.HttpStatusCode;
-                var googleMessage = $"Google API returned HTTP {status} while retrieving {what}.";
-                if (status is 401 or 403)
-                    googleMessage += " The account's consented scopes may be insufficient; re-authenticating it may be required.";
-                return googleMessage;
-
-            case HttpRequestException { StatusCode: { } httpStatus }:
-                return $"The provider returned HTTP {(int)httpStatus} while retrieving {what}.";
-
-            case HttpRequestException:
-                return $"Network error while retrieving {what} from this account.";
-
             case NotSupportedException:
                 return $"This account does not support retrieving {what}.";
 
             default:
-                return $"Failed to retrieve {what} from this account.";
+                var detail = ProviderErrorFormatter.Format(ex);
+                return detail is null
+                    ? $"Failed to retrieve {what} from this account."
+                    : $"Failed to retrieve {what} from this account: {detail}";
         }
     }
 }

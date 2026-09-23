@@ -79,7 +79,7 @@ public sealed class CreateEventTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in create_event tool");
-            throw new McpException("Failed to create event.", ex);
+            throw ToolGuard.Failure("create event", ex);
         }
     }
 

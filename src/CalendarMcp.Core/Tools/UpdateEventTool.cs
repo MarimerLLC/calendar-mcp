@@ -55,7 +55,7 @@ public sealed class UpdateEventTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in update_event tool");
-            throw new McpException("Failed to update event.", ex);
+            throw ToolGuard.Failure("update event", ex);
         }
     }
 }

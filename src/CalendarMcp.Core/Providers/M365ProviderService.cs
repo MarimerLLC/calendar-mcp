@@ -40,14 +40,14 @@ public class M365ProviderService : IM365ProviderService
         if (account == null)
         {
             _logger.LogError("Account {AccountId} not found in registry", accountId);
-            throw new InvalidOperationException($"Account '{accountId}' not found in registry");
+            throw new ProviderOperationException($"Account '{accountId}' not found in registry");
         }
 
         if (!account.ProviderConfig.TryGetValue("tenantId", out var tenantId) ||
             !account.ProviderConfig.TryGetValue("clientId", out var clientId))
         {
             _logger.LogError("Account {AccountId} missing tenantId or clientId in configuration", accountId);
-            throw new InvalidOperationException($"Account '{accountId}' is missing tenantId or clientId in its configuration");
+            throw new ProviderOperationException($"Account '{accountId}' is missing tenantId or clientId in its configuration");
         }
 
         // Use the scopes this account was actually consented for, if recorded; otherwise

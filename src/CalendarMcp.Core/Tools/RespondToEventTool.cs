@@ -87,7 +87,7 @@ public sealed class RespondToEventTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in respond_to_event tool");
-            throw new McpException("Failed to respond to event.", ex);
+            throw ToolGuard.Failure("respond to event", ex);
         }
     }
 }

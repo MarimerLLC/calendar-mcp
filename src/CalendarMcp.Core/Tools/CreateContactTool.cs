@@ -80,7 +80,7 @@ public sealed class CreateContactTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in create_contact tool");
-            throw new McpException("Failed to create contact.", ex);
+            throw ToolGuard.Failure("create contact", ex);
         }
     }
 

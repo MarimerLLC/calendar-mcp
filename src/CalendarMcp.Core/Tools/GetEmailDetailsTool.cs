@@ -72,7 +72,7 @@ public sealed class GetEmailDetailsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_email_details tool");
-            throw new McpException("Failed to get email details.", ex);
+            throw ToolGuard.Failure("get email details", ex);
         }
     }
 }
