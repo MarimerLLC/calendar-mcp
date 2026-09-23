@@ -158,6 +158,11 @@ else
                             <InputText class="form-control" @bind-Value="_model.TrashFolder" />
                             <div class="form-text">Deletes move messages here rather than expunging.</div>
                         </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Junk</label>
+                            <InputText class="form-control" @bind-Value="_model.JunkFolder" />
+                            <div class="form-text">Target of move_email "spam"; falls back to the server's \Junk folder.</div>
+                        </div>
                     </div>
                 </details>
                 break;

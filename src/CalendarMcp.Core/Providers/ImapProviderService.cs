@@ -30,6 +30,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
     public const string DefaultInbox = "INBOX";
     public const string DefaultSent = "[Gmail]/Sent Mail";
     public const string DefaultTrash = "[Gmail]/Trash";
+    public const string DefaultJunk = "[Gmail]/Spam";
 
     private const string ProviderName = "imap";
 
@@ -135,7 +136,8 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
             Password: _passwordProtector.Unprotect(storedPassword),
             InboxFolder: Get(pc, "inboxFolder", DefaultInbox),
             SentFolder: Get(pc, "sentFolder", DefaultSent),
-            TrashFolder: Get(pc, "trashFolder", DefaultTrash));
+            TrashFolder: Get(pc, "trashFolder", DefaultTrash),
+            JunkFolder: Get(pc, "junkFolder", DefaultJunk));
 
         static string Get(IDictionary<string, string> d, string key, string fallback) =>
             d.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v : fallback;
@@ -588,9 +590,85 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
             var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadWrite, cancellationToken);
             EnsureUidValidity(folder, uidValidity, accountId, folderName);
 
-            var dest = await client.GetFolderAsync(destinationFolder, cancellationToken);
+            var dest = await ResolveDestinationFolderAsync(client, cfg, destinationFolder, cancellationToken);
             await folder.MoveToAsync(new[] { new UniqueId(uid) }, dest, cancellationToken);
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Maps a destination alias to the folder name configured for the account, or
+    /// <c>null</c> when the account has no setting for it (archive, drafts).
+    /// </summary>
+    internal static string? ResolveConfiguredFolder(WellKnownMailFolder folder, ImapAccountConfig cfg) =>
+        folder switch
+        {
+            WellKnownMailFolder.Inbox => cfg.InboxFolder,
+            WellKnownMailFolder.Sent => cfg.SentFolder,
+            WellKnownMailFolder.Trash => cfg.TrashFolder,
+            WellKnownMailFolder.Spam => cfg.JunkFolder,
+            _ => null
+        };
+
+    /// <summary>
+    /// Resolves a <c>move_email</c> destination. Aliases (<c>trash</c>, <c>spam</c>, ...)
+    /// use the account's configured folders, then the server's SPECIAL-USE folders;
+    /// anything else is a literal folder name.
+    /// </summary>
+    private static async Task<IMailFolder> ResolveDestinationFolderAsync(
+        ImapClient client, ImapAccountConfig cfg, string destination, CancellationToken ct)
+    {
+        if (!MailFolderAliases.TryParse(destination, out var wellKnown))
+            return await client.GetFolderAsync(destination, ct);
+
+        var configured = ResolveConfiguredFolder(wellKnown, cfg);
+        if (configured is not null)
+        {
+            if (string.Equals(configured, "INBOX", StringComparison.OrdinalIgnoreCase))
+                return client.Inbox;
+
+            try
+            {
+                return await client.GetFolderAsync(configured, ct);
+            }
+            catch (FolderNotFoundException) when (wellKnown == WellKnownMailFolder.Spam)
+            {
+                // The junk folder default is Gmail's; other hosts usually advertise \Junk.
+                return GetSpecialFolder(client, SpecialFolder.Junk)
+                    ?? throw new InvalidOperationException(
+                        $"IMAP folder '{configured}' for destination '{destination}' was not found on account " +
+                        $"'{cfg.AccountId}', and the server has no \\Junk folder. Set 'junkFolder' in the account's providerConfig.");
+            }
+        }
+
+        var special = wellKnown switch
+        {
+            WellKnownMailFolder.Archive =>
+                GetSpecialFolder(client, SpecialFolder.Archive) ?? GetSpecialFolder(client, SpecialFolder.All),
+            WellKnownMailFolder.Drafts => GetSpecialFolder(client, SpecialFolder.Drafts),
+            _ => null
+        };
+        if (special is not null)
+            return special;
+
+        // No SPECIAL-USE folder: fall back to a folder literally named after the alias.
+        try
+        {
+            return await client.GetFolderAsync(destination.Trim(), ct);
+        }
+        catch (FolderNotFoundException ex)
+        {
+            throw new InvalidOperationException(
+                $"Destination '{destination}' could not be resolved on IMAP account '{cfg.AccountId}': the server " +
+                $"advertises no matching SPECIAL-USE folder and has no folder named '{destination.Trim()}'. " +
+                "Pass the literal folder name as the destination instead.", ex);
+        }
+    }
+
+    private static IMailFolder? GetSpecialFolder(ImapClient client, SpecialFolder folder)
+    {
+        if ((client.Capabilities & (ImapCapabilities.SpecialUse | ImapCapabilities.XList)) == 0)
+            return null;
+        return client.GetFolder(folder);
     }
 
     // ── Calendar / contact methods are unsupported ───────────────────
@@ -761,12 +839,12 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
             "Re-list the folder to get current IDs.");
     }
 
-    private sealed record ImapAccountConfig(
+    internal sealed record ImapAccountConfig(
         string AccountId,
         string ImapHost, int ImapPort,
         string SmtpHost, int SmtpPort,
         string Username, string Password,
-        string InboxFolder, string SentFolder, string TrashFolder);
+        string InboxFolder, string SentFolder, string TrashFolder, string JunkFolder);
 
     // ── Disposal ─────────────────────────────────────────────────────
 

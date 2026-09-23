@@ -21,7 +21,7 @@ public sealed class MoveEmailTool(
     public async Task<string> MoveEmail(
         [Description("Account ID that owns the email. Obtain from the accountId field returned by get_emails or search_emails.")] string accountId,
         [Description("Email message ID to move. Obtain from the id field returned by get_emails or search_emails.")] string emailId,
-        [Description("Destination: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft only), 'sentitems' (Microsoft only), or a custom label/folder ID (Google only). Aliases: 'deleteditems'='trash', 'junkemail'='spam'.")] string destination)
+        [Description("Destination: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft, IMAP), 'sentitems' (Microsoft, IMAP), or a custom folder ID (Microsoft), label ID (Google) or folder name (IMAP). Aliases: 'deleteditems'='trash', 'junkemail'='spam'.")] string destination)
     {
         logger.LogInformation("Moving email: accountId={AccountId}, emailId={EmailId}, destination={Destination}",
             accountId, emailId, destination);

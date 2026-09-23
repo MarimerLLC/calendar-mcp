@@ -116,6 +116,7 @@ public class CreateAccountFormModel : AccountFormBase
     public string InboxFolder { get; set; } = ImapProviderService.DefaultInbox;
     public string SentFolder { get; set; } = ImapProviderService.DefaultSent;
     public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
+    public string JunkFolder { get; set; } = ImapProviderService.DefaultJunk;
 
     public override AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null)
     {
@@ -176,7 +177,8 @@ public class CreateAccountFormModel : AccountFormBase
             ["password"] = encryptedPassword,
             ["inboxFolder"] = InboxFolder,
             ["sentFolder"] = SentFolder,
-            ["trashFolder"] = TrashFolder
+            ["trashFolder"] = TrashFolder,
+            ["junkFolder"] = JunkFolder
         };
     }
 
@@ -256,6 +258,7 @@ public class EditAccountFormModel : AccountFormBase
     public string InboxFolder { get; set; } = ImapProviderService.DefaultInbox;
     public string SentFolder { get; set; } = ImapProviderService.DefaultSent;
     public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
+    public string JunkFolder { get; set; } = ImapProviderService.DefaultJunk;
 
     public static EditAccountFormModel FromAccountInfo(AccountInfo account, PasswordProtector? passwordProtector = null)
     {
@@ -322,6 +325,8 @@ public class EditAccountFormModel : AccountFormBase
                 if (string.IsNullOrEmpty(model.SentFolder)) model.SentFolder = ImapProviderService.DefaultSent;
                 model.TrashFolder = GetConfigValue(config, "trashFolder");
                 if (string.IsNullOrEmpty(model.TrashFolder)) model.TrashFolder = ImapProviderService.DefaultTrash;
+                model.JunkFolder = GetConfigValue(config, "junkFolder");
+                if (string.IsNullOrEmpty(model.JunkFolder)) model.JunkFolder = ImapProviderService.DefaultJunk;
                 break;
         }
 
@@ -386,7 +391,8 @@ public class EditAccountFormModel : AccountFormBase
             ["password"] = encryptedPassword,
             ["inboxFolder"] = InboxFolder,
             ["sentFolder"] = SentFolder,
-            ["trashFolder"] = TrashFolder
+            ["trashFolder"] = TrashFolder,
+            ["junkFolder"] = JunkFolder
         };
     }
 

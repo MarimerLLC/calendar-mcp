@@ -585,37 +585,34 @@ public class GoogleProviderService : IGoogleProviderService
             // Gmail uses labels instead of folders
             // Common labels: "INBOX", "TRASH", "SPAM", "STARRED", "IMPORTANT"
             // Archive is done by removing INBOX label
-            // Map common folder names to label operations
-            if (destinationFolder.Equals("archive", StringComparison.OrdinalIgnoreCase))
+            // Map common folder names to label operations. Drafts/sent aliases have no
+            // label move equivalent and fall through to the custom-label path.
+            switch (MailFolderAliases.TryParse(destinationFolder, out var wellKnown) ? wellKnown : (WellKnownMailFolder?)null)
             {
-                // Archive means remove from INBOX
-                modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
-            }
-            else if (destinationFolder.Equals("trash", StringComparison.OrdinalIgnoreCase) ||
-                     destinationFolder.Equals("deleteditems", StringComparison.OrdinalIgnoreCase))
-            {
-                // Move to trash
-                modifyRequest.AddLabelIds = new List<string> { "TRASH" };
-                modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
-            }
-            else if (destinationFolder.Equals("spam", StringComparison.OrdinalIgnoreCase) ||
-                     destinationFolder.Equals("junkemail", StringComparison.OrdinalIgnoreCase))
-            {
-                // Move to spam
-                modifyRequest.AddLabelIds = new List<string> { "SPAM" };
-                modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
-            }
-            else if (destinationFolder.Equals("inbox", StringComparison.OrdinalIgnoreCase))
-            {
-                // Move to inbox (in case it was archived)
-                modifyRequest.AddLabelIds = new List<string> { "INBOX" };
-            }
-            else
-            {
-                // Treat as a custom label ID and add it to the message
-                // Note: Custom labels are additive - they don't remove INBOX by default
-                // This preserves the message in inbox while adding the label
-                modifyRequest.AddLabelIds = new List<string> { destinationFolder };
+                case WellKnownMailFolder.Archive:
+                    // Archive means remove from INBOX
+                    modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+                    break;
+                case WellKnownMailFolder.Trash:
+                    // Move to trash
+                    modifyRequest.AddLabelIds = new List<string> { "TRASH" };
+                    modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+                    break;
+                case WellKnownMailFolder.Spam:
+                    // Move to spam
+                    modifyRequest.AddLabelIds = new List<string> { "SPAM" };
+                    modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+                    break;
+                case WellKnownMailFolder.Inbox:
+                    // Move to inbox (in case it was archived)
+                    modifyRequest.AddLabelIds = new List<string> { "INBOX" };
+                    break;
+                default:
+                    // Treat as a custom label ID and add it to the message
+                    // Note: Custom labels are additive - they don't remove INBOX by default
+                    // This preserves the message in inbox while adding the label
+                    modifyRequest.AddLabelIds = new List<string> { destinationFolder };
+                    break;
             }
 
             var request = service.Users.Messages.Modify(modifyRequest, "me", emailId);

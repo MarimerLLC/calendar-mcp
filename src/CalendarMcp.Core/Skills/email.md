@@ -73,9 +73,10 @@ Pass `isRead=false` to mark unread.
 ### `move_email(accountId, emailId, destination)`
 
 `destination` values: `archive`, `inbox`, `trash`, `spam`, `drafts`
-(Microsoft only), `sentitems` (Microsoft only), or a custom folder/label
-ID (Google labels are addressed by ID). Aliases: `deleteditems`→`trash`,
-`junkemail`→`spam`.
+(Microsoft, IMAP), `sentitems` (Microsoft, IMAP), or a custom folder ID
+(Microsoft), label ID (Google) or folder name (IMAP). Aliases:
+`deleteditems`→`trash`, `junkemail`→`spam`. The aliases work the same on
+every provider.
 
 ### Bulk operations
 

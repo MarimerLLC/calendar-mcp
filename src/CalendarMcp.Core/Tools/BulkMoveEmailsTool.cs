@@ -23,7 +23,7 @@ public sealed class BulkMoveEmailsTool(
     [McpServerTool, Description("Move multiple emails to a folder or apply labels in a single batch operation. More efficient than calling move_email repeatedly.")]
     public async Task<string> BulkMoveEmails(
         [Description("Array of emails to move, each with 'accountId' and 'emailId'. Maximum 50 items. Obtain values from get_emails or search_emails.")] BulkEmailItem[] items,
-        [Description("Destination for all emails: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft only), 'sentitems' (Microsoft only), or a custom label/folder ID (Google only). Aliases: 'deleteditems'='trash', 'junkemail'='spam'.")] string destination)
+        [Description("Destination for all emails: 'archive', 'inbox', 'trash', 'spam', 'drafts' (Microsoft, IMAP), 'sentitems' (Microsoft, IMAP), or a custom folder ID (Microsoft), label ID (Google) or folder name (IMAP). Aliases: 'deleteditems'='trash', 'junkemail'='spam'.")] string destination)
     {
         logger.LogInformation("Bulk moving emails to {Destination}", destination);
 
