@@ -525,4 +525,65 @@ public class GetCalendarEventsToolTests
         regExp.Verify();
         factExp.Verify();
     }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_CalendarIdLookup_UnreadableAccount_NamesItInError()
+    {
+        // When the only account can't be read, "No calendar found" alone would be misleading:
+        // that account may well own the calendar.
+        var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([acc1]);
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromException<IEnumerable<CalendarInfo>>(new AccountAuthenticationRequiredException("acc-1")));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.GetCalendarEvents(TestTimeZone, Start, End, null, "cal-1"));
+        StringAssert.Contains(ex.Message, "No calendar found with id 'cal-1'");
+        StringAssert.Contains(ex.Message, "could not be checked");
+        StringAssert.Contains(ex.Message, "calendar-mcp-cli reauth acc-1");
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_ProviderAuthFailure_WarningNamesReauth()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1").ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetCalendarEventsAsync("acc-1", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromException<IEnumerable<CalendarEvent>>(new AccountAuthenticationRequiredException("acc-1")));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var doc = JsonDocument.Parse(await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-1"));
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("events").GetArrayLength());
+        var warnings = doc.RootElement.GetProperty("warnings");
+        Assert.AreEqual(1, warnings.GetArrayLength());
+        StringAssert.Contains(warnings[0].GetProperty("error").GetString(), "calendar-mcp-cli reauth acc-1");
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
 }

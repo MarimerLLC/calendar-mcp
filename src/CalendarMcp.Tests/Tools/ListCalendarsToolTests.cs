@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Graph.Models.ODataErrors;
 using ModelContextProtocol;
 using Rocks;
 
@@ -118,6 +119,43 @@ public class ListCalendarsToolTests
         var calendarsArray = doc.RootElement.GetProperty("calendars");
         Assert.AreEqual(1, calendarsArray.GetArrayLength());
         Assert.AreEqual("acc-cal", calendarsArray[0].GetProperty("accountId").GetString());
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task ListCalendars_GraphForbidden_ReportedInWarnings()
+    {
+        // e.g. the account was consented without calendar scope: a 403 must not look like "no calendars".
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([account]);
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromException<IEnumerable<CalendarInfo>>(new ODataError
+            {
+                ResponseStatusCode = 403,
+                Error = new MainError { Code = "ErrorAccessDenied" }
+            }));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new ListCalendarsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<ListCalendarsTool>.Instance);
+
+        var doc = JsonDocument.Parse(await tool.ListCalendars());
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("calendars").GetArrayLength());
+        var warnings = doc.RootElement.GetProperty("warnings");
+        Assert.AreEqual(1, warnings.GetArrayLength());
+        var error = warnings[0].GetProperty("error").GetString();
+        StringAssert.Contains(error, "HTTP 403");
+        StringAssert.Contains(error, "ErrorAccessDenied");
 
         regExp.Verify();
         factExp.Verify();

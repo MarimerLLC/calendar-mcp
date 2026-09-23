@@ -63,6 +63,7 @@ public sealed class GetCalendarEventsTool(
                 var allAccounts = accountRegistry.GetEnabledAccounts()
                     .Where(AccountCapabilities.HasCalendar)
                     .ToList();
+                var lookupFailures = new List<string>();
                 var lookupTasks = allAccounts.Select(async acc =>
                 {
                     try
@@ -74,6 +75,10 @@ public sealed class GetCalendarEventsTool(
                     catch (Exception ex)
                     {
                         logger.LogWarning(ex, "Error listing calendars for account {AccountId} during calendar lookup", acc.Id);
+                        lock (lookupFailures)
+                        {
+                            lookupFailures.Add($"{acc.Id}: {ToolGuard.DescribeAccountFailure(ex, "calendars")}");
+                        }
                         return null;
                     }
                 });
@@ -82,7 +87,14 @@ public sealed class GetCalendarEventsTool(
                 var matchingAccountIds = lookupResults.OfType<string>().ToList();
 
                 if (matchingAccountIds.Count == 0)
-                    throw new McpException($"No calendar found with id '{calendarId}'. Provide accountId to specify which account to query.");
+                {
+                    // An unreadable account may be the one that owns the calendar, so say so rather
+                    // than reporting a flat "not found".
+                    var unreadable = lookupFailures.Count > 0
+                        ? $" Some accounts could not be checked: {string.Join(" ", lookupFailures)}"
+                        : "";
+                    throw new McpException($"No calendar found with id '{calendarId}'. Provide accountId to specify which account to query.{unreadable}");
+                }
 
                 if (matchingAccountIds.Count > 1)
                     throw new McpException($"calendarId '{calendarId}' exists in multiple accounts; provide accountId to specify which account to query.");
@@ -187,7 +199,7 @@ public sealed class GetCalendarEventsTool(
                     logger.LogError(ex, "Error getting calendar events from account {AccountId}", account!.Id);
                     lock (warnings)
                     {
-                        warnings.Add(new { accountId = account.Id, error = "Failed to retrieve events from this account." });
+                        warnings.Add(new { accountId = account.Id, error = ToolGuard.DescribeAccountFailure(ex, "events") });
                     }
                     return Enumerable.Empty<CalendarEvent>();
                 }

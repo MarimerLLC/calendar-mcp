@@ -4,6 +4,7 @@ using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
 using Microsoft.Graph.Models;
+using Microsoft.Graph.Models.ODataErrors;
 using Microsoft.Graph.Me.SendMail;
 using GraphContact = Microsoft.Graph.Models.Contact;
 
@@ -33,20 +34,20 @@ public class M365ProviderService : IM365ProviderService
     /// <summary>
     /// Get access token for an account
     /// </summary>
-    private async Task<string?> GetAccessTokenAsync(string accountId, CancellationToken cancellationToken)
+    private async Task<string> GetAccessTokenAsync(string accountId, CancellationToken cancellationToken)
     {
         var account = await _accountRegistry.GetAccountAsync(accountId);
         if (account == null)
         {
             _logger.LogError("Account {AccountId} not found in registry", accountId);
-            return null;
+            throw new InvalidOperationException($"Account '{accountId}' not found in registry");
         }
 
         if (!account.ProviderConfig.TryGetValue("tenantId", out var tenantId) ||
             !account.ProviderConfig.TryGetValue("clientId", out var clientId))
         {
             _logger.LogError("Account {AccountId} missing tenantId or clientId in configuration", accountId);
-            return null;
+            throw new InvalidOperationException($"Account '{accountId}' is missing tenantId or clientId in its configuration");
         }
 
         // Use the scopes this account was actually consented for, if recorded; otherwise
@@ -78,6 +79,7 @@ public class M365ProviderService : IM365ProviderService
         if (token == null)
         {
             _logger.LogWarning("No cached token available for account {AccountId}. Run CLI to authenticate.", accountId);
+            throw new AccountAuthenticationRequiredException(accountId);
         }
 
         return token;
@@ -90,10 +92,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return Enumerable.Empty<EmailMessage>();
-        }
 
         try
         {
@@ -141,7 +139,7 @@ public class M365ProviderService : IM365ProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching emails from M365 account {AccountId}", accountId);
-            return Enumerable.Empty<EmailMessage>();
+            throw;
         }
     }
 
@@ -154,10 +152,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return Enumerable.Empty<EmailMessage>();
-        }
 
         try
         {
@@ -230,7 +224,7 @@ public class M365ProviderService : IM365ProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error searching emails from M365 account {AccountId} with query '{Query}'", accountId, query);
-            return Enumerable.Empty<EmailMessage>();
+            throw;
         }
     }
 
@@ -240,10 +234,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return null;
-        }
 
         try
         {
@@ -301,10 +291,15 @@ public class M365ProviderService : IM365ProviderService
             _logger.LogInformation("Retrieved email details for {EmailId} from M365 account {AccountId}", emailId, accountId);
             return result;
         }
+        catch (ODataError ex) when (ex.ResponseStatusCode == 404)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting email details for {EmailId} from M365 account {AccountId}", emailId, accountId);
-            return null;
+            throw;
         }
     }
 
@@ -344,10 +339,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return null;
-        }
 
         try
         {
@@ -370,11 +361,16 @@ public class M365ProviderService : IM365ProviderService
                 Bytes = file.ContentBytes,
             };
         }
+        catch (ODataError ex) when (ex.ResponseStatusCode == 404)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching attachment {AttachmentId} on {EmailId} from M365 account {AccountId}",
                 attachmentId, emailId, accountId);
-            return null;
+            throw;
         }
     }
 
@@ -391,10 +387,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot send email: No authentication token for account {accountId}");
-        }
 
         if (bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
         {
@@ -473,10 +465,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot delete email: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -501,10 +489,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot mark email as read: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -536,10 +520,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot move email: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -570,10 +550,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return Enumerable.Empty<CalendarInfo>();
-        }
 
         try
         {
@@ -609,7 +585,7 @@ public class M365ProviderService : IM365ProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing calendars from M365 account {AccountId}", accountId);
-            return Enumerable.Empty<CalendarInfo>();
+            throw;
         }
     }
 
@@ -622,10 +598,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return Enumerable.Empty<CalendarEvent>();
-        }
 
         try
         {
@@ -695,7 +667,7 @@ public class M365ProviderService : IM365ProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting calendar events from M365 account {AccountId}", accountId);
-            return Enumerable.Empty<CalendarEvent>();
+            throw;
         }
     }
 
@@ -706,10 +678,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return null;
-        }
 
         try
         {
@@ -790,10 +758,15 @@ public class M365ProviderService : IM365ProviderService
             _logger.LogInformation("Retrieved event details for {EventId} from M365 account {AccountId}", eventId, accountId);
             return result;
         }
+        catch (ODataError ex) when (ex.ResponseStatusCode == 404)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting calendar event details for {EventId} from M365 account {AccountId}", eventId, accountId);
-            return null;
+            throw;
         }
     }
 
@@ -950,10 +923,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot create event: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -1040,10 +1009,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot update event: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -1115,10 +1080,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot delete event: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -1145,10 +1106,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot respond to event: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -1215,10 +1172,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return Enumerable.Empty<Models.Contact>();
-        }
 
         try
         {
@@ -1247,7 +1200,7 @@ public class M365ProviderService : IM365ProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching contacts from M365 account {AccountId}", accountId);
-            return Enumerable.Empty<Models.Contact>();
+            throw;
         }
     }
 
@@ -1258,10 +1211,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return Enumerable.Empty<Models.Contact>();
-        }
 
         try
         {
@@ -1292,7 +1241,7 @@ public class M365ProviderService : IM365ProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error searching contacts from M365 account {AccountId} with query '{Query}'", accountId, query);
-            return Enumerable.Empty<Models.Contact>();
+            throw;
         }
     }
 
@@ -1302,10 +1251,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            return null;
-        }
 
         try
         {
@@ -1323,10 +1268,15 @@ public class M365ProviderService : IM365ProviderService
             _logger.LogInformation("Retrieved contact details for {ContactId} from M365 account {AccountId}", contactId, accountId);
             return result;
         }
+        catch (ODataError ex) when (ex.ResponseStatusCode == 404)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting contact details for {ContactId} from M365 account {AccountId}", contactId, accountId);
-            return null;
+            throw;
         }
     }
 
@@ -1343,10 +1293,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot create contact: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -1408,10 +1354,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot update contact: No authentication token for account {accountId}");
-        }
 
         try
         {
@@ -1464,10 +1406,6 @@ public class M365ProviderService : IM365ProviderService
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
-        if (token == null)
-        {
-            throw new InvalidOperationException($"Cannot delete contact: No authentication token for account {accountId}");
-        }
 
         try
         {
