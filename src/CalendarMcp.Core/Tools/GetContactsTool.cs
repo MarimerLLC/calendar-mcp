@@ -102,7 +102,7 @@ public sealed class GetContactsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_contacts tool");
-            throw new McpException("Failed to get contacts.", ex);
+            throw ToolGuard.Failure("get contacts", ex);
         }
     }
 }

@@ -47,7 +47,7 @@ public sealed class ListAccountsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error listing accounts");
-            throw new McpException("Failed to list accounts.", ex);
+            throw ToolGuard.Failure("list accounts", ex);
         }
     }
 

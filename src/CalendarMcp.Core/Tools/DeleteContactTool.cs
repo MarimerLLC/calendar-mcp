@@ -52,7 +52,7 @@ public sealed class DeleteContactTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in delete_contact tool");
-            throw new McpException("Failed to delete contact.", ex);
+            throw ToolGuard.Failure("delete contact", ex);
         }
     }
 }

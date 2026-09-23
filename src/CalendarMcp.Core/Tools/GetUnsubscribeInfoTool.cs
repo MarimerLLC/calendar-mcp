@@ -66,7 +66,7 @@ public sealed class GetUnsubscribeInfoTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_unsubscribe_info tool");
-            throw new McpException("Failed to get unsubscribe info.", ex);
+            throw ToolGuard.Failure("get unsubscribe info", ex);
         }
     }
 

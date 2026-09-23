@@ -98,6 +98,22 @@ network errors are reported the same way. Single-item tools
 (`get_email_details`, etc.) return the same re-authentication message as
 their error.
 
+## Tool errors
+
+When a provider call fails, the error reads `Failed to <action>: <detail>`.
+The detail is the provider's own diagnosis, sanitized: the Microsoft Graph
+error code and message (e.g. `ErrorItemNotFound`), the Google API reason,
+the IMAP/SMTP server's response, or a provider message such as a missing
+folder. Use it to tell a bad ID or folder from an auth or scope problem. The
+same text appears in bulk tools' per-item `error` fields.
+
+- **Transient** failures (throttling, HTTP 5xx, network errors) end with a
+  retry hint. For throttling, wait before retrying.
+- Anything else won't succeed if you retry the same call. Fix the input
+  instead, or relay the problem to the user.
+- A bare `Failed to <action>.` with no detail means the cause is logged on
+  the server only.
+
 ## Where to go next
 
 - `accounts` — multi-account routing, capabilities, domain matching

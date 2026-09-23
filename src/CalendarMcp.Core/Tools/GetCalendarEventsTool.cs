@@ -105,7 +105,7 @@ public sealed class GetCalendarEventsTool(
             catch (Exception ex) when (ex is not McpException)
             {
                 logger.LogError(ex, "Error resolving accountId from calendarId {CalendarId}", calendarId);
-                throw new McpException("Failed to resolve account from calendarId.", ex);
+                throw ToolGuard.Failure("resolve account from calendarId", ex);
             }
 
             validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
@@ -251,7 +251,7 @@ public sealed class GetCalendarEventsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_calendar_events tool");
-            throw new McpException("Failed to get calendar events.", ex);
+            throw ToolGuard.Failure("get calendar events", ex);
         }
     }
 

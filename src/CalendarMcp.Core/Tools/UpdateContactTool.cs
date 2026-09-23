@@ -68,7 +68,7 @@ public sealed class UpdateContactTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in update_contact tool");
-            throw new McpException("Failed to update contact.", ex);
+            throw ToolGuard.Failure("update contact", ex);
         }
     }
 

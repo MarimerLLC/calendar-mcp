@@ -56,7 +56,7 @@ public sealed class MarkEmailAsReadTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in mark_email_as_read tool");
-            throw new McpException("Failed to mark email as read.", ex);
+            throw ToolGuard.Failure("mark email as read", ex);
         }
     }
 }

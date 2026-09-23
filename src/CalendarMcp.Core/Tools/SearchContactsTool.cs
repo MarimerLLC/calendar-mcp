@@ -107,7 +107,7 @@ public sealed class SearchContactsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in search_contacts tool");
-            throw new McpException("Failed to search contacts.", ex);
+            throw ToolGuard.Failure("search contacts", ex);
         }
     }
 }

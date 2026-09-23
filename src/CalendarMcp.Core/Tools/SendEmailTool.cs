@@ -148,7 +148,7 @@ public sealed class SendEmailTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in send_email tool");
-            throw new McpException("Failed to send email.", ex);
+            throw ToolGuard.Failure("send email", ex);
         }
     }
 

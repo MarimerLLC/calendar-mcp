@@ -90,7 +90,7 @@ public sealed class GetEmailAttachmentTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_email_attachment tool");
-            throw new McpException("Failed to fetch attachment.", ex);
+            throw ToolGuard.Failure("fetch attachment", ex);
         }
     }
 }

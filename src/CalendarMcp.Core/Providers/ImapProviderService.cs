@@ -113,7 +113,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
     private async Task<ImapAccountConfig> ResolveConfigAsync(string accountId)
     {
         var account = await _accountRegistry.GetAccountAsync(accountId)
-            ?? throw new InvalidOperationException($"Account '{accountId}' not found in registry.");
+            ?? throw new ProviderOperationException($"Account '{accountId}' not found in registry.");
 
         var pc = account.ProviderConfig;
 
@@ -123,7 +123,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
         var storedPassword = Get(pc, "password", "");
 
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(storedPassword))
-            throw new InvalidOperationException(
+            throw new ProviderOperationException(
                 $"Account '{accountId}' is missing username or password in providerConfig.");
 
         return new ImapAccountConfig(
@@ -186,7 +186,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
             : await client.GetFolderAsync(folderName, ct);
 
         if (folder is null)
-            throw new InvalidOperationException($"IMAP folder '{folderName}' not found.");
+            throw new ProviderOperationException($"IMAP folder '{folderName}' not found.");
 
         await folder.OpenAsync(access, ct);
         return folder;
@@ -624,7 +624,8 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
         if (configured is not null)
         {
             if (string.Equals(configured, "INBOX", StringComparison.OrdinalIgnoreCase))
-                return client.Inbox;
+                return client.Inbox
+                    ?? throw new ProviderOperationException($"IMAP account '{cfg.AccountId}' has no INBOX folder.");
 
             try
             {
@@ -634,7 +635,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
             {
                 // The junk folder default is Gmail's; other hosts usually advertise \Junk.
                 return GetSpecialFolder(client, SpecialFolder.Junk)
-                    ?? throw new InvalidOperationException(
+                    ?? throw new ProviderOperationException(
                         $"IMAP folder '{configured}' for destination '{destination}' was not found on account " +
                         $"'{cfg.AccountId}', and the server has no \\Junk folder. Set 'junkFolder' in the account's providerConfig.");
             }
@@ -657,7 +658,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
         }
         catch (FolderNotFoundException ex)
         {
-            throw new InvalidOperationException(
+            throw new ProviderOperationException(
                 $"Destination '{destination}' could not be resolved on IMAP account '{cfg.AccountId}': the server " +
                 $"advertises no matching SPECIAL-USE folder and has no folder named '{destination.Trim()}'. " +
                 "Pass the literal folder name as the destination instead.", ex);
@@ -833,7 +834,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
     private static void EnsureUidValidity(IMailFolder folder, uint expected, string accountId, string folderName)
     {
         if (folder.UidValidity == expected) return;
-        throw new InvalidOperationException(
+        throw new ProviderOperationException(
             $"Email ID is no longer valid: folder '{folderName}' on account '{accountId}' " +
             $"has UIDVALIDITY {folder.UidValidity}, but the ID was created with {expected}. " +
             "Re-list the folder to get current IDs.");

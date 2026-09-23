@@ -73,7 +73,7 @@ public sealed class DeleteEventTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in delete_event tool");
-            throw new McpException("Failed to delete event.", ex);
+            throw ToolGuard.Failure("delete event", ex);
         }
     }
 }

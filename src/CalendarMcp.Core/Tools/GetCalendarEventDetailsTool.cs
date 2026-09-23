@@ -108,7 +108,7 @@ public sealed class GetCalendarEventDetailsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_calendar_event_details tool");
-            throw new McpException("Failed to get calendar event details.", ex);
+            throw ToolGuard.Failure("get calendar event details", ex);
         }
     }
 }

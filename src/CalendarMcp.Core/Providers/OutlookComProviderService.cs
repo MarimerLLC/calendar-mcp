@@ -41,7 +41,7 @@ public class OutlookComProviderService : IOutlookComProviderService
         if (account == null)
         {
             _logger.LogError("Account {AccountId} not found in registry", accountId);
-            throw new InvalidOperationException($"Account '{accountId}' not found in registry");
+            throw new ProviderOperationException($"Account '{accountId}' not found in registry");
         }
 
         account.ProviderConfig.TryGetValue("tenantId", out var tenantId);
@@ -50,7 +50,7 @@ public class OutlookComProviderService : IOutlookComProviderService
         if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId))
         {
             _logger.LogError("Account {AccountId} missing tenantId or clientId in configuration", accountId);
-            throw new InvalidOperationException($"Account '{accountId}' is missing tenantId or clientId in its configuration");
+            throw new ProviderOperationException($"Account '{accountId}' is missing tenantId or clientId in its configuration");
         }
 
         var token = await _authService.GetTokenSilentlyAsync(

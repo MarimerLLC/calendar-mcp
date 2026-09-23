@@ -106,7 +106,7 @@ public sealed class GetEmailsTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_emails tool");
-            throw new McpException("Failed to get emails.", ex);
+            throw ToolGuard.Failure("get emails", ex);
         }
     }
 }

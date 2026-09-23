@@ -4,6 +4,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Graph.Models.ODataErrors;
 using ModelContextProtocol;
 using Rocks;
 
@@ -96,5 +97,61 @@ public class MoveEmailToolTests
         regExp.Verify();
         factExp.Verify();
         provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task MoveEmail_GraphError_SurfacesCodeAndMessage()
+    {
+        var tool = MoveToolThrowing(new ODataError
+        {
+            ResponseStatusCode = 404,
+            Error = new MainError { Code = "ErrorItemNotFound", Message = "The specified object was not found in the store." }
+        });
+
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(() => tool.MoveEmail("acc-1", "email-1", "Receipts"));
+
+        StringAssert.StartsWith(ex.Message, "Failed to move email: ");
+        StringAssert.Contains(ex.Message, "HTTP 404");
+        StringAssert.Contains(ex.Message, "ErrorItemNotFound");
+        StringAssert.Contains(ex.Message, "The specified object was not found in the store");
+        Assert.IsFalse(ex.Message.Contains("retrying"), ex.Message);
+    }
+
+    [TestMethod]
+    public async Task MoveEmail_ProviderOperationException_SurfacesMessage()
+    {
+        var tool = MoveToolThrowing(new ProviderOperationException("IMAP folder 'Receipts' not found."));
+
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(() => tool.MoveEmail("acc-1", "email-1", "Receipts"));
+
+        Assert.AreEqual("Failed to move email: IMAP folder 'Receipts' not found.", ex.Message);
+    }
+
+    [TestMethod]
+    public async Task MoveEmail_UnrecognizedException_KeepsGenericMessage()
+    {
+        var tool = MoveToolThrowing(new InvalidOperationException("Sensitive provider detail"));
+
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(() => tool.MoveEmail("acc-1", "email-1", "Receipts"));
+
+        Assert.AreEqual("Failed to move email.", ex.Message);
+    }
+
+    private static MoveEmailTool MoveToolThrowing(Exception error)
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.MoveEmailAsync("acc-1", "email-1", "Receipts", Arg.Any<CancellationToken>())
+            .Callback((_, _, _, _) => throw error);
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        return new MoveEmailTool(regExp.Instance(), factExp.Instance(), NullLogger<MoveEmailTool>.Instance);
     }
 }

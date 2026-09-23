@@ -96,7 +96,7 @@ public sealed partial class GetContextualEmailSummaryTool(
         catch (Exception ex) when (ex is not McpException)
         {
             logger.LogError(ex, "Error in get_contextual_email_summary tool");
-            throw new McpException("Failed to get contextual email summary.", ex);
+            throw ToolGuard.Failure("get contextual email summary", ex);
         }
     }
 

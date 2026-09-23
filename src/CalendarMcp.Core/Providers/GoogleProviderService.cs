@@ -50,14 +50,14 @@ public class GoogleProviderService : IGoogleProviderService
         if (account == null)
         {
             _logger.LogError("Account {AccountId} not found in registry", accountId);
-            throw new InvalidOperationException($"Account '{accountId}' not found in registry");
+            throw new ProviderOperationException($"Account '{accountId}' not found in registry");
         }
 
         if (!account.ProviderConfig.TryGetValue("clientId", out var clientId) ||
             !account.ProviderConfig.TryGetValue("clientSecret", out var clientSecret))
         {
             _logger.LogError("Account {AccountId} missing clientId or clientSecret in configuration", accountId);
-            throw new InvalidOperationException($"Account '{accountId}' is missing clientId or clientSecret in its configuration");
+            throw new ProviderOperationException($"Account '{accountId}' is missing clientId or clientSecret in its configuration");
         }
 
         try
@@ -625,7 +625,7 @@ public class GoogleProviderService : IGoogleProviderService
         {
             _logger.LogError(gex, "Invalid label '{Label}' for Google account {AccountId}", 
                 destinationFolder, accountId);
-            throw new InvalidOperationException(
+            throw new ProviderOperationException(
                 $"Invalid label '{destinationFolder}'. Use system labels (INBOX, TRASH, SPAM) or get valid custom label IDs from Gmail settings.", 
                 gex);
         }
@@ -983,14 +983,14 @@ public class GoogleProviderService : IGoogleProviderService
 
             if (evt.Attendees == null || !evt.Attendees.Any())
             {
-                throw new InvalidOperationException("Event has no attendees, cannot respond");
+                throw new ProviderOperationException("Event has no attendees, cannot respond");
             }
 
             // Find the current user's attendee entry
             var myAttendee = evt.Attendees.FirstOrDefault(a => a.Self == true);
             if (myAttendee == null)
             {
-                throw new InvalidOperationException("You are not an attendee of this event");
+                throw new ProviderOperationException("You are not an attendee of this event");
             }
 
             // Update the response status
