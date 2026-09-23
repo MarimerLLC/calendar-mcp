@@ -54,9 +54,13 @@ given account.
 - **Use case**: unattended mailboxes lacking OAuth, role-based accounts,
   legacy systems.
 - **Folders**: IMAP folder names are mailbox-specific. The destination
-  aliases (`archive`, `trash`, `spam`, `inbox`) are mapped to common
-  conventions (`Archive`, `INBOX`, `[Gmail]/Spam`, etc.) but custom
-  folders may need their literal name as `destination`.
+  aliases map to the account's configured folders: `inbox` →
+  `inboxFolder`, `sentitems` → `sentFolder`, `trash`/`deleteditems` →
+  `trashFolder`, `spam`/`junkemail` → `junkFolder` (falling back to the
+  server's `\Junk` folder). `archive` and `drafts` use the server's
+  SPECIAL-USE folders (`\Archive`, else Gmail's `\All`; `\Drafts`)
+  when advertised, otherwise a folder with that literal name. Any other
+  value is a literal folder name.
 - **Search**: IMAP SEARCH is less powerful than Graph/Gmail; complex
   queries may not match. Falls back to client-side filtering when needed.
 - **Unsubscribe**: `List-Unsubscribe` headers are parsed the same way

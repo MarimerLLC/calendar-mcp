@@ -496,14 +496,16 @@ public class OutlookComProviderService : IOutlookComProviderService
 
             // Microsoft Graph supports moving messages by updating the parentFolderId
             // or using the Move endpoint. We'll use the Move endpoint which is more explicit.
-            // Common folders: "inbox", "archive", "deleteditems", "drafts", "sentitems", "junkemail"
+            // Aliases such as "trash"/"spam" are mapped to Graph's well-known folder names
+            // ("deleteditems"/"junkemail"); anything else is treated as a folder ID.
+            var destinationId = MailFolderAliases.ToGraphDestinationId(destinationFolder);
             await graphClient.Me.Messages[emailId].Move.PostAsync(new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
             {
-                DestinationId = destinationFolder
+                DestinationId = destinationId
             }, cancellationToken: cancellationToken);
             
             _logger.LogInformation("Moved email {EmailId} to folder '{Folder}' for Outlook.com account {AccountId}", 
-                emailId, destinationFolder, accountId);
+                emailId, destinationId, accountId);
         }
         catch (Exception ex)
         {

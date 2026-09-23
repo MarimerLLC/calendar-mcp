@@ -345,7 +345,8 @@ account's effective permissions.
     "password": "ENC:CfDJ8...",
     "inboxFolder": "INBOX",
     "sentFolder": "[Gmail]/Sent Mail",
-    "trashFolder": "[Gmail]/Trash"
+    "trashFolder": "[Gmail]/Trash",
+    "junkFolder": "[Gmail]/Spam"
   }
 }
 ```
@@ -361,6 +362,7 @@ account's effective permissions.
 | `inboxFolder`  | `INBOX`              |
 | `sentFolder`   | `[Gmail]/Sent Mail`  |
 | `trashFolder`  | `[Gmail]/Trash`      |
+| `junkFolder`   | `[Gmail]/Spam`       |
 
 **Password storage**: `password` is encrypted at rest via ASP.NET DataProtection — values written by the admin UI or CLI are stored with an `ENC:` prefix and the keystore lives under the data directory (see `docs/security.md`). Plaintext values without the prefix are still readable, so manually-edited entries continue to work.
 

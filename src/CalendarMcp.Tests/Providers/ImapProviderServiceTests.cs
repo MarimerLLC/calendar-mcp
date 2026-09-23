@@ -55,4 +55,41 @@ public class ImapProviderServiceTests
     {
         Assert.ThrowsException<ArgumentException>(() => ImapProviderService.ParseEmailId(bad));
     }
+
+    // Non-default folder names prove the account's configuration is honored.
+    private static readonly ImapProviderService.ImapAccountConfig CustomFolders = new(
+        AccountId: "acc-1",
+        ImapHost: "imap.example.com", ImapPort: 993,
+        SmtpHost: "smtp.example.com", SmtpPort: 587,
+        Username: "user", Password: "pw",
+        InboxFolder: "INBOX",
+        SentFolder: "Sent Items",
+        TrashFolder: "Deleted Items",
+        JunkFolder: "Junk E-mail");
+
+    [TestMethod]
+    [DataRow("inbox", "INBOX")]
+    [DataRow("sentitems", "Sent Items")]
+    [DataRow("trash", "Deleted Items")]
+    [DataRow("deleteditems", "Deleted Items")]
+    [DataRow("spam", "Junk E-mail")]
+    [DataRow("junkemail", "Junk E-mail")]
+    [DataRow("Trash", "Deleted Items")]
+    public void ResolveConfiguredFolder_MapsAliasesToConfiguredFolders(string destination, string expected)
+    {
+        Assert.IsTrue(MailFolderAliases.TryParse(destination, out var folder));
+
+        Assert.AreEqual(expected, ImapProviderService.ResolveConfiguredFolder(folder, CustomFolders));
+    }
+
+    [TestMethod]
+    [DataRow("archive")]
+    [DataRow("drafts")]
+    public void ResolveConfiguredFolder_ReturnsNullForSpecialUseOnlyAliases(string destination)
+    {
+        // No providerConfig key for these; the provider falls back to SPECIAL-USE lookup.
+        Assert.IsTrue(MailFolderAliases.TryParse(destination, out var folder));
+
+        Assert.IsNull(ImapProviderService.ResolveConfiguredFolder(folder, CustomFolders));
+    }
 }
