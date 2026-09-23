@@ -110,7 +110,7 @@ public class OutlookComProviderService : IOutlookComProviderService
                         Cc = message.CcRecipients?.Select(r => r.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
                         Body = message.BodyPreview ?? string.Empty,
                         BodyFormat = "text",
-                        ReceivedDateTime = message.ReceivedDateTime?.DateTime ?? DateTime.MinValue,
+                        ReceivedDateTime = message.ReceivedDateTime?.UtcDateTime ?? DateTime.MinValue,
                         IsRead = message.IsRead ?? false,
                         HasAttachments = message.HasAttachments ?? false
                     });
@@ -161,7 +161,7 @@ public class OutlookComProviderService : IOutlookComProviderService
             {
                 foreach (var message in messages.Value)
                 {
-                    var receivedDate = message.ReceivedDateTime?.DateTime ?? DateTime.MinValue;
+                    var receivedDate = message.ReceivedDateTime?.UtcDateTime ?? DateTime.MinValue;
                     
                     // Apply client-side date filtering if specified
                     if (fromDate.HasValue && receivedDate < fromDate.Value)
@@ -254,7 +254,7 @@ public class OutlookComProviderService : IOutlookComProviderService
                 Cc = message.CcRecipients?.Select(r => r.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
                 Body = message.Body?.Content ?? string.Empty,
                 BodyFormat = message.Body?.ContentType == BodyType.Html ? "html" : "text",
-                ReceivedDateTime = message.ReceivedDateTime?.DateTime ?? DateTime.MinValue,
+                ReceivedDateTime = message.ReceivedDateTime?.UtcDateTime ?? DateTime.MinValue,
                 IsRead = message.IsRead ?? false,
                 HasAttachments = message.HasAttachments ?? false,
                 Attachments = attachments,

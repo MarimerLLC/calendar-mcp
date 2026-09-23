@@ -80,6 +80,46 @@ public class SearchEmailsToolTests
     }
 
     [TestMethod]
+    public async Task SearchEmails_UnspecifiedKindReceivedDate_SerializesWithZ()
+    {
+        // Graph providers used to hand back Unspecified-kind UTC values, which serialized with no offset.
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var emails = new List<EmailMessage>
+        {
+            new()
+            {
+                Id = "e1", AccountId = "acc-1", Subject = "Match",
+                ReceivedDateTime = new DateTime(2026, 8, 24, 22, 45, 25, DateTimeKind.Unspecified)
+            }
+        };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.SearchEmailsAsync(
+            "acc-1", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365")
+            .ReturnValue(provExp.Instance());
+
+        var tool = new SearchEmailsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<SearchEmailsTool>.Instance);
+
+        var result = await tool.SearchEmails("test", "acc-1");
+        var emailsArray = JsonDocument.Parse(result).RootElement.GetProperty("emails");
+
+        Assert.AreEqual("2026-08-24T22:45:25Z", emailsArray[0].GetProperty("receivedDateTime").GetString());
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
     public async Task SearchEmails_NoAccountId_QueriesAllAccounts()
     {
         var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");

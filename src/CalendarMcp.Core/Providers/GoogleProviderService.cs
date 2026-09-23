@@ -1446,7 +1446,7 @@ public class GoogleProviderService : IGoogleProviderService
         var ccList = ParseEmailAddresses(cc);
 
         // Parse date
-        DateTime.TryParse(date, out var receivedDate);
+        var receivedDate = ParseDateHeader(date);
 
         // Get body
         var body = includeBody ? GetMessageBody(message) : (message.Snippet ?? string.Empty);
@@ -1475,6 +1475,13 @@ public class GoogleProviderService : IGoogleProviderService
                 string.IsNullOrEmpty(listUnsubscribePost) ? null : listUnsubscribePost)
         };
     }
+
+    /// <summary>
+    /// Parses an RFC 2822 Date header to UTC, honoring the header's offset rather than
+    /// the server's local zone. Returns <see cref="DateTime.MinValue"/> if unparseable.
+    /// </summary>
+    internal static DateTime ParseDateHeader(string? date) =>
+        DateTimeOffset.TryParse(date, out var parsed) ? parsed.UtcDateTime : DateTime.MinValue;
 
     private static string GetHeader(IList<MessagePartHeader> headers, string name)
     {

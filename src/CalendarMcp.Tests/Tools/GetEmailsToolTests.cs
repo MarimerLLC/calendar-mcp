@@ -172,4 +172,51 @@ public class GetEmailsToolTests
         Assert.AreEqual(0, doc.RootElement.GetProperty("emails").GetArrayLength());
         Assert.AreEqual(JsonValueKind.Null, doc.RootElement.GetProperty("warnings").ValueKind);
     }
+
+    [TestMethod]
+    public async Task GetEmails_MixedDateTimeKinds_EmitUtcWithZAndSortByInstant()
+    {
+        // Graph providers used to return Unspecified (UTC wall clock) and Gmail returned Local.
+        // The Gmail message is received later; its raw local ticks must not decide the order.
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var graphEmail = WithReceived(TestData.CreateEmail(id: "graph", accountId: "acc-1"),
+            new DateTime(2026, 8, 24, 12, 0, 0, DateTimeKind.Unspecified));
+        var gmailEmail = WithReceived(TestData.CreateEmail(id: "gmail", accountId: "acc-1"),
+            new DateTime(2026, 8, 24, 13, 0, 0, DateTimeKind.Utc).ToLocalTime());
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>([graphEmail, gmailEmail]));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetEmailsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetEmailsTool>.Instance);
+
+        var result = await tool.GetEmails("acc-1");
+        var emails = JsonDocument.Parse(result).RootElement.GetProperty("emails");
+
+        Assert.AreEqual("gmail", emails[0].GetProperty("id").GetString());
+        Assert.AreEqual("2026-08-24T13:00:00Z", emails[0].GetProperty("receivedDateTime").GetString());
+        Assert.AreEqual("graph", emails[1].GetProperty("id").GetString());
+        Assert.AreEqual("2026-08-24T12:00:00Z", emails[1].GetProperty("receivedDateTime").GetString());
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    private static EmailMessage WithReceived(EmailMessage email, DateTime received) => new()
+    {
+        Id = email.Id,
+        AccountId = email.AccountId,
+        Subject = email.Subject,
+        From = email.From,
+        ReceivedDateTime = received
+    };
 }

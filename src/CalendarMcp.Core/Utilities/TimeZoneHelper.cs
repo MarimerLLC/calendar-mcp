@@ -15,6 +15,19 @@ public static class TimeZoneHelper
     }
 
     /// <summary>
+    /// Normalizes a DateTime to <see cref="DateTimeKind.Utc"/> so it serializes with a Z suffix
+    /// and compares correctly against values from other providers.
+    /// Local values are converted to UTC; Unspecified values are assumed to already be UTC
+    /// (as Microsoft Graph and JSON sources supply) and only have their Kind set.
+    /// </summary>
+    public static DateTime EnsureUtc(DateTime value) => value.Kind switch
+    {
+        DateTimeKind.Utc => value,
+        DateTimeKind.Local => value.ToUniversalTime(),
+        _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+    };
+
+    /// <summary>
     /// Converts a DateTimeOffset to a formatted local time string (ISO 8601 without offset)
     /// in the specified IANA time zone.
     /// </summary>
