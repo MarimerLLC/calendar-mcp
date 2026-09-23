@@ -165,7 +165,9 @@ public class Program
         // Configure MCP server with HTTP/SSE transport and register tools
         builder.Services
             .AddMcpServer(CalendarMcpServerOptions.Configure)
-            .WithHttpTransport()
+            // Stateless: no tool needs server-to-client requests or session state, and the API
+            // key is checked on every request. (SDK 2.x default; stated so a default flip is visible.)
+            .WithHttpTransport(options => options.Stateless = true)
             .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
             .WithTools<CalendarMcp.Core.Tools.GetGuideTool>()
             .WithTools<CalendarMcp.Core.Tools.GetEmailsTool>()
