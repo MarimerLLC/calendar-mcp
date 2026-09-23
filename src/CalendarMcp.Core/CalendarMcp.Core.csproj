@@ -32,4 +32,8 @@
     <EmbeddedResource Include="Skills/*.md" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="CalendarMcp.Tests" />
+  </ItemGroup>
+
 </Project>

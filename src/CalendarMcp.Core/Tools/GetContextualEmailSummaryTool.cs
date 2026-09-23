@@ -64,15 +64,17 @@ public sealed partial class GetContextualEmailSummaryTool(
             var searchKeywords = ParseTopics(topics);
             
             // Fetch emails from all accounts in parallel
-            var allEmails = await FetchEmailsFromAllAccountsAsync(accounts, countPerAccount, unreadOnly, searchKeywords);
-            
+            var warnings = new List<AccountReadWarning>();
+            var allEmails = await FetchEmailsFromAllAccountsAsync(accounts, countPerAccount, unreadOnly, searchKeywords, warnings);
+
             if (allEmails.Count == 0)
             {
                 return JsonSerializer.Serialize(new
                 {
                     message = "No emails found matching criteria",
                     searchKeywords,
-                    accountsSearched = accounts.Count
+                    accountsSearched = accounts.Count,
+                    warnings = warnings.Count > 0 ? warnings : null
                 }, JsonOptions);
             }
 
@@ -83,6 +85,7 @@ public sealed partial class GetContextualEmailSummaryTool(
                 searchKeywords, 
                 includeBodyPreview, 
                 maxSamplesPerCluster);
+            summary.Warnings = warnings.Count > 0 ? warnings : null;
 
             logger.LogInformation(
                 "Built contextual summary: {TotalEmails} emails, {ClusterCount} clusters, {MismatchCount} mismatches, {PersonaCount} personas",
@@ -112,7 +115,8 @@ public sealed partial class GetContextualEmailSummaryTool(
         List<AccountInfo> accounts,
         int countPerAccount,
         bool unreadOnly,
-        List<string> searchKeywords)
+        List<string> searchKeywords,
+        List<AccountReadWarning> warnings)
     {
         var tasks = accounts.Select(async account =>
         {
@@ -136,6 +140,14 @@ public sealed partial class GetContextualEmailSummaryTool(
             catch (Exception ex)
             {
                 logger.LogWarning(ex, "Error fetching emails from account {AccountId}", account.Id);
+                lock (warnings)
+                {
+                    warnings.Add(new AccountReadWarning
+                    {
+                        AccountId = account.Id,
+                        Error = ToolGuard.DescribeAccountFailure(ex, "emails")
+                    });
+                }
                 return Enumerable.Empty<EmailMessage>();
             }
         });

@@ -54,6 +54,9 @@ public sealed class SearchContactsTool(
         try
         {
 
+            // A failed account is reported here rather than being indistinguishable from one with no data.
+            var warnings = new List<object>();
+
             var tasks = validAccounts.Select(async account =>
             {
                 try
@@ -65,6 +68,10 @@ public sealed class SearchContactsTool(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Error searching contacts in account {AccountId}", account!.Id);
+                    lock (warnings)
+                    {
+                        warnings.Add(new { accountId = account.Id, error = ToolGuard.DescribeAccountFailure(ex, "contacts") });
+                    }
                     return Enumerable.Empty<Contact>();
                 }
             });
@@ -85,7 +92,8 @@ public sealed class SearchContactsTool(
                     phoneNumbers = c.PhoneNumbers.Select(p => p.Number),
                     companyName = c.CompanyName,
                     jobTitle = c.JobTitle
-                })
+                }),
+                warnings = warnings.Count > 0 ? warnings : null
             };
 
             logger.LogInformation("Found {Count} contacts matching '{Query}' from {AccountCount} accounts",

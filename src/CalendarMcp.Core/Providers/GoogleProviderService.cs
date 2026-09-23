@@ -1,6 +1,7 @@
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Calendar.v3;
 using Google.Apis.Calendar.v3.Data;
 using Google.Apis.Gmail.v1;
@@ -42,20 +43,20 @@ public class GoogleProviderService : IGoogleProviderService
     /// <summary>
     /// Get Google credential for an account
     /// </summary>
-    private async Task<UserCredential?> GetCredentialAsync(string accountId, CancellationToken cancellationToken)
+    private async Task<UserCredential> GetCredentialAsync(string accountId, CancellationToken cancellationToken)
     {
         var account = await _accountRegistry.GetAccountAsync(accountId);
         if (account == null)
         {
             _logger.LogError("Account {AccountId} not found in registry", accountId);
-            return null;
+            throw new InvalidOperationException($"Account '{accountId}' not found in registry");
         }
 
         if (!account.ProviderConfig.TryGetValue("clientId", out var clientId) ||
             !account.ProviderConfig.TryGetValue("clientSecret", out var clientSecret))
         {
             _logger.LogError("Account {AccountId} missing clientId or clientSecret in configuration", accountId);
-            return null;
+            throw new InvalidOperationException($"Account '{accountId}' is missing clientId or clientSecret in its configuration");
         }
 
         try
@@ -73,7 +74,7 @@ public class GoogleProviderService : IGoogleProviderService
             if (!File.Exists(tokenFile))
             {
                 _logger.LogWarning("No cached credential found for Google account {AccountId}. Run CLI to authenticate.", accountId);
-                return null;
+                throw new AccountAuthenticationRequiredException(accountId);
             }
 
             var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
@@ -91,16 +92,22 @@ public class GoogleProviderService : IGoogleProviderService
                 if (!refreshed)
                 {
                     _logger.LogWarning("Failed to refresh Google token for account {AccountId}", accountId);
-                    return null;
+                    throw new AccountAuthenticationRequiredException(accountId);
                 }
             }
 
             return credential;
         }
-        catch (Exception ex)
+        catch (TokenResponseException ex)
+        {
+            // Refresh token expired or revoked (e.g. invalid_grant): only re-authenticating fixes it.
+            _logger.LogWarning(ex, "Google token refresh rejected for account {AccountId}: {Message}", accountId, ex.Message);
+            throw new AccountAuthenticationRequiredException(accountId, ex);
+        }
+        catch (Exception ex) when (ex is not AccountAuthenticationRequiredException)
         {
             _logger.LogError(ex, "Error getting Google credential for account {AccountId}: {Message}", accountId, ex.Message);
-            return null;
+            throw;
         }
     }
 
@@ -146,10 +153,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return Enumerable.Empty<EmailMessage>();
-        }
 
         try
         {
@@ -180,7 +183,7 @@ public class GoogleProviderService : IGoogleProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching emails from Google account {AccountId}", accountId);
-            return Enumerable.Empty<EmailMessage>();
+            throw;
         }
     }
 
@@ -193,10 +196,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return Enumerable.Empty<EmailMessage>();
-        }
 
         try
         {
@@ -239,7 +238,7 @@ public class GoogleProviderService : IGoogleProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error searching emails from Google account {AccountId} with query '{Query}'", accountId, query);
-            return Enumerable.Empty<EmailMessage>();
+            throw;
         }
     }
 
@@ -249,10 +248,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return null;
-        }
 
         try
         {
@@ -274,10 +269,15 @@ public class GoogleProviderService : IGoogleProviderService
             _logger.LogInformation("Retrieved email details for {EmailId} from Google account {AccountId}", emailId, accountId);
             return result;
         }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting email details for {EmailId} from Google account {AccountId}", emailId, accountId);
-            return null;
+            throw;
         }
     }
 
@@ -339,7 +339,6 @@ public class GoogleProviderService : IGoogleProviderService
         }
 
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null) return null;
 
         try
         {
@@ -394,11 +393,16 @@ public class GoogleProviderService : IGoogleProviderService
                 Bytes = bytes,
             };
         }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching attachment {AttachmentId} on {EmailId} from Google account {AccountId}",
                 attachmentId, emailId, accountId);
-            return null;
+            throw;
         }
     }
 
@@ -426,10 +430,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot send email: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -508,10 +508,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot delete email: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -541,10 +537,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot mark email as read: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -583,10 +575,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot move email: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -656,10 +644,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return Enumerable.Empty<CalendarInfo>();
-        }
 
         try
         {
@@ -690,7 +674,7 @@ public class GoogleProviderService : IGoogleProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing calendars from Google account {AccountId}", accountId);
-            return Enumerable.Empty<CalendarInfo>();
+            throw;
         }
     }
 
@@ -703,10 +687,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return Enumerable.Empty<CalendarEvent>();
-        }
 
         try
         {
@@ -754,7 +734,7 @@ public class GoogleProviderService : IGoogleProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting calendar events from Google account {AccountId}", accountId);
-            return Enumerable.Empty<CalendarEvent>();
+            throw;
         }
     }
 
@@ -765,10 +745,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return null;
-        }
 
         try
         {
@@ -827,10 +803,15 @@ public class GoogleProviderService : IGoogleProviderService
             _logger.LogInformation("Retrieved event details for {EventId} from Google account {AccountId}", eventId, accountId);
             return result;
         }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting calendar event details for {EventId} from Google account {AccountId}", eventId, accountId);
-            return null;
+            throw;
         }
     }
 
@@ -847,10 +828,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot create event: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -908,10 +885,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot update event: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -972,10 +945,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot delete event: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -1001,10 +970,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot respond to event: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -1065,10 +1030,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return Enumerable.Empty<Models.Contact>();
-        }
 
         try
         {
@@ -1097,7 +1058,7 @@ public class GoogleProviderService : IGoogleProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error fetching contacts from Google account {AccountId}", accountId);
-            return Enumerable.Empty<Models.Contact>();
+            throw;
         }
     }
 
@@ -1108,10 +1069,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return Enumerable.Empty<Models.Contact>();
-        }
 
         try
         {
@@ -1142,7 +1099,7 @@ public class GoogleProviderService : IGoogleProviderService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error searching contacts from Google account {AccountId} with query '{Query}'", accountId, query);
-            return Enumerable.Empty<Models.Contact>();
+            throw;
         }
     }
 
@@ -1152,10 +1109,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            return null;
-        }
 
         try
         {
@@ -1176,10 +1129,15 @@ public class GoogleProviderService : IGoogleProviderService
             _logger.LogInformation("Retrieved contact details for {ContactId} from Google account {AccountId}", contactId, accountId);
             return result;
         }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting contact details for {ContactId} from Google account {AccountId}", contactId, accountId);
-            return null;
+            throw;
         }
     }
 
@@ -1196,10 +1154,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot create contact: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -1283,10 +1237,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot update contact: No authentication credential for account {accountId}");
-        }
 
         try
         {
@@ -1389,10 +1339,6 @@ public class GoogleProviderService : IGoogleProviderService
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
-        if (credential == null)
-        {
-            throw new InvalidOperationException($"Cannot delete contact: No authentication credential for account {accountId}");
-        }
 
         try
         {

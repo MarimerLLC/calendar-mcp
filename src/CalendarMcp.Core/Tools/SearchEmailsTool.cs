@@ -57,6 +57,9 @@ public sealed class SearchEmailsTool(
         try
         {
 
+            // A failed account is reported here rather than being indistinguishable from one with no data.
+            var warnings = new List<object>();
+
             // Query all accounts in parallel
             var tasks = validAccounts.Select(async account =>
             {
@@ -70,6 +73,10 @@ public sealed class SearchEmailsTool(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Error searching emails in account {AccountId}", account!.Id);
+                    lock (warnings)
+                    {
+                        warnings.Add(new { accountId = account.Id, error = ToolGuard.DescribeAccountFailure(ex, "emails") });
+                    }
                     return Enumerable.Empty<EmailMessage>();
                 }
             });
@@ -90,7 +97,8 @@ public sealed class SearchEmailsTool(
                     receivedDateTime = e.ReceivedDateTime,
                     isRead = e.IsRead,
                     hasAttachments = e.HasAttachments
-                })
+                }),
+                warnings = warnings.Count > 0 ? warnings : null
             };
 
             logger.LogInformation("Found {Count} emails matching '{Query}' from {AccountCount} accounts",

@@ -49,6 +49,9 @@ public sealed class ListCalendarsTool(
         try
         {
 
+            // A failed account is reported here rather than being indistinguishable from one with no data.
+            var warnings = new List<object>();
+
             // Query all accounts in parallel
             var tasks = validAccounts.Select(async account =>
             {
@@ -61,6 +64,10 @@ public sealed class ListCalendarsTool(
                 catch (Exception ex)
                 {
                     logger.LogError(ex, "Error listing calendars from account {AccountId}", account!.Id);
+                    lock (warnings)
+                    {
+                        warnings.Add(new { accountId = account.Id, error = ToolGuard.DescribeAccountFailure(ex, "calendars") });
+                    }
                     return Enumerable.Empty<CalendarInfo>();
                 }
             });
@@ -78,7 +85,8 @@ public sealed class ListCalendarsTool(
                     owner = c.Owner,
                     canEdit = c.CanEdit,
                     isDefault = c.IsDefault
-                })
+                }),
+                warnings = warnings.Count > 0 ? warnings : null
             };
 
             logger.LogInformation("Retrieved {Count} calendars from {AccountCount} accounts",

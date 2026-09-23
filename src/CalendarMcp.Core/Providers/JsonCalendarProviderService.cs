@@ -200,12 +200,10 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
         if (token == null)
         {
-            var hint = isReusedCredentials
-                ? $"The reused account '{refAccountId}' may not have the 'Files.Read' permission consented. " +
-                  $"Run 'calendar-mcp-cli reauth {refAccountId}' to re-authenticate with Files.Read scope."
-                : $"Run 'calendar-mcp-cli reauth {authAccountId}' to authenticate.";
-            throw new InvalidOperationException(
-                $"Failed to get OneDrive access token for account '{account.Id}'. {hint}");
+            var detail = isReusedCredentials
+                ? $"It is used for OneDrive access by account '{account.Id}' and may not have the 'Files.Read' permission consented; re-authenticate it with Files.Read scope."
+                : "It needs OneDrive access (Files.Read) to load its calendar file.";
+            throw new AccountAuthenticationRequiredException(authAccountId, detail: detail);
         }
 
         var httpClient = _httpClientFactory.CreateClient("JsonProvider");
@@ -224,7 +222,9 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
                     ? "The access token may lack 'Files.Read' permission. Re-authenticate with the correct scope."
                     : response.StatusCode == System.Net.HttpStatusCode.NotFound
                         ? "File not found. Check that the path is correct."
-                        : $"Response: {errorBody}"));
+                        : $"Response: {errorBody}"),
+                inner: null,
+                statusCode: response.StatusCode);
         }
 
         return await response.Content.ReadAsStringAsync(cancellationToken);

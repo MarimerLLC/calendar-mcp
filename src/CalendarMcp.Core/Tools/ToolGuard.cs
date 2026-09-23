@@ -1,6 +1,7 @@
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Graph.Models.ODataErrors;
 using ModelContextProtocol;
 
 namespace CalendarMcp.Core.Tools;
@@ -100,4 +101,51 @@ internal static class ToolGuard
     public static McpException NoPermittedAccounts(AccountPermission permission) =>
         new($"No accounts permit {AccountPermissions.Describe(permission)}. " +
             "Use list_accounts to see each account's permissions.");
+
+    /// <summary>
+    /// Builds a short, client-safe description of why reading <paramref name="what"/> from one
+    /// account failed, for a fan-out tool's per-account <c>warnings</c> entry. Distinguishes
+    /// "re-authenticate" (actionable by the user) from provider API and network errors so a
+    /// failure is never indistinguishable from an account that simply has no data.
+    /// </summary>
+    public static string DescribeAccountFailure(Exception ex, string what)
+    {
+        switch (ex)
+        {
+            case AccountAuthenticationRequiredException:
+                return ex.Message;
+
+            // Google refreshes tokens transparently mid-request; a rejected refresh surfaces here.
+            case Google.Apis.Auth.OAuth2.Responses.TokenResponseException:
+                return "The provider rejected this account's stored credential. Re-authenticate it with " +
+                       "'calendar-mcp-cli reauth <accountId>' or from the admin UI.";
+
+            case ODataError odata:
+                var code = odata.Error?.Code;
+                var detail = string.IsNullOrEmpty(code) ? "" : $" ({code})";
+                var message = $"Microsoft Graph returned HTTP {odata.ResponseStatusCode}{detail} while retrieving {what}.";
+                if (odata.ResponseStatusCode is 401 or 403)
+                    message += " The account's consented scopes may be insufficient; re-authenticating it may be required.";
+                return message;
+
+            case Google.GoogleApiException google:
+                var status = (int)google.HttpStatusCode;
+                var googleMessage = $"Google API returned HTTP {status} while retrieving {what}.";
+                if (status is 401 or 403)
+                    googleMessage += " The account's consented scopes may be insufficient; re-authenticating it may be required.";
+                return googleMessage;
+
+            case HttpRequestException { StatusCode: { } httpStatus }:
+                return $"The provider returned HTTP {(int)httpStatus} while retrieving {what}.";
+
+            case HttpRequestException:
+                return $"Network error while retrieving {what} from this account.";
+
+            case NotSupportedException:
+                return $"This account does not support retrieving {what}.";
+
+            default:
+                return $"Failed to retrieve {what} from this account.";
+        }
+    }
 }

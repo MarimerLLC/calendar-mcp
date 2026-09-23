@@ -75,6 +75,29 @@ than reconstructing the steps yourself.
 Tool names are snake_case (the C# MCP SDK auto-converts from the
 PascalCase method names in the source).
 
+## Accounts that fail to read: `warnings`
+
+Read tools that query one or more accounts (`get_emails`, `search_emails`,
+`list_calendars`, `get_calendar_events`, `get_contacts`, `search_contacts`,
+`get_contextual_email_summary`) never let a failed account masquerade as an
+empty one. Results from healthy accounts are still returned, and each
+account that could not be read gets an entry in the `warnings` array
+(`null` when everything succeeded):
+
+```json
+"warnings": [
+  { "accountId": "work", "error": "Account 'work' requires re-authentication (no valid cached credential). Run 'calendar-mcp-cli reauth work' or re-authenticate it from the admin UI." }
+]
+```
+
+Always check `warnings` before telling the user an account has "no
+emails" or "no events". A re-authentication warning needs the user to act:
+relay the instruction rather than retrying. Provider errors (e.g. `HTTP 403`,
+which often means the account was consented without the needed scope) and
+network errors are reported the same way. Single-item tools
+(`get_email_details`, etc.) return the same re-authentication message as
+their error.
+
 ## Where to go next
 
 - `accounts` — multi-account routing, capabilities, domain matching

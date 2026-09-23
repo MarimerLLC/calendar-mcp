@@ -39,19 +39,19 @@ public class IcsProviderService : IIcsProviderService
 
     #region ICS Fetching & Caching
 
-    private async Task<Calendar?> GetCalendarDataAsync(string accountId, CancellationToken cancellationToken)
+    private async Task<Calendar> GetCalendarDataAsync(string accountId, CancellationToken cancellationToken)
     {
         var account = await _accountRegistry.GetAccountAsync(accountId);
         if (account == null)
         {
             _logger.LogError("Account {AccountId} not found in registry", accountId);
-            return null;
+            throw new InvalidOperationException($"Account '{accountId}' not found in registry");
         }
 
         if (!account.ProviderConfig.TryGetValue("icsUrl", out var icsUrl))
         {
             _logger.LogError("Account {AccountId} missing icsUrl in ProviderConfig", accountId);
-            return null;
+            throw new InvalidOperationException($"Account '{accountId}' is missing icsUrl in its configuration");
         }
 
         var cacheTtl = GetCacheTtl(account);
@@ -91,7 +91,8 @@ public class IcsProviderService : IIcsProviderService
                 return stale.Calendar;
             }
 
-            return null;
+            // No cache to fall back on: surface the failure rather than an empty calendar.
+            throw;
         }
     }
 
@@ -138,8 +139,6 @@ public class IcsProviderService : IIcsProviderService
         CancellationToken cancellationToken = default)
     {
         var calendar = await GetCalendarDataAsync(accountId, cancellationToken);
-        if (calendar == null)
-            return Enumerable.Empty<CalendarEvent>();
 
         var start = startDate ?? DateTime.UtcNow.Date;
         var end = endDate ?? start.AddDays(7);
@@ -233,8 +232,6 @@ public class IcsProviderService : IIcsProviderService
         CancellationToken cancellationToken = default)
     {
         var calendar = await GetCalendarDataAsync(accountId, cancellationToken);
-        if (calendar == null)
-            return null;
 
         var evt = calendar.Events.FirstOrDefault(e => e.Uid == eventId);
         if (evt == null)

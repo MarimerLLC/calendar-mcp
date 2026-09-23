@@ -139,4 +139,36 @@ public class SearchEmailsToolTests
         Assert.AreEqual("No accounts found", ex.Message);
         regExp.Verify();
     }
+
+    [TestMethod]
+    public async Task SearchEmails_ProviderNetworkFailure_ReportedInWarnings()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.SearchEmailsAsync("acc-1", "invoice", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromException<IEnumerable<EmailMessage>>(new HttpRequestException("no route to host")));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new SearchEmailsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<SearchEmailsTool>.Instance);
+
+        var doc = JsonDocument.Parse(await tool.SearchEmails("invoice", "acc-1"));
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("emails").GetArrayLength());
+        var warnings = doc.RootElement.GetProperty("warnings");
+        Assert.AreEqual(1, warnings.GetArrayLength());
+        Assert.AreEqual("acc-1", warnings[0].GetProperty("accountId").GetString());
+        StringAssert.Contains(warnings[0].GetProperty("error").GetString(), "Network error");
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
 }

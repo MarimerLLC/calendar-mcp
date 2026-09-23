@@ -854,6 +854,34 @@ Common error codes:
 - `NETWORK_ERROR`: Network connectivity issue
 - `INVALID_PARAMETER`: Invalid parameter value
 
+### Per-account failures in read tools
+
+Read tools that query accounts (`get_emails`, `search_emails`, `list_calendars`,
+`get_calendar_events`, `get_contacts`, `search_contacts`, `get_contextual_email_summary`)
+return whatever the healthy accounts produced and list each account that failed in a
+`warnings` array (`null` when none failed), so a failure is never indistinguishable from an
+account with no data:
+
+```json
+{
+  "emails": [ ... ],
+  "warnings": [
+    { "accountId": "work", "error": "Account 'work' requires re-authentication (no valid cached credential). Run 'calendar-mcp-cli reauth work' or re-authenticate it from the admin UI." }
+  ]
+}
+```
+
+The `error` text distinguishes the cases a user can act on:
+
+- **Re-authentication required**: no cached credential, or the refresh token expired or was revoked.
+- **Provider API error**: e.g. `Microsoft Graph returned HTTP 403 (ErrorAccessDenied)`. A 401/403
+  usually means the account was consented without the scope the operation needs.
+- **Network error**: the provider could not be reached.
+
+Single-item tools (`get_email_details`, `get_calendar_event_details`, `get_contact_details`,
+`get_email_attachment`, …) and write tools return the re-authentication message as their tool
+error. A genuine "not found" (HTTP 404) is still reported as not found.
+
 ## Transport
 
 Tools are exposed via MCP protocol with multiple transport options:

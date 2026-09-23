@@ -112,4 +112,33 @@ public class GetEmailDetailsToolTests
         factExp.Verify();
         provExp.Verify();
     }
+
+    [TestMethod]
+    public async Task GetEmailDetails_AuthenticationRequired_SurfacesReauthMessage()
+    {
+        // The actionable re-auth message must reach the client, not the generic "Failed to get email details."
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetEmailDetailsAsync("acc-1", "email-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromException<EmailMessage?>(new AccountAuthenticationRequiredException("acc-1")));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetEmailDetailsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetEmailDetailsTool>.Instance);
+
+        var ex = await Assert.ThrowsExactlyAsync<AccountAuthenticationRequiredException>(
+            () => tool.GetEmailDetails("acc-1", "email-1"));
+        StringAssert.Contains(ex.Message, "calendar-mcp-cli reauth acc-1");
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
 }
