@@ -40,7 +40,8 @@ used.
 
 Returns events sorted by start time, each with `id, accountId,
 calendarId, subject, start_utc/start_local, end_utc/end_local,
-location, attendees, isAllDay, organizer`.
+start_date/end_date, location, attendees, isAllDay, organizer`.
+`start_date`/`end_date` are set only for all-day events (null otherwise).
 
 ### `get_calendar_event_details(accountId, calendarId, eventId, timeZone)`
 
@@ -163,8 +164,13 @@ multi-account availability, fan out and merge.
 
 - **Default account** for `create_event`/`respond_to_event` is whichever
   account was registered first — pass `accountId` explicitly.
-- **All-day events**: pass start/end as midnight-to-midnight in the
-  user's zone; check provider behavior — `isAllDay` is returned but
+- **All-day events** are floating dates. They are returned with
+  `start_date`/`end_date` (`yyyy-MM-dd`, **end date exclusive** — a
+  one-day event on 2026-09-23 has `end_date` 2026-09-24), and
+  `start_local`/`end_local` are local midnight in the requested zone.
+  Bucket them by `start_date`; don't derive the day by converting
+  `start_utc` yourself. To create one, pass start/end as
+  midnight-to-midnight in the user's zone — `isAllDay` is returned but
   not a creation parameter.
 - **Recurring events**: not directly supported via tool parameters in
   the current version. `get_calendar_events` returns expanded

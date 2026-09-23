@@ -139,4 +139,33 @@ public class GetCalendarEventDetailsToolTests
         factExp.Verify();
         provExp.Verify();
     }
+
+    [TestMethod]
+    public async Task GetCalendarEventDetails_AllDayEvent_IsLocalMidnightOnItsOwnDate()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1").ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetCalendarEventDetailsAsync("acc-1", "cal-1", "all-day", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<CalendarEvent?>(
+                TestData.CreateAllDayEvent(new DateOnly(2026, 9, 23), days: 2, id: "all-day", accountId: "acc-1")));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventDetailsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventDetailsTool>.Instance);
+
+        var result = await tool.GetCalendarEventDetails(TestTimeZone, "acc-1", "cal-1", "all-day");
+        var root = JsonDocument.Parse(result).RootElement;
+
+        Assert.AreEqual("2026-09-23", root.GetProperty("start_date").GetString());
+        Assert.AreEqual("2026-09-25", root.GetProperty("end_date").GetString());
+        Assert.AreEqual("2026-09-23T00:00:00", root.GetProperty("start_local").GetString());
+        Assert.AreEqual("2026-09-25T00:00:00", root.GetProperty("end_local").GetString());
+        Assert.AreEqual("2026-09-23T05:00:00Z", root.GetProperty("start_utc").GetString());
+        provExp.Verify();
+    }
 }

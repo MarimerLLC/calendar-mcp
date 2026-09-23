@@ -586,4 +586,81 @@ public class GetCalendarEventsToolTests
         factExp.Verify();
         provExp.Verify();
     }
+
+    private static GetCalendarEventsTool CreateToolReturning(List<CalendarEvent> events)
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetCalendarEventsAsync(
+            "acc-1", Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365")
+            .ReturnValue(provExp.Instance());
+
+        return new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+    }
+
+    [TestMethod]
+    [DataRow("America/Chicago", "2026-09-23T05:00:00Z", "2026-09-24T05:00:00Z")]
+    [DataRow("Asia/Tokyo", "2026-09-22T15:00:00Z", "2026-09-23T15:00:00Z")]
+    public async Task GetCalendarEvents_AllDayEvent_IsLocalMidnightOnItsOwnDate(
+        string zone, string expectedStartUtc, string expectedEndUtc)
+    {
+        var tool = CreateToolReturning([TestData.CreateAllDayEvent(new DateOnly(2026, 9, 23))]);
+
+        var result = await tool.GetCalendarEvents(zone, new DateTime(2026, 9, 23), new DateTime(2026, 9, 23), "acc-1");
+        var evt = JsonDocument.Parse(result).RootElement.GetProperty("events")[0];
+
+        Assert.IsTrue(evt.GetProperty("isAllDay").GetBoolean());
+        Assert.AreEqual("2026-09-23", evt.GetProperty("start_date").GetString());
+        Assert.AreEqual("2026-09-24", evt.GetProperty("end_date").GetString());
+        Assert.AreEqual("2026-09-23T00:00:00", evt.GetProperty("start_local").GetString());
+        Assert.AreEqual("2026-09-24T00:00:00", evt.GetProperty("end_local").GetString());
+        Assert.AreEqual(expectedStartUtc, evt.GetProperty("start_utc").GetString());
+        Assert.AreEqual(expectedEndUtc, evt.GetProperty("end_utc").GetString());
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_AllDayEvent_SortsAfterPreviousEveningInWesternZone()
+    {
+        // 20:00 CDT on 2026-09-22 is 01:00Z on the 23rd — later than the all-day event's
+        // UTC-midnight anchor, but earlier than its local-midnight start in Chicago.
+        var timed = TestData.CreateEvent(id: "evening", accountId: "acc-1",
+            start: new DateTime(2026, 9, 23, 1, 0, 0, DateTimeKind.Utc),
+            end: new DateTime(2026, 9, 23, 2, 0, 0, DateTimeKind.Utc));
+        var allDay = TestData.CreateAllDayEvent(new DateOnly(2026, 9, 23), id: "all-day", accountId: "acc-1");
+        var tool = CreateToolReturning([allDay, timed]);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, new DateTime(2026, 9, 22), new DateTime(2026, 9, 23), "acc-1");
+        var events = JsonDocument.Parse(result).RootElement.GetProperty("events");
+
+        Assert.AreEqual("evening", events[0].GetProperty("id").GetString());
+        Assert.AreEqual("all-day", events[1].GetProperty("id").GetString());
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_TimedEvent_HasNullDateFields()
+    {
+        var timed = TestData.CreateEvent(id: "ev1", accountId: "acc-1",
+            start: new DateTime(2026, 9, 23, 15, 0, 0, DateTimeKind.Utc),
+            end: new DateTime(2026, 9, 23, 16, 0, 0, DateTimeKind.Utc));
+        var tool = CreateToolReturning([timed]);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, new DateTime(2026, 9, 23), new DateTime(2026, 9, 23), "acc-1");
+        var evt = JsonDocument.Parse(result).RootElement.GetProperty("events")[0];
+
+        Assert.AreEqual(JsonValueKind.Null, evt.GetProperty("start_date").ValueKind);
+        Assert.AreEqual(JsonValueKind.Null, evt.GetProperty("end_date").ValueKind);
+        Assert.AreEqual("2026-09-23T15:00:00Z", evt.GetProperty("start_utc").GetString());
+        Assert.AreEqual("2026-09-23T10:00:00", evt.GetProperty("start_local").GetString());
+    }
 }

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
+using CalendarMcp.Core.Utilities;
 using Ical.Net;
 using Ical.Net.DataTypes;
 using Microsoft.Extensions.Logging;
@@ -168,8 +169,18 @@ public class IcsProviderService : IIcsProviderService
             else
             {
                 // Single event - check if it falls in range
-                var evtStart = evt.DtStart?.AsUtc ?? DateTime.MinValue;
-                var evtEnd = evt.DtEnd?.AsUtc ?? evtStart;
+                DateTime evtStart, evtEnd;
+                if (evt.IsAllDay)
+                {
+                    var (allDayStart, allDayEnd) = GetAllDayDates(evt, null);
+                    evtStart = allDayStart.ToDateTime(TimeOnly.MinValue);
+                    evtEnd = allDayEnd.ToDateTime(TimeOnly.MinValue);
+                }
+                else
+                {
+                    evtStart = evt.DtStart?.AsUtc ?? DateTime.MinValue;
+                    evtEnd = evt.DtEnd?.AsUtc ?? evtStart;
+                }
 
                 if (evtStart < end && evtEnd > start)
                 {
@@ -361,12 +372,44 @@ public class IcsProviderService : IIcsProviderService
 
     #region ICS-to-CalendarEvent Mapping
 
+    /// <summary>
+    /// Returns the floating start date and exclusive end date of an all-day event (or one of its
+    /// occurrences). A missing DTEND means a one-day event (RFC 5545 §3.6.1).
+    /// </summary>
+    private static (DateOnly Start, DateOnly End) GetAllDayDates(IcsCalendarEvent icsEvent, Occurrence? occurrence)
+    {
+        var baseStart = icsEvent.DtStart != null ? DateOnly.FromDateTime(icsEvent.DtStart.Value) : DateOnly.MinValue;
+        var lengthDays = icsEvent.DtEnd != null
+            ? Math.Max(1, DateOnly.FromDateTime(icsEvent.DtEnd.Value).DayNumber - baseStart.DayNumber)
+            : 1;
+
+        if (occurrence == null)
+            return (baseStart, baseStart.AddDays(lengthDays));
+
+        var start = DateOnly.FromDateTime(occurrence.Period.StartTime.Value);
+        var end = occurrence.Period.EndTime != null
+            ? DateOnly.FromDateTime(occurrence.Period.EndTime.Value)
+            : start.AddDays(lengthDays);
+        return (start, end > start ? end : start.AddDays(lengthDays));
+    }
+
     private CalendarEvent? MapToCalendarEvent(
         IcsCalendarEvent icsEvent, string accountId, Occurrence? occurrence = null)
     {
         DateTimeOffset evtStart, evtEnd;
+        DateOnly? startDate = null, endDate = null;
 
-        if (occurrence != null)
+        if (icsEvent.IsAllDay)
+        {
+            // All-day (VALUE=DATE) events are floating dates: keep the date as written rather
+            // than anchoring it to an instant, which would shift it in zones behind UTC.
+            var (s, e) = GetAllDayDates(icsEvent, occurrence);
+            startDate = s;
+            endDate = e;
+            evtStart = TimeZoneHelper.UtcMidnight(s);
+            evtEnd = TimeZoneHelper.UtcMidnight(e);
+        }
+        else if (occurrence != null)
         {
             evtStart = new DateTimeOffset(occurrence.Period.StartTime.AsUtc, TimeSpan.Zero);
             var occEnd = occurrence.Period.EndTime?.AsUtc
@@ -487,6 +530,8 @@ public class IcsProviderService : IIcsProviderService
             Subject = icsEvent.Summary ?? string.Empty,
             Start = evtStart,
             End = evtEnd,
+            StartDate = startDate,
+            EndDate = endDate,
             Location = icsEvent.Location ?? string.Empty,
             Body = icsEvent.Description ?? string.Empty,
             BodyFormat = "text",

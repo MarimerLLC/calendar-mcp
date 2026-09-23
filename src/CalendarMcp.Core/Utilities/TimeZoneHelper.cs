@@ -1,3 +1,6 @@
+using System.Globalization;
+using CalendarMcp.Core.Models;
+
 namespace CalendarMcp.Core.Utilities;
 
 /// <summary>
@@ -36,6 +39,68 @@ public static class TimeZoneHelper
         var localTime = TimeZoneInfo.ConvertTime(dto, timeZone);
         return localTime.DateTime.ToString("yyyy-MM-ddTHH:mm:ss");
     }
+
+    /// <summary>
+    /// Formats a floating date (all-day event boundary) as ISO 8601 (yyyy-MM-dd).
+    /// </summary>
+    public static string? ToDateString(DateOnly? date) =>
+        date?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Returns local midnight on <paramref name="date"/> in <paramref name="timeZone"/> as an instant.
+    /// If midnight does not exist (a DST gap at 00:00), advances to the first valid local time.
+    /// If midnight is ambiguous, uses the standard-time offset.
+    /// </summary>
+    public static DateTimeOffset LocalMidnight(DateOnly date, TimeZoneInfo timeZone)
+    {
+        var local = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        while (timeZone.IsInvalidTime(local))
+            local = local.AddMinutes(1);
+
+        return new DateTimeOffset(local, timeZone.GetUtcOffset(local));
+    }
+
+    /// <summary>
+    /// Returns the start/end instants to present for an event in <paramref name="timeZone"/>.
+    /// All-day events are floating dates, so they span local midnight to local midnight in the
+    /// requested zone; timed events are returned unchanged.
+    /// </summary>
+    public static (DateTimeOffset Start, DateTimeOffset End) GetEffectiveRange(CalendarEvent evt, TimeZoneInfo timeZone)
+    {
+        if (evt.IsAllDay && evt.StartDate is { } startDate)
+        {
+            var endDate = evt.EndDate ?? startDate.AddDays(1);
+            return (LocalMidnight(startDate, timeZone), LocalMidnight(endDate, timeZone));
+        }
+
+        return (evt.Start, evt.End);
+    }
+
+    /// <summary>
+    /// Extracts the calendar date from a date or date-time string exactly as written, ignoring
+    /// any time or offset (e.g. "2026-09-23", "2026-09-23T00:00:00.0000000", "2026-09-23T00:00:00Z").
+    /// Used for all-day events, whose date must not shift with the host or source time zone.
+    /// </summary>
+    public static DateOnly? ParseFloatingDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        var text = value.Trim();
+        if (text.Length > 10)
+            text = text[..10];
+
+        return DateOnly.TryParseExact(text, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : null;
+    }
+
+    /// <summary>
+    /// UTC midnight of a floating date — the host-independent instant stored in
+    /// <see cref="CalendarEvent.Start"/>/<see cref="CalendarEvent.End"/> for all-day events.
+    /// </summary>
+    public static DateTimeOffset UtcMidnight(DateOnly date) =>
+        new(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
 
     /// <summary>
     /// Tries to find a TimeZoneInfo by IANA timezone ID. Returns null if invalid.

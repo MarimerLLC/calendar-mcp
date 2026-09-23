@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
+using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
 
 namespace CalendarMcp.Core.Providers;
@@ -284,16 +285,13 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
             if (cancellationToken.IsCancellationRequested)
                 break;
 
-            var evtStart = ParseDateTime(entry.StartWithTimeZone, entry.Start);
-            var evtEnd = ParseDateTime(entry.EndWithTimeZone, entry.End);
-
-            if (evtStart == null || evtEnd == null)
+            if (ResolveEventTimes(entry) is not { } times)
                 continue;
 
             // Filter by date range
-            if (evtStart.Value < new DateTimeOffset(end, TimeSpan.Zero) && evtEnd.Value > new DateTimeOffset(start, TimeSpan.Zero))
+            if (times.Start < new DateTimeOffset(end, TimeSpan.Zero) && times.End > new DateTimeOffset(start, TimeSpan.Zero))
             {
-                events.Add(MapToCalendarEvent(entry, accountId, evtStart.Value, evtEnd.Value));
+                events.Add(MapToCalendarEvent(entry, accountId, times));
             }
         }
 
@@ -312,13 +310,10 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         if (entry == null)
             return null;
 
-        var evtStart = ParseDateTime(entry.StartWithTimeZone, entry.Start);
-        var evtEnd = ParseDateTime(entry.EndWithTimeZone, entry.End);
-
-        if (evtStart == null || evtEnd == null)
+        if (ResolveEventTimes(entry) is not { } times)
             return null;
 
-        return MapToCalendarEvent(entry, accountId, evtStart.Value, evtEnd.Value);
+        return MapToCalendarEvent(entry, accountId, times);
     }
 
     #endregion
@@ -679,8 +674,38 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
     #region JSON-to-CalendarEvent Mapping
 
+    /// <summary>
+    /// Resolves an entry's start/end. All-day entries are floating dates: the date is taken as
+    /// written (no host or source offset applied) and anchored to UTC midnight. Returns null when
+    /// the entry's times can't be parsed.
+    /// </summary>
+    internal static EventTimes? ResolveEventTimes(JsonCalendarEntry entry)
+    {
+        if (entry.IsAllDay == true
+            && TimeZoneHelper.ParseFloatingDate(FirstNonEmpty(entry.Start, entry.StartWithTimeZone)) is { } startDate)
+        {
+            var endDate = TimeZoneHelper.ParseFloatingDate(FirstNonEmpty(entry.End, entry.EndWithTimeZone)) is { } d && d > startDate
+                ? d
+                : startDate.AddDays(1);
+            return new EventTimes(TimeZoneHelper.UtcMidnight(startDate), TimeZoneHelper.UtcMidnight(endDate), startDate, endDate);
+        }
+
+        var evtStart = ParseDateTime(entry.StartWithTimeZone, entry.Start);
+        var evtEnd = ParseDateTime(entry.EndWithTimeZone, entry.End);
+
+        if (evtStart == null || evtEnd == null)
+            return null;
+
+        return new EventTimes(evtStart.Value, evtEnd.Value, null, null);
+    }
+
+    internal readonly record struct EventTimes(DateTimeOffset Start, DateTimeOffset End, DateOnly? StartDate, DateOnly? EndDate);
+
+    private static string? FirstNonEmpty(string? first, string? second) =>
+        !string.IsNullOrEmpty(first) ? first : second;
+
     private CalendarEvent MapToCalendarEvent(
-        JsonCalendarEntry entry, string accountId, DateTimeOffset start, DateTimeOffset end)
+        JsonCalendarEntry entry, string accountId, EventTimes times)
     {
         // Parse attendees from semicolon/comma-separated strings
         var requiredAttendees = ParseAttendeeString(entry.RequiredAttendees);
@@ -792,8 +817,10 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
             AccountId = accountId,
             CalendarId = DefaultCalendarId,
             Subject = entry.Subject ?? string.Empty,
-            Start = start,
-            End = end,
+            Start = times.Start,
+            End = times.End,
+            StartDate = times.StartDate,
+            EndDate = times.EndDate,
             Location = entry.Location ?? string.Empty,
             Body = entry.Body ?? string.Empty,
             BodyFormat = bodyFormat,

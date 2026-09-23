@@ -1,5 +1,6 @@
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Services;
+using CalendarMcp.Core.Utilities;
 using Google.Apis.Auth.OAuth2;
 using Google.Apis.Auth.OAuth2.Responses;
 using Google.Apis.Calendar.v3;
@@ -720,6 +721,8 @@ public class GoogleProviderService : IGoogleProviderService
                 Subject = evt.Summary ?? string.Empty,
                 Start = GetEventDateTime(evt.Start),
                 End = GetEventDateTime(evt.End),
+                StartDate = TimeZoneHelper.ParseFloatingDate(evt.Start?.Date),
+                EndDate = TimeZoneHelper.ParseFloatingDate(evt.End?.Date),
                 Location = evt.Location ?? string.Empty,
                 Body = evt.Description ?? string.Empty,
                 Organizer = evt.Organizer?.Email ?? string.Empty,
@@ -769,6 +772,8 @@ public class GoogleProviderService : IGoogleProviderService
                 Subject = evt.Summary ?? string.Empty,
                 Start = GetEventDateTime(evt.Start),
                 End = GetEventDateTime(evt.End),
+                StartDate = TimeZoneHelper.ParseFloatingDate(evt.Start?.Date),
+                EndDate = TimeZoneHelper.ParseFloatingDate(evt.End?.Date),
                 Location = evt.Location ?? string.Empty,
                 Body = evt.Description ?? string.Empty,
                 BodyFormat = "text",
@@ -1571,7 +1576,7 @@ public class GoogleProviderService : IGoogleProviderService
         return Encoding.UTF8.GetString(bytes);
     }
 
-    private static DateTimeOffset GetEventDateTime(EventDateTime? eventDateTime)
+    internal static DateTimeOffset GetEventDateTime(EventDateTime? eventDateTime)
     {
         if (eventDateTime == null)
             return DateTimeOffset.MinValue;
@@ -1579,8 +1584,10 @@ public class GoogleProviderService : IGoogleProviderService
         if (eventDateTime.DateTimeDateTimeOffset.HasValue)
             return eventDateTime.DateTimeDateTimeOffset.Value;
 
-        if (!string.IsNullOrEmpty(eventDateTime.Date))
-            return DateTimeOffset.Parse(eventDateTime.Date);
+        // All-day events carry a floating date ("yyyy-MM-dd"); anchor it to UTC midnight so the
+        // result doesn't depend on the host's time zone. Callers use StartDate/EndDate for display.
+        if (TimeZoneHelper.ParseFloatingDate(eventDateTime.Date) is { } date)
+            return TimeZoneHelper.UtcMidnight(date);
 
         return DateTimeOffset.MinValue;
     }
