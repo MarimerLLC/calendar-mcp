@@ -65,8 +65,8 @@ public sealed class BulkMoveEmailsTool(
                     }
 
                     var provider = providerFactory.GetProvider(account.Provider);
-                    await provider.MoveEmailAsync(item.AccountId, item.EmailId, destination, CancellationToken.None);
-                    return new BulkResultItem(item.EmailId, item.AccountId, true, null);
+                    var newEmailId = await provider.MoveEmailAsync(item.AccountId, item.EmailId, destination, CancellationToken.None);
+                    return new BulkResultItem(item.EmailId, item.AccountId, true, null, newEmailId);
                 }
                 catch (Exception ex)
                 {
@@ -91,9 +91,7 @@ public sealed class BulkMoveEmailsTool(
                 succeeded,
                 failed,
                 destination,
-                results = results.Select(r => r.Success
-                    ? new { r.EmailId, r.AccountId, r.Success, error = (string?)null }
-                    : new { r.EmailId, r.AccountId, r.Success, error = r.Error })
+                results = results.Select(r => new { r.EmailId, r.AccountId, r.Success, r.NewEmailId, error = r.Error })
             }, new JsonSerializerOptions { WriteIndented = true });
         }
         catch (Exception ex) when (ex is not McpException)
@@ -115,5 +113,7 @@ public sealed class BulkMoveEmailsTool(
         return result;
     }
 
-    private sealed record BulkResultItem(string EmailId, string AccountId, bool Success, string? Error);
+    /// <param name="NewEmailId">The message's ID after the move (null when unknown or on failure).</param>
+    private sealed record BulkResultItem(
+        string EmailId, string AccountId, bool Success, string? Error, string? NewEmailId = null);
 }

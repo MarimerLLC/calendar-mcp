@@ -35,12 +35,15 @@ public sealed class MoveEmailTool(
         try
         {
             var provider = providerFactory.GetProvider(account.Provider);
-            await provider.MoveEmailAsync(accountId, emailId, destination, CancellationToken.None);
+            var newEmailId = await provider.MoveEmailAsync(accountId, emailId, destination, CancellationToken.None);
 
             var response = new
             {
                 success = true,
                 emailId = emailId,
+                // Microsoft and IMAP assign a new ID in the destination folder; use this one
+                // for follow-up calls. Null when the provider can't report it.
+                newEmailId = newEmailId,
                 accountId = accountId,
                 destination = destination,
                 message = $"Email '{emailId}' moved to '{destination}' in account '{accountId}'"

@@ -256,13 +256,13 @@ public class IcsProviderService : IIcsProviderService
     #region Email Operations (Not Supported)
 
     public Task<IEnumerable<EmailMessage>> GetEmailsAsync(
-        string accountId, int count = 20, bool unreadOnly = false,
+        string accountId, int count = 20, bool unreadOnly = false, string? folder = null,
         CancellationToken cancellationToken = default)
         => Task.FromResult(Enumerable.Empty<EmailMessage>());
 
     public Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
         string accountId, string query, int count = 20,
-        DateTime? fromDate = null, DateTime? toDate = null,
+        DateTime? fromDate = null, DateTime? toDate = null, string? folder = null,
         CancellationToken cancellationToken = default)
         => Task.FromResult(Enumerable.Empty<EmailMessage>());
 
@@ -295,7 +295,7 @@ public class IcsProviderService : IIcsProviderService
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider does not support marking emails as read.");
 
-    public Task MoveEmailAsync(
+    public Task<string?> MoveEmailAsync(
         string accountId, string emailId, string destinationFolder,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider does not support moving emails.");

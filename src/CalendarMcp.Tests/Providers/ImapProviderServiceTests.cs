@@ -1,4 +1,5 @@
 using CalendarMcp.Core.Providers;
+using CalendarMcp.Core.Services;
 
 namespace CalendarMcp.Tests.Providers;
 
@@ -45,7 +46,9 @@ public class ImapProviderServiceTests
     [DataRow("INBOX/1234/notanumber")]
     public void ParseEmailId_RejectsInvalidFormats(string bad)
     {
-        Assert.ThrowsException<FormatException>(() => ImapProviderService.ParseEmailId(bad));
+        // Client-safe type, so the tool error tells the caller what a valid ID looks like.
+        var ex = Assert.ThrowsException<ProviderOperationException>(() => ImapProviderService.ParseEmailId(bad));
+        StringAssert.Contains(ex.Message, "is not in IMAP format");
     }
 
     [TestMethod]

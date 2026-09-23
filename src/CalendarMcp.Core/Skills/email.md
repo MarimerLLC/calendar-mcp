@@ -25,18 +25,27 @@ must come along — both are required.
 
 ## Tool reference
 
-### `get_emails(accountId?, count=20, unreadOnly=false)`
+### `get_emails(accountId?, count=20, unreadOnly=false, folder?)`
 
 Recent emails, newest first. Omit `accountId` to fan out across all
 accounts. Returns `id, accountId, subject, from, receivedDateTime, isRead, hasAttachments`.
 
-### `search_emails(query, accountId?, count=20, fromDate?, toDate?)`
+### `search_emails(query, accountId?, count=20, fromDate?, toDate?, folder?)`
 
 Full-text search across subject and body. Date filters are ISO-8601
 (`2026-02-01`). Fans out across all accounts when `accountId` is
 omitted. Same return shape as `get_emails`. On Microsoft accounts the
-search covers every folder (Sent Items, Deleted Items, …), not just the
-inbox — see the duplicate-copies pitfall below.
+default search spans the mailbox (Sent Items and other folders), not just
+the inbox — see the duplicate-copies pitfall below — but it does not
+return messages in Deleted Items.
+
+`folder` (both tools) reads a specific folder instead of the default view.
+It takes the same values as `move_email`'s `destination`: `inbox`, `archive`,
+`trash`, `spam`, `drafts`, `sentitems`, or a provider folder ID / label ID /
+folder name. The default view is the inbox on Microsoft and IMAP, and all
+mail except spam and trash on Gmail. Default searches **don't cover Deleted
+Items / Trash or Spam** (and IMAP searches only the inbox), so pass `folder`
+to find a message there — e.g. after moving it.
 
 ### `get_email_details(accountId, emailId)`
 
@@ -78,12 +87,19 @@ Pass `isRead=false` to mark unread.
 `deleteditems`→`trash`, `junkemail`→`spam`. The aliases work the same on
 every provider.
 
+The response includes `newEmailId`: the message's ID in its new folder.
+**Microsoft and IMAP assign a new ID on every move**, so the old `emailId` stops
+working; use `newEmailId` for any follow-up call (Gmail keeps the same ID).
+It's `null` when the provider can't report it (IMAP servers without UIDPLUS);
+then find the message with `get_emails`/`search_emails` and `folder`.
+
 ### Bulk operations
 
 `bulk_delete_emails(items[])`, `bulk_mark_emails_as_read(items[])`,
 `bulk_move_emails(items[], destination)` all take an array of
 `{accountId, emailId}` items (max 50). Each item succeeds or fails
-independently; the response contains per-item `success`/`error`.
+independently; the response contains per-item `success`/`error`
+(`bulk_move_emails` items also carry `NewEmailId`).
 **Use these for any operation touching more than 3 emails** —
 materially faster than serial calls and rate-limit friendly.
 
@@ -187,7 +203,7 @@ search_emails(query="unsubscribe", count=50)
 - **Threading**: there is no thread-aware tool. To handle a reply
   thread, you operate on individual messages.
 - **Duplicate copies in search results**: `search_emails` on Microsoft
-  accounts searches all folders, so a self-addressed message (or anything
+  accounts searches across the mailbox, so a self-addressed message (or anything
   you sent to a list you're on) comes back twice — the Sent Items copy and
   the inbox copy — with the same subject but different `id`s. Results carry
   no folder field; the sent copy's `from` is your own address. When moving

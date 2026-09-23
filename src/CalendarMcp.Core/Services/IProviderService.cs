@@ -8,10 +8,16 @@ namespace CalendarMcp.Core.Services;
 public interface IProviderService
 {
     // Email operations
+    /// <param name="folder">
+    /// Folder to list: an alias (<c>inbox</c>, <c>archive</c>, <c>trash</c>, <c>spam</c>,
+    /// <c>drafts</c>, <c>sentitems</c>) or a provider folder ID / label ID / folder name.
+    /// <c>null</c> keeps the provider's default view.
+    /// </param>
     Task<IEnumerable<EmailMessage>> GetEmailsAsync(
         string accountId, 
         int count = 20, 
         bool unreadOnly = false,
+        string? folder = null,
         CancellationToken cancellationToken = default);
     
     Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
@@ -20,6 +26,7 @@ public interface IProviderService
         int count = 20,
         DateTime? fromDate = null,
         DateTime? toDate = null,
+        string? folder = null,
         CancellationToken cancellationToken = default);
     
     Task<EmailMessage?> GetEmailDetailsAsync(
@@ -63,7 +70,11 @@ public interface IProviderService
         bool isRead,
         CancellationToken cancellationToken = default);
 
-    Task MoveEmailAsync(
+    /// <returns>
+    /// The message's ID after the move (IDs change on Microsoft Graph and IMAP), or
+    /// <c>null</c> when the provider can't report it.
+    /// </returns>
+    Task<string?> MoveEmailAsync(
         string accountId,
         string emailId,
         string destinationFolder,

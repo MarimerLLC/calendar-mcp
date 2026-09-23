@@ -50,7 +50,7 @@ public class BulkMoveEmailsToolTests
 
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.MoveEmailAsync("acc-1", "e1", "archive", Arg.Any<CancellationToken>())
-            .ReturnValue(Task.CompletedTask);
+            .ReturnValue(Task.FromResult<string?>("moved-id"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
         factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
@@ -63,6 +63,7 @@ public class BulkMoveEmailsToolTests
 
         Assert.AreEqual(1, doc.RootElement.GetProperty("succeeded").GetInt32());
         Assert.AreEqual("archive", doc.RootElement.GetProperty("destination").GetString());
+        Assert.AreEqual("moved-id", doc.RootElement.GetProperty("results")[0].GetProperty("NewEmailId").GetString());
 
         regExp.Verify();
         factExp.Verify();

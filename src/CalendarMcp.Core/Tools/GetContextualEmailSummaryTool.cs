@@ -129,12 +129,12 @@ public sealed partial class GetContextualEmailSummaryTool(
                 {
                     var query = string.Join(" OR ", searchKeywords);
                     return await provider.SearchEmailsAsync(
-                        account.Id, query, countPerAccount, null, null, CancellationToken.None);
+                        account.Id, query, countPerAccount, null, null, cancellationToken: CancellationToken.None);
                 }
                 else
                 {
                     return await provider.GetEmailsAsync(
-                        account.Id, countPerAccount, unreadOnly, CancellationToken.None);
+                        account.Id, countPerAccount, unreadOnly, cancellationToken: CancellationToken.None);
                 }
             }
             catch (Exception ex)

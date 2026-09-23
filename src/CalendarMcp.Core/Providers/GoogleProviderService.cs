@@ -10,6 +10,7 @@ using Google.Apis.Gmail.v1.Data;
 using Google.Apis.PeopleService.v1;
 using Google.Apis.PeopleService.v1.Data;
 using Google.Apis.Services;
+using Google.Apis.Util;
 using Google.Apis.Util.Store;
 using Microsoft.Extensions.Logging;
 using MimeKit;
@@ -147,10 +148,29 @@ public class GoogleProviderService : IGoogleProviderService
         });
     }
 
+    /// <summary>
+    /// Narrows a Gmail message list to one folder (alias or label ID). Without a folder the
+    /// list keeps Gmail's default view: all mail except spam and trash.
+    /// </summary>
+    private static void ApplyFolder(UsersResource.MessagesResource.ListRequest request, string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+            return;
+
+        var filter = MailFolderAliases.ToGmailListFilter(folder);
+        if (filter.LabelId is not null)
+            request.LabelIds = new Repeatable<string>([filter.LabelId]);
+        if (filter.IncludeSpamTrash)
+            request.IncludeSpamTrash = true;
+        if (filter.Query is not null)
+            request.Q = string.IsNullOrEmpty(request.Q) ? filter.Query : $"{request.Q} {filter.Query}";
+    }
+
     public async Task<IEnumerable<EmailMessage>> GetEmailsAsync(
         string accountId, 
         int count = 20, 
         bool unreadOnly = false, 
+        string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -162,6 +182,7 @@ public class GoogleProviderService : IGoogleProviderService
             var request = service.Users.Messages.List("me");
             request.MaxResults = count;
             request.Q = unreadOnly ? "is:unread" : null;
+            ApplyFolder(request, folder);
             
             var response = await request.ExecuteAsync(cancellationToken);
 
@@ -194,6 +215,7 @@ public class GoogleProviderService : IGoogleProviderService
         int count = 20, 
         DateTime? fromDate = null, 
         DateTime? toDate = null, 
+        string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -216,6 +238,7 @@ public class GoogleProviderService : IGoogleProviderService
             var request = service.Users.Messages.List("me");
             request.MaxResults = count;
             request.Q = searchQuery;
+            ApplyFolder(request, folder);
             
             var response = await request.ExecuteAsync(cancellationToken);
 
@@ -569,7 +592,7 @@ public class GoogleProviderService : IGoogleProviderService
         }
     }
 
-    public async Task MoveEmailAsync(
+    public async Task<string?> MoveEmailAsync(
         string accountId,
         string emailId,
         string destinationFolder,
@@ -620,6 +643,9 @@ public class GoogleProviderService : IGoogleProviderService
 
             _logger.LogInformation("Moved email {EmailId} to folder/label '{Folder}' for Google account {AccountId}", 
                 emailId, destinationFolder, accountId);
+
+            // Gmail moves by relabeling, so the message keeps its ID.
+            return emailId;
         }
         catch (Google.GoogleApiException gex) when (gex.Message.Contains("Label") || gex.Message.Contains("label"))
         {

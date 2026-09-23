@@ -39,7 +39,7 @@ public class GetContextualEmailSummaryToolTests
             .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([account]));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>([]));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -81,7 +81,7 @@ public class GetContextualEmailSummaryToolTests
             .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([account]));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -122,11 +122,11 @@ public class GetContextualEmailSummaryToolTests
             .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([okAccount, staleAccount]));
 
         var okProvExp = new IProviderServiceCreateExpectations();
-        okProvExp.Setups.GetEmailsAsync("acc-ok", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        okProvExp.Setups.GetEmailsAsync("acc-ok", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails));
 
         var staleProvExp = new IProviderServiceCreateExpectations();
-        staleProvExp.Setups.GetEmailsAsync("acc-stale", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        staleProvExp.Setups.GetEmailsAsync("acc-stale", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromException<IEnumerable<EmailMessage>>(new AccountAuthenticationRequiredException("acc-stale")));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -156,7 +156,7 @@ public class GetContextualEmailSummaryToolTests
             .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([account]));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromException<IEnumerable<EmailMessage>>(new AccountAuthenticationRequiredException("acc-1")));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();

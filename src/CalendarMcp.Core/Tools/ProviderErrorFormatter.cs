@@ -121,6 +121,10 @@ internal static partial class ProviderErrorFormatter
             case FolderNotFoundException folder:
                 return new($"Folder '{Sanitize(folder.FolderName)}' was not found.", false);
 
+            case MessageNotFoundException:
+                return new("The message was not found. It may have been moved or deleted; re-list " +
+                           "the folder to get current IDs.", false);
+
             case HttpRequestException { StatusCode: { } httpStatus }:
                 return new($"The provider returned HTTP {(int)httpStatus}.", IsRetryableStatus((int)httpStatus));
 

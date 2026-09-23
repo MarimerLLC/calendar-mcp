@@ -73,6 +73,7 @@ public class OutlookComProviderService : IOutlookComProviderService
         string accountId, 
         int count = 20, 
         bool unreadOnly = false, 
+        string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
@@ -82,7 +83,7 @@ public class OutlookComProviderService : IOutlookComProviderService
             var authProvider = new BearerTokenAuthenticationProvider(token);
             var graphClient = new GraphServiceClient(authProvider);
 
-            var messages = await graphClient.Me.MailFolders["inbox"].Messages.GetAsync(config =>
+            var messages = await graphClient.Me.MailFolders[MailFolderAliases.ToGraphDestinationId(folder ?? "inbox")].Messages.GetAsync(config =>
             {
                 config.QueryParameters.Top = count;
                 config.QueryParameters.Orderby = ["receivedDateTime desc"];
@@ -133,6 +134,7 @@ public class OutlookComProviderService : IOutlookComProviderService
         int count = 20, 
         DateTime? fromDate = null, 
         DateTime? toDate = null, 
+        string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
@@ -148,13 +150,27 @@ public class OutlookComProviderService : IOutlookComProviderService
             _logger.LogDebug("Searching Outlook.com emails with query: {Query}, fromDate: {FromDate}, toDate: {ToDate}", 
                 query, fromDate, toDate);
 
-            var messages = await graphClient.Me.Messages.GetAsync(config =>
-            {
-                // $orderby is not supported with $search — sort client-side instead
-                config.QueryParameters.Top = (fromDate.HasValue || toDate.HasValue) ? count * 3 : count;
-                config.QueryParameters.Select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "bodyPreview"];
-                config.QueryParameters.Search = GraphSearchQueryBuilder.Build(query);
-            }, cancellationToken);
+            // $orderby is not supported with $search — sort client-side instead. Request more
+            // results when dates are filtered client-side.
+            var top = (fromDate.HasValue || toDate.HasValue) ? count * 3 : count;
+            string[] select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "bodyPreview"];
+            var search = GraphSearchQueryBuilder.Build(query);
+
+            // Without a folder, search the whole mailbox. Mailbox-wide $search doesn't return
+            // messages in Deleted Items, so pass a folder (e.g. "trash") to search there.
+            var messages = folder is null
+                ? await graphClient.Me.Messages.GetAsync(config =>
+                {
+                    config.QueryParameters.Top = top;
+                    config.QueryParameters.Select = select;
+                    config.QueryParameters.Search = search;
+                }, cancellationToken)
+                : await graphClient.Me.MailFolders[MailFolderAliases.ToGraphDestinationId(folder)].Messages.GetAsync(config =>
+                {
+                    config.QueryParameters.Top = top;
+                    config.QueryParameters.Select = select;
+                    config.QueryParameters.Search = search;
+                }, cancellationToken);
 
             var result = new List<EmailMessage>();
             if (messages?.Value != null)
@@ -481,7 +497,7 @@ public class OutlookComProviderService : IOutlookComProviderService
         }
     }
 
-    public async Task MoveEmailAsync(
+    public async Task<string?> MoveEmailAsync(
         string accountId,
         string emailId,
         string destinationFolder,
@@ -499,13 +515,16 @@ public class OutlookComProviderService : IOutlookComProviderService
             // Aliases such as "trash"/"spam" are mapped to Graph's well-known folder names
             // ("deleteditems"/"junkemail"); anything else is treated as a folder ID.
             var destinationId = MailFolderAliases.ToGraphDestinationId(destinationFolder);
-            await graphClient.Me.Messages[emailId].Move.PostAsync(new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
+            var moved = await graphClient.Me.Messages[emailId].Move.PostAsync(new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
             {
                 DestinationId = destinationId
             }, cancellationToken: cancellationToken);
             
             _logger.LogInformation("Moved email {EmailId} to folder '{Folder}' for Outlook.com account {AccountId}", 
                 emailId, destinationId, accountId);
+
+            // Graph gives the message a new ID in its new folder.
+            return moved?.Id;
         }
         catch (Exception ex)
         {

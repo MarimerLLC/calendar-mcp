@@ -54,7 +54,7 @@ public class PermissionEnforcementTests
             .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([allowed, denied]));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.GetEmailsAsync("acc-allowed", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provExp.Setups.GetEmailsAsync("acc-allowed", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(
                 [TestData.CreateEmail(id: "e1", accountId: "acc-allowed")]));
 
