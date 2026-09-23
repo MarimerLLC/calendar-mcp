@@ -117,6 +117,17 @@ public class ProviderErrorFormatterTests
     }
 
     [TestMethod]
+    public void MessageNotFound_SaysToRelist()
+    {
+        var summary = ProviderErrorFormatter.Describe(
+            new MessageNotFoundException("The IMAP server did not return the requested message."));
+
+        StringAssert.Contains(summary!.Message, "message was not found");
+        StringAssert.Contains(summary.Message, "re-list");
+        Assert.IsFalse(summary.Retryable);
+    }
+
+    [TestMethod]
     public void ProviderOperationException_PassesMessageThrough()
     {
         var summary = ProviderErrorFormatter.Describe(

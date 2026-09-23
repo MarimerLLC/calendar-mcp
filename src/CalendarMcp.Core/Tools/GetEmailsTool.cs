@@ -21,10 +21,11 @@ public sealed class GetEmailsTool(
     public async Task<string> GetEmails(
         [Description("Account ID to query, or omit for all accounts. Obtain from list_accounts.")] string? accountId = null,
         [Description("Maximum number of emails to return per account (default 20)")] int count = 20,
-        [Description("If true, only return unread emails")] bool unreadOnly = false)
+        [Description("If true, only return unread emails")] bool unreadOnly = false,
+        [Description("Folder to read instead of the default view: 'inbox', 'archive', 'trash', 'spam', 'drafts', 'sentitems' (aliases 'deleteditems'='trash', 'junkemail'='spam'), or a folder ID (Microsoft), label ID (Google) or folder name (IMAP). Use this to find a message after move_email.")] string? folder = null)
     {
-        logger.LogInformation("Getting emails: accountId={AccountId}, count={Count}, unreadOnly={UnreadOnly}",
-            accountId, count, unreadOnly);
+        logger.LogInformation("Getting emails: accountId={AccountId}, count={Count}, unreadOnly={UnreadOnly}, folder={Folder}",
+            accountId, count, unreadOnly, folder);
 
         // Determine which accounts to query
         List<AccountInfo> validAccounts;
@@ -61,7 +62,7 @@ public sealed class GetEmailsTool(
                 try
                 {
                     var provider = providerFactory.GetProvider(account!.Provider);
-                    var emails = await provider.GetEmailsAsync(account.Id, count, unreadOnly, CancellationToken.None);
+                    var emails = await provider.GetEmailsAsync(account.Id, count, unreadOnly, folder, CancellationToken.None);
                     return emails;
                 }
                 catch (Exception ex)

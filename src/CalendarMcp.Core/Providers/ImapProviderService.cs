@@ -89,19 +89,19 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
 
         var lastSlash = id.LastIndexOf('/');
         if (lastSlash <= 0)
-            throw new FormatException(
+            throw new ProviderOperationException(
                 $"Email ID '{id}' is not in IMAP format. Expected '<folder>/<uidvalidity>/<uid>'.");
 
         var secondLastSlash = id.LastIndexOf('/', lastSlash - 1);
         if (secondLastSlash <= 0)
-            throw new FormatException(
+            throw new ProviderOperationException(
                 $"Email ID '{id}' is not in IMAP format. Expected '<folder>/<uidvalidity>/<uid>'.");
 
         var folder = id[..secondLastSlash];
         if (!uint.TryParse(id[(secondLastSlash + 1)..lastSlash], out var uidValidity) ||
             !uint.TryParse(id[(lastSlash + 1)..], out var uid))
         {
-            throw new FormatException(
+            throw new ProviderOperationException(
                 $"Email ID '{id}' is not in IMAP format. UID validity and UID must be unsigned integers.");
         }
 
@@ -317,12 +317,14 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
     // ── Email operations ─────────────────────────────────────────────
 
     public async Task<IEnumerable<EmailMessage>> GetEmailsAsync(
-        string accountId, int count = 20, bool unreadOnly = false, CancellationToken cancellationToken = default)
+        string accountId, int count = 20, bool unreadOnly = false, string? folder = null,
+        CancellationToken cancellationToken = default)
     {
         var cfg = await ResolveConfigAsync(accountId);
+        var requestedFolder = folder;
         return await WithImapAsync<IEnumerable<EmailMessage>>(cfg, async client =>
         {
-            var folder = await OpenFolderAsync(client, cfg.InboxFolder, FolderAccess.ReadOnly, cancellationToken);
+            var (folder, folderName) = await OpenListFolderAsync(client, cfg, requestedFolder, cancellationToken);
 
             IList<UniqueId> uids;
             if (unreadOnly)
@@ -342,20 +344,21 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
 
             return summaries
                 .OrderByDescending(s => s.InternalDate ?? s.Date)
-                .Select(s => SummaryToEmail(s, cfg.InboxFolder, folder.UidValidity, accountId))
+                .Select(s => SummaryToEmail(s, folderName, folder.UidValidity, accountId))
                 .ToList();
         }, cancellationToken);
     }
 
     public async Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
         string accountId, string query, int count = 20,
-        DateTime? fromDate = null, DateTime? toDate = null,
+        DateTime? fromDate = null, DateTime? toDate = null, string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var cfg = await ResolveConfigAsync(accountId);
+        var requestedFolder = folder;
         return await WithImapAsync<IEnumerable<EmailMessage>>(cfg, async client =>
         {
-            var folder = await OpenFolderAsync(client, cfg.InboxFolder, FolderAccess.ReadOnly, cancellationToken);
+            var (folder, folderName) = await OpenListFolderAsync(client, cfg, requestedFolder, cancellationToken);
 
             SearchQuery search = string.IsNullOrWhiteSpace(query)
                 ? SearchQuery.All
@@ -380,7 +383,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
 
             return summaries
                 .OrderByDescending(s => s.InternalDate ?? s.Date)
-                .Select(s => SummaryToEmail(s, cfg.InboxFolder, folder.UidValidity, accountId))
+                .Select(s => SummaryToEmail(s, folderName, folder.UidValidity, accountId))
                 .ToList();
         }, cancellationToken);
     }
@@ -575,7 +578,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
         }, cancellationToken);
     }
 
-    public async Task MoveEmailAsync(
+    public async Task<string?> MoveEmailAsync(
         string accountId, string emailId, string destinationFolder,
         CancellationToken cancellationToken = default)
     {
@@ -585,14 +588,35 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
         var (folderName, uidValidity, uid) = ParseEmailId(emailId);
         var cfg = await ResolveConfigAsync(accountId);
 
-        await WithImapAsync(cfg, async client =>
+        return await WithImapAsync<string?>(cfg, async client =>
         {
             var folder = await OpenFolderAsync(client, folderName, FolderAccess.ReadWrite, cancellationToken);
             EnsureUidValidity(folder, uidValidity, accountId, folderName);
 
-            var dest = await ResolveDestinationFolderAsync(client, cfg, destinationFolder, cancellationToken);
-            await folder.MoveToAsync(new[] { new UniqueId(uid) }, dest, cancellationToken);
+            var dest = await ResolveFolderAsync(client, cfg, destinationFolder, cancellationToken);
+            var moved = await folder.MoveToAsync(new UniqueId(uid), dest, cancellationToken);
+
+            // The new UID is only known when the server supports UIDPLUS (COPYUID).
+            return moved is { Validity: > 0 } newUid
+                ? FormatEmailId(dest.FullName, newUid.Validity, newUid.Id)
+                : null;
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Opens the folder to list or search: the configured inbox by default, otherwise an
+    /// alias or folder name resolved like a <c>move_email</c> destination. Returns the name
+    /// that email IDs from this folder must carry.
+    /// </summary>
+    private static async Task<(IMailFolder Folder, string Name)> OpenListFolderAsync(
+        ImapClient client, ImapAccountConfig cfg, string? folder, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+            return (await OpenFolderAsync(client, cfg.InboxFolder, FolderAccess.ReadOnly, ct), cfg.InboxFolder);
+
+        var resolved = await ResolveFolderAsync(client, cfg, folder, ct);
+        await resolved.OpenAsync(FolderAccess.ReadOnly, ct);
+        return (resolved, resolved.FullName);
     }
 
     /// <summary>
@@ -610,11 +634,11 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
         };
 
     /// <summary>
-    /// Resolves a <c>move_email</c> destination. Aliases (<c>trash</c>, <c>spam</c>, ...)
+    /// Resolves a folder alias or name (a <c>move_email</c> destination or a list/search folder). Aliases (<c>trash</c>, <c>spam</c>, ...)
     /// use the account's configured folders, then the server's SPECIAL-USE folders;
     /// anything else is a literal folder name.
     /// </summary>
-    private static async Task<IMailFolder> ResolveDestinationFolderAsync(
+    private static async Task<IMailFolder> ResolveFolderAsync(
         ImapClient client, ImapAccountConfig cfg, string destination, CancellationToken ct)
     {
         if (!MailFolderAliases.TryParse(destination, out var wellKnown))
@@ -636,7 +660,7 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
                 // The junk folder default is Gmail's; other hosts usually advertise \Junk.
                 return GetSpecialFolder(client, SpecialFolder.Junk)
                     ?? throw new ProviderOperationException(
-                        $"IMAP folder '{configured}' for destination '{destination}' was not found on account " +
+                        $"IMAP folder '{configured}' for '{destination}' was not found on account " +
                         $"'{cfg.AccountId}', and the server has no \\Junk folder. Set 'junkFolder' in the account's providerConfig.");
             }
         }
@@ -659,9 +683,9 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
         catch (FolderNotFoundException ex)
         {
             throw new ProviderOperationException(
-                $"Destination '{destination}' could not be resolved on IMAP account '{cfg.AccountId}': the server " +
+                $"Folder '{destination}' could not be resolved on IMAP account '{cfg.AccountId}': the server " +
                 $"advertises no matching SPECIAL-USE folder and has no folder named '{destination.Trim()}'. " +
-                "Pass the literal folder name as the destination instead.", ex);
+                "Pass the literal folder name instead.", ex);
         }
     }
 

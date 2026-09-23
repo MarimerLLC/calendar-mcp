@@ -23,7 +23,7 @@ public class GetEmailsToolTests
             .ReturnValue(Task.FromResult<AccountInfo?>(account));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -70,7 +70,7 @@ public class GetEmailsToolTests
             .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([acc1]));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -119,11 +119,11 @@ public class GetEmailsToolTests
             .ReturnValue(Task.FromResult<IEnumerable<AccountInfo>>([okAccount, staleAccount]));
 
         var okProvExp = new IProviderServiceCreateExpectations();
-        okProvExp.Setups.GetEmailsAsync("acc-ok", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        okProvExp.Setups.GetEmailsAsync("acc-ok", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails));
 
         var staleProvExp = new IProviderServiceCreateExpectations();
-        staleProvExp.Setups.GetEmailsAsync("acc-stale", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        staleProvExp.Setups.GetEmailsAsync("acc-stale", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromException<IEnumerable<EmailMessage>>(new AccountAuthenticationRequiredException("acc-stale")));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -158,7 +158,7 @@ public class GetEmailsToolTests
             .ReturnValue(Task.FromResult<AccountInfo?>(account));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>([]));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -189,7 +189,7 @@ public class GetEmailsToolTests
             .ReturnValue(Task.FromResult<AccountInfo?>(account));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>([graphEmail, gmailEmail]));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -219,4 +219,30 @@ public class GetEmailsToolTests
         From = email.From,
         ReceivedDateTime = received
     };
+
+    [TestMethod]
+    public async Task GetEmails_Folder_IsPassedToProvider()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetEmailsAsync("acc-1", Arg.Any<int>(), Arg.Any<bool>(), "trash", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>([TestData.CreateEmail(id: "e1", accountId: "acc-1")]));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new GetEmailsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetEmailsTool>.Instance);
+
+        await tool.GetEmails("acc-1", folder: "trash");
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
 }

@@ -365,7 +365,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
     #region Email Operations
 
     public async Task<IEnumerable<EmailMessage>> GetEmailsAsync(
-        string accountId, int count = 20, bool unreadOnly = false,
+        string accountId, int count = 20, bool unreadOnly = false, string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var entries = await GetEmailsJsonDataAsync(accountId, cancellationToken);
@@ -378,7 +378,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
 
     public async Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
         string accountId, string query, int count = 20,
-        DateTime? fromDate = null, DateTime? toDate = null,
+        DateTime? fromDate = null, DateTime? toDate = null, string? folder = null,
         CancellationToken cancellationToken = default)
     {
         var entries = await GetEmailsJsonDataAsync(accountId, cancellationToken);
@@ -436,7 +436,7 @@ public class JsonCalendarProviderService : IJsonCalendarProviderService
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("JSON file provider is read-only; emails cannot be marked as read.");
 
-    public Task MoveEmailAsync(
+    public Task<string?> MoveEmailAsync(
         string accountId, string emailId, string destinationFolder,
         CancellationToken cancellationToken = default)
         => throw new NotSupportedException("JSON file provider is read-only; emails cannot be moved.");

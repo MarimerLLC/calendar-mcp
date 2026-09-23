@@ -61,4 +61,29 @@ internal static class MailFolderAliases
                 _ => destination
             }
             : destination;
+
+    /// <summary>
+    /// Maps a folder to a Gmail message-list filter. Gmail has labels, not folders: aliases
+    /// become system labels, <c>archive</c> becomes "not in the inbox", and anything else is a
+    /// label ID. Trash and spam are hidden from list results unless explicitly included.
+    /// </summary>
+    public static GmailListFilter ToGmailListFilter(string folder)
+    {
+        if (!TryParse(folder, out var wellKnown))
+            return new(folder.Trim(), IncludeSpamTrash: false, Query: null);
+
+        return wellKnown switch
+        {
+            WellKnownMailFolder.Inbox => new("INBOX", false, null),
+            WellKnownMailFolder.Trash => new("TRASH", true, null),
+            WellKnownMailFolder.Spam => new("SPAM", true, null),
+            WellKnownMailFolder.Drafts => new("DRAFT", false, null),
+            WellKnownMailFolder.Sent => new("SENT", false, null),
+            WellKnownMailFolder.Archive => new(null, false, "-in:inbox"),
+            _ => new(folder.Trim(), false, null)
+        };
+    }
 }
+
+/// <summary>Gmail <c>messages.list</c> parameters for one folder.</summary>
+internal sealed record GmailListFilter(string? LabelId, bool IncludeSpamTrash, string? Query);

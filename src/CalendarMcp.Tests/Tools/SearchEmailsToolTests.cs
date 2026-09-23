@@ -57,7 +57,7 @@ public class SearchEmailsToolTests
 
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.SearchEmailsAsync(
-            "acc-1", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            "acc-1", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -99,7 +99,7 @@ public class SearchEmailsToolTests
 
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.SearchEmailsAsync(
-            "acc-1", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            "acc-1", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -134,12 +134,12 @@ public class SearchEmailsToolTests
 
         var prov1Exp = new IProviderServiceCreateExpectations();
         prov1Exp.Setups.SearchEmailsAsync(
-            "acc-1", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            "acc-1", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails1));
 
         var prov2Exp = new IProviderServiceCreateExpectations();
         prov2Exp.Setups.SearchEmailsAsync(
-            "acc-2", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+            "acc-2", "test", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>(emails2));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -190,7 +190,7 @@ public class SearchEmailsToolTests
             .ReturnValue(Task.FromResult<AccountInfo?>(account));
 
         var provExp = new IProviderServiceCreateExpectations();
-        provExp.Setups.SearchEmailsAsync("acc-1", "invoice", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<CancellationToken>())
+        provExp.Setups.SearchEmailsAsync("acc-1", "invoice", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromException<IEnumerable<EmailMessage>>(new HttpRequestException("no route to host")));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -206,6 +206,33 @@ public class SearchEmailsToolTests
         Assert.AreEqual(1, warnings.GetArrayLength());
         Assert.AreEqual("acc-1", warnings[0].GetProperty("accountId").GetString());
         StringAssert.Contains(warnings[0].GetProperty("error").GetString(), "Network error");
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task SearchEmails_Folder_IsPassedToProvider()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.SearchEmailsAsync(
+            "acc-1", "invoice", Arg.Any<int>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(), "spam", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<EmailMessage>>([]));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new SearchEmailsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<SearchEmailsTool>.Instance);
+
+        await tool.SearchEmails("invoice", "acc-1", folder: "spam");
 
         regExp.Verify();
         factExp.Verify();

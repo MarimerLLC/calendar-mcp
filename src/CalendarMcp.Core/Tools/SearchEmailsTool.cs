@@ -23,10 +23,11 @@ public sealed class SearchEmailsTool(
         [Description("Account ID to search, or omit for all accounts. Obtain from list_accounts.")] string? accountId = null,
         [Description("Maximum number of results to return per account (default 20)")] int count = 20,
         [Description("Only return emails received on or after this date (ISO 8601 format, e.g. '2026-02-01')")] DateTime? fromDate = null,
-        [Description("Only return emails received on or before this date (ISO 8601 format, e.g. '2026-02-28')")] DateTime? toDate = null)
+        [Description("Only return emails received on or before this date (ISO 8601 format, e.g. '2026-02-28')")] DateTime? toDate = null,
+        [Description("Folder to search instead of the default scope: 'inbox', 'archive', 'trash', 'spam', 'drafts', 'sentitems' (aliases 'deleteditems'='trash', 'junkemail'='spam'), or a folder ID (Microsoft), label ID (Google) or folder name (IMAP). Use this to find a message after move_email.")] string? folder = null)
     {
-        logger.LogInformation("Searching emails: query={Query}, accountId={AccountId}, count={Count}",
-            query, accountId, count);
+        logger.LogInformation("Searching emails: query={Query}, accountId={AccountId}, count={Count}, folder={Folder}",
+            query, accountId, count, folder);
 
         if (string.IsNullOrWhiteSpace(query))
             throw new McpException("query is required");
@@ -67,7 +68,7 @@ public sealed class SearchEmailsTool(
                 {
                     var provider = providerFactory.GetProvider(account!.Provider);
                     var emails = await provider.SearchEmailsAsync(
-                        account.Id, query, count, fromDate, toDate, CancellationToken.None);
+                        account.Id, query, count, fromDate, toDate, folder, CancellationToken.None);
                     return emails;
                 }
                 catch (Exception ex)

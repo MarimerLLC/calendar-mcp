@@ -53,6 +53,25 @@ public class MailFolderAliasesTests
     }
 
     [TestMethod]
+    [DataRow("inbox", "INBOX", false, null)]
+    [DataRow("trash", "TRASH", true, null)]
+    [DataRow("deleteditems", "TRASH", true, null)]
+    [DataRow("spam", "SPAM", true, null)]
+    [DataRow("junkemail", "SPAM", true, null)]
+    [DataRow("drafts", "DRAFT", false, null)]
+    [DataRow("sentitems", "SENT", false, null)]
+    [DataRow("archive", null, false, "-in:inbox")]
+    [DataRow("Label_123", "Label_123", false, null)]
+    public void ToGmailListFilter_MapsFoldersToLabels(string folder, string? labelId, bool includeSpamTrash, string? query)
+    {
+        var filter = MailFolderAliases.ToGmailListFilter(folder);
+
+        Assert.AreEqual(labelId, filter.LabelId);
+        Assert.AreEqual(includeSpamTrash, filter.IncludeSpamTrash);
+        Assert.AreEqual(query, filter.Query);
+    }
+
+    [TestMethod]
     public void ToGraphDestinationId_PassesFolderIdsThroughUnchanged()
     {
         // Graph folder IDs are case-sensitive; they must not be normalized.
