@@ -2,6 +2,7 @@
 
 **Date**: September 23, 2026
 **Follows**: [#89](https://github.com/MarimerLLC/calendar-mcp/issues/89), [#90](https://github.com/MarimerLLC/calendar-mcp/issues/90)
+**Version**: 1.8.2
 
 ---
 
