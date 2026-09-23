@@ -113,7 +113,12 @@ public class EmailSummaryItem
     public string Subject { get; init; } = string.Empty;
     public string From { get; init; } = string.Empty;
     public string FromName { get; init; } = string.Empty;
-    public DateTime ReceivedDateTime { get; init; }
+    public DateTime ReceivedDateTime
+    {
+        get => _receivedDateTime;
+        init => _receivedDateTime = Utilities.TimeZoneHelper.EnsureUtc(value);
+    }
+    private readonly DateTime _receivedDateTime;
     public bool IsRead { get; init; }
     public bool HasAttachments { get; init; }
     

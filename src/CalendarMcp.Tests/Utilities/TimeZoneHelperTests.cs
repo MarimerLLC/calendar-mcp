@@ -91,4 +91,39 @@ public class TimeZoneHelperTests
         var tz = TimeZoneHelper.TryGetTimeZone("'America/Chicago`");
         Assert.IsNull(tz);
     }
+
+    [TestMethod]
+    public void EnsureUtc_UtcValue_ReturnedUnchanged()
+    {
+        var value = new DateTime(2026, 8, 24, 22, 45, 25, DateTimeKind.Utc);
+        var result = TimeZoneHelper.EnsureUtc(value);
+        Assert.AreEqual(DateTimeKind.Utc, result.Kind);
+        Assert.AreEqual(value, result);
+    }
+
+    [TestMethod]
+    public void EnsureUtc_UnspecifiedValue_TreatedAsUtcWithoutShifting()
+    {
+        var value = new DateTime(2026, 8, 24, 22, 45, 25, DateTimeKind.Unspecified);
+        var result = TimeZoneHelper.EnsureUtc(value);
+        Assert.AreEqual(DateTimeKind.Utc, result.Kind);
+        Assert.AreEqual(value.Ticks, result.Ticks);
+    }
+
+    [TestMethod]
+    public void EnsureUtc_LocalValue_ConvertedToSameInstantInUtc()
+    {
+        var utc = new DateTime(2026, 8, 24, 22, 45, 25, DateTimeKind.Utc);
+        var result = TimeZoneHelper.EnsureUtc(utc.ToLocalTime());
+        Assert.AreEqual(DateTimeKind.Utc, result.Kind);
+        Assert.AreEqual(utc, result);
+    }
+
+    [TestMethod]
+    public void EnsureUtc_MinValue_DoesNotThrow()
+    {
+        var result = TimeZoneHelper.EnsureUtc(DateTime.MinValue);
+        Assert.AreEqual(DateTimeKind.Utc, result.Kind);
+        Assert.AreEqual(DateTime.MinValue.Ticks, result.Ticks);
+    }
 }

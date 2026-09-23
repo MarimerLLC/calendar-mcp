@@ -51,9 +51,14 @@ public class EmailMessage
     public string BodyFormat { get; init; } = "text";
     
     /// <summary>
-    /// When the email was received
+    /// When the email was received, always normalized to UTC
     /// </summary>
-    public DateTime ReceivedDateTime { get; init; }
+    public DateTime ReceivedDateTime
+    {
+        get => _receivedDateTime;
+        init => _receivedDateTime = Utilities.TimeZoneHelper.EnsureUtc(value);
+    }
+    private readonly DateTime _receivedDateTime;
     
     /// <summary>
     /// Whether the email has been read
