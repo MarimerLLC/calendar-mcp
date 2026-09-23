@@ -649,8 +649,10 @@ public class M365ProviderService : IM365ProviderService
                         AccountId = accountId,
                         CalendarId = calendarId ?? "primary",
                         Subject = evt.Subject ?? string.Empty,
-                        Start = ParseM365DateTime(evt.Start),
-                        End = ParseM365DateTime(evt.End),
+                        Start = ParseM365DateTime(evt.Start, evt.IsAllDay == true),
+                        End = ParseM365DateTime(evt.End, evt.IsAllDay == true),
+                        StartDate = evt.IsAllDay == true ? TimeZoneHelper.ParseFloatingDate(evt.Start?.DateTime) : null,
+                        EndDate = evt.IsAllDay == true ? TimeZoneHelper.ParseFloatingDate(evt.End?.DateTime) : null,
                         Location = evt.Location?.DisplayName ?? string.Empty,
                         Body = evt.Body?.Content ?? string.Empty,
                         Organizer = evt.Organizer?.EmailAddress?.Address ?? string.Empty,
@@ -721,8 +723,10 @@ public class M365ProviderService : IM365ProviderService
                 AccountId = accountId,
                 CalendarId = calendarId ?? "primary",
                 Subject = evt.Subject ?? string.Empty,
-                Start = ParseM365DateTime(evt.Start),
-                End = ParseM365DateTime(evt.End),
+                Start = ParseM365DateTime(evt.Start, evt.IsAllDay == true),
+                End = ParseM365DateTime(evt.End, evt.IsAllDay == true),
+                StartDate = evt.IsAllDay == true ? TimeZoneHelper.ParseFloatingDate(evt.Start?.DateTime) : null,
+                EndDate = evt.IsAllDay == true ? TimeZoneHelper.ParseFloatingDate(evt.End?.DateTime) : null,
                 Location = evt.Location?.DisplayName ?? string.Empty,
                 Body = evt.Body?.Content ?? string.Empty,
                 BodyFormat = evt.Body?.ContentType == BodyType.Html ? "html" : "text",
@@ -770,8 +774,13 @@ public class M365ProviderService : IM365ProviderService
         }
     }
 
-    private static DateTimeOffset ParseM365DateTime(DateTimeTimeZone? dtz)
+    internal static DateTimeOffset ParseM365DateTime(DateTimeTimeZone? dtz, bool isAllDay = false)
     {
+        // All-day events are floating dates reported as midnight in some zone (UTC unless a
+        // Prefer: outlook.timezone header is sent). Keep the date as written, anchored to UTC midnight.
+        if (isAllDay && TimeZoneHelper.ParseFloatingDate(dtz?.DateTime) is { } date)
+            return TimeZoneHelper.UtcMidnight(date);
+
         if (dtz?.DateTime == null || !DateTime.TryParse(dtz.DateTime, out var dt))
             return DateTimeOffset.MinValue;
         try

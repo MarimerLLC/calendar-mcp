@@ -19,7 +19,7 @@ public sealed class GetCalendarEventDetailsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetCalendarEventDetailsTool> logger)
 {
-    [McpServerTool, Description("Get full details for a single calendar event including attendee responses, free/busy status, recurrence pattern, and online meeting link. Use this after get_calendar_events to fetch richer data for a specific event.")]
+    [McpServerTool, Description("Get full details for a single calendar event including attendee responses, free/busy status, recurrence pattern, and online meeting link. Use this after get_calendar_events to fetch richer data for a specific event. All-day events start and end at local midnight in timeZone and also carry start_date/end_date (yyyy-MM-dd, end date exclusive); these are null for timed events.")]
     public async Task<string> GetCalendarEventDetails(
         [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone.")] string timeZone,
         [Description("Account ID from get_calendar_events")] string accountId,
@@ -51,16 +51,21 @@ public sealed class GetCalendarEventDetailsTool(
             if (evt == null)
                 throw new McpException($"Event '{eventId}' not found in account '{accountId}'");
 
+            // All-day events span local midnight to midnight in the requested zone.
+            var range = TimeZoneHelper.GetEffectiveRange(evt, tz);
+
             var response = new
             {
                 id = evt.Id,
                 accountId = evt.AccountId,
                 calendarId = evt.CalendarId,
                 subject = evt.Subject,
-                start_utc = TimeZoneHelper.ToUtcString(evt.Start),
-                start_local = TimeZoneHelper.ToLocalString(evt.Start, tz),
-                end_utc = TimeZoneHelper.ToUtcString(evt.End),
-                end_local = TimeZoneHelper.ToLocalString(evt.End, tz),
+                start_utc = TimeZoneHelper.ToUtcString(range.Start),
+                start_local = TimeZoneHelper.ToLocalString(range.Start, tz),
+                end_utc = TimeZoneHelper.ToUtcString(range.End),
+                end_local = TimeZoneHelper.ToLocalString(range.End, tz),
+                start_date = TimeZoneHelper.ToDateString(evt.StartDate),
+                end_date = TimeZoneHelper.ToDateString(evt.EndDate),
                 timezone = timeZone,
                 location = evt.Location,
                 body = evt.Body,

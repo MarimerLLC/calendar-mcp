@@ -72,6 +72,33 @@ internal static class TestData
         };
     }
 
+    /// <summary>
+    /// Creates an all-day event the way providers map one: floating dates, with Start/End
+    /// anchored to UTC midnight.
+    /// </summary>
+    public static CalendarEvent CreateAllDayEvent(
+        DateOnly date,
+        int days = 1,
+        string id = "all-day-1",
+        string accountId = "test-account",
+        string calendarId = "calendar-1",
+        string subject = "All Day Event")
+    {
+        var endDate = date.AddDays(days);
+        return new CalendarEvent
+        {
+            Id = id,
+            AccountId = accountId,
+            CalendarId = calendarId,
+            Subject = subject,
+            Start = new DateTimeOffset(date.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
+            End = new DateTimeOffset(endDate.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero),
+            StartDate = date,
+            EndDate = endDate,
+            IsAllDay = true
+        };
+    }
+
     public static CalendarInfo CreateCalendar(
         string id = "calendar-1",
         string accountId = "test-account",

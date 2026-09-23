@@ -18,7 +18,7 @@ public sealed class GetCalendarEventsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetCalendarEventsTool> logger)
 {
-    [McpServerTool, Description("Get calendar events for a date range from one or all accounts. The timeZone parameter is required. Omit accountId (and calendarId) to query all enabled accounts at once; provide accountId to scope to one account, or provide calendarId alone to resolve the account automatically when it uniquely identifies a single account. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
+    [McpServerTool, Description("Get calendar events for a date range from one or all accounts. The timeZone parameter is required. Omit accountId (and calendarId) to query all enabled accounts at once; provide accountId to scope to one account, or provide calendarId alone to resolve the account automatically when it uniquely identifies a single account. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. All-day events start and end at local midnight in timeZone and also carry start_date/end_date (yyyy-MM-dd, end date exclusive); these are null for timed events. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
     public async Task<string> GetCalendarEvents(
         [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone. Required.")] string timeZone,
         [Description("Start of the date range (ISO 8601 format, e.g. `2026-02-20`). Defaults to today.")] DateTime? startDate = null,
@@ -206,27 +206,36 @@ public sealed class GetCalendarEventsTool(
             });
 
             var results = await Task.WhenAll(tasks);
+            // All-day events span local midnight to midnight in the requested zone, so resolve
+            // each event's effective range before sorting and formatting.
             var allEvents = results.SelectMany(e => e)
-                .OrderBy(e => e.Start)
+                .Select(e => (Event: e, Range: TimeZoneHelper.GetEffectiveRange(e, tz)))
+                .OrderBy(x => x.Range.Start)
                 .ToList();
 
             var response = new
             {
                 timezone = timeZone,
-                events = allEvents.Select(e => new
+                events = allEvents.Select(x =>
                 {
-                    id = e.Id,
-                    accountId = e.AccountId,
-                    calendarId = e.CalendarId,
-                    subject = e.Subject,
-                    start_utc = TimeZoneHelper.ToUtcString(e.Start),
-                    start_local = TimeZoneHelper.ToLocalString(e.Start, tz),
-                    end_utc = TimeZoneHelper.ToUtcString(e.End),
-                    end_local = TimeZoneHelper.ToLocalString(e.End, tz),
-                    location = e.Location,
-                    attendees = e.Attendees,
-                    isAllDay = e.IsAllDay,
-                    organizer = e.Organizer
+                    var (e, range) = x;
+                    return new
+                    {
+                        id = e.Id,
+                        accountId = e.AccountId,
+                        calendarId = e.CalendarId,
+                        subject = e.Subject,
+                        start_utc = TimeZoneHelper.ToUtcString(range.Start),
+                        start_local = TimeZoneHelper.ToLocalString(range.Start, tz),
+                        end_utc = TimeZoneHelper.ToUtcString(range.End),
+                        end_local = TimeZoneHelper.ToLocalString(range.End, tz),
+                        start_date = TimeZoneHelper.ToDateString(e.StartDate),
+                        end_date = TimeZoneHelper.ToDateString(e.EndDate),
+                        location = e.Location,
+                        attendees = e.Attendees,
+                        isAllDay = e.IsAllDay,
+                        organizer = e.Organizer
+                    };
                 }),
                 warnings = warnings.Count > 0 ? warnings : null
             };

@@ -26,14 +26,28 @@ public class CalendarEvent
     public string Subject { get; init; } = string.Empty;
     
     /// <summary>
-    /// Event start date/time with UTC offset (ISO 8601 with offset, e.g. 2026-02-20T09:00:00-06:00)
+    /// Event start date/time with UTC offset (ISO 8601 with offset, e.g. 2026-02-20T09:00:00-06:00).
+    /// For all-day events this is UTC midnight of <see cref="StartDate"/>; use <see cref="StartDate"/>
+    /// (a floating date) rather than converting this instant to a local zone.
     /// </summary>
     public DateTimeOffset Start { get; init; }
 
     /// <summary>
-    /// Event end date/time with UTC offset (ISO 8601 with offset, e.g. 2026-02-20T10:00:00-06:00)
+    /// Event end date/time with UTC offset (ISO 8601 with offset, e.g. 2026-02-20T10:00:00-06:00).
+    /// For all-day events this is UTC midnight of <see cref="EndDate"/>.
     /// </summary>
     public DateTimeOffset End { get; init; }
+
+    /// <summary>
+    /// Calendar date an all-day event starts on, independent of any time zone. Null for timed events.
+    /// </summary>
+    public DateOnly? StartDate { get; init; }
+
+    /// <summary>
+    /// Exclusive end date of an all-day event (a one-day event on 2026-09-23 ends 2026-09-24).
+    /// Null for timed events.
+    /// </summary>
+    public DateOnly? EndDate { get; init; }
     
     /// <summary>
     /// Event location
