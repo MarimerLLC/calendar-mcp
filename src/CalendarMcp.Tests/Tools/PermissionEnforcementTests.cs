@@ -250,7 +250,7 @@ public class PermissionEnforcementTests
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.CreateEventAsync("acc-writable", Arg.Any<string?>(), Arg.Any<string>(),
                 Arg.Any<DateTime>(), Arg.Any<DateTime>(), Arg.Any<string?>(), Arg.Any<List<string>?>(),
-                Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+                Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<bool>(), Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult("evt-1"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();

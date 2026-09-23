@@ -19,20 +19,24 @@ public sealed class CreateEventTool(
     [McpServerTool, Description("Create a calendar event. Always pass the timeZone parameter using the user's local IANA timezone (e.g. `America/Chicago`, `America/New_York`, `Europe/London`) so events are created at the correct local time. Requires explicit account selection or smart routing.")]
     public async Task<string> CreateEvent(
         [Description("Event subject/title")] string subject,
-        [Description("Event start date and time (ISO 8601 format)")] DateTime start,
-        [Description("Event end date and time (ISO 8601 format)")] DateTime end,
+        [Description("Event start date and time (ISO 8601 format). For an all-day event, a date (yyyy-MM-dd).")] DateTime start,
+        [Description("Event end date and time (ISO 8601 format). For an all-day event, the exclusive end date (yyyy-MM-dd): a one-day event on 2026-10-01 ends 2026-10-02.")] DateTime end,
         [Description("Account ID to create the event in. Omitting uses the first configured account — provide explicitly to target the correct account. Obtain from list_accounts.")] string? accountId = null,
         [Description("Calendar ID to create the event in, or omit for the default calendar. Obtain from list_calendars.")] string? calendarId = null,
         [Description("Event location")] string? location = null,
         [Description("List of attendee email addresses")] List<string>? attendees = null,
         [Description("Event description/body")] string? body = null,
-        [Description("IANA timezone name for the event (e.g. `America/Chicago`, `America/New_York`, `Europe/London`). Required to create events at the correct local time.")] string? timeZone = null)
+        [Description("IANA timezone name for the event (e.g. `America/Chicago`, `America/New_York`, `Europe/London`). Required to create events at the correct local time.")] string? timeZone = null,
+        [Description("True for an all-day event. start/end are then dates (yyyy-MM-dd, end exclusive) and any time of day is ignored.")] bool isAllDay = false)
     {
         // Strip CDATA wrappers if present (LLMs sometimes wrap content in XML CDATA)
         body = StripCdataWrapper(body);
         
-        logger.LogInformation("Creating event: subject={Subject}, start={Start}, end={End}, accountId={AccountId}",
-            subject, start, end, accountId);
+        logger.LogInformation("Creating event: subject={Subject}, start={Start}, end={End}, isAllDay={IsAllDay}, accountId={AccountId}",
+            subject, start, end, isAllDay, accountId);
+
+        if (isAllDay)
+            (start, end) = AllDayRange.Normalize(start, end);
 
         // Determine which account to use
         Models.AccountInfo account;
@@ -59,7 +63,7 @@ public sealed class CreateEventTool(
             // Create event
             var provider = providerFactory.GetProvider(account.Provider);
             var eventId = await provider.CreateEventAsync(
-                account.Id, calendarId, subject, start, end, location, attendees, body, timeZone, CancellationToken.None);
+                account.Id, calendarId, subject, start, end, location, attendees, body, timeZone, isAllDay, CancellationToken.None);
 
             var result = new
             {

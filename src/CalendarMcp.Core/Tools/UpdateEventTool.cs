@@ -23,11 +23,12 @@ public sealed class UpdateEventTool(
         [Description("Calendar ID that contains the event. Obtain from list_calendars.")] string calendarId,
         [Description("Event ID to update. Obtain from get_calendar_events or get_calendar_event_details.")] string eventId,
         [Description("New event subject/title")] string? subject = null,
-        [Description("New event start date and time (ISO 8601 format)")] DateTime? start = null,
-        [Description("New event end date and time (ISO 8601 format)")] DateTime? end = null,
+        [Description("New event start date and time (ISO 8601 format). For an all-day event, a date (yyyy-MM-dd).")] DateTime? start = null,
+        [Description("New event end date and time (ISO 8601 format). For an all-day event, the exclusive end date (yyyy-MM-dd).")] DateTime? end = null,
         [Description("New event location")] string? location = null,
         [Description("New list of attendee email addresses")] List<string>? attendees = null,
-        [Description("IANA timezone name for the event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`). Required when updating start or end times.")] string? timeZone = null)
+        [Description("IANA timezone name for the event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`). Required when updating start or end times.")] string? timeZone = null,
+        [Description("Set true to make the event all-day (start/end become dates, end exclusive) or false to make it timed. Requires both start and end. Pass true when moving an existing all-day event. Omit to leave it unchanged.")] bool? isAllDay = null)
     {
         logger.LogInformation("Updating event: eventId={EventId}, accountId={AccountId}, calendarId={CalendarId}",
             eventId, accountId, calendarId);
@@ -35,6 +36,19 @@ public sealed class UpdateEventTool(
         ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
         ToolGuard.RequireNonEmpty(calendarId, nameof(calendarId));
         ToolGuard.RequireNonEmpty(eventId, nameof(eventId));
+
+        if (isAllDay.HasValue)
+        {
+            if (!start.HasValue || !end.HasValue)
+                throw new McpException("isAllDay requires both start and end.");
+
+            if (isAllDay.Value)
+            {
+                var (allDayStart, allDayEnd) = AllDayRange.Normalize(start.Value, end.Value);
+                (start, end) = (allDayStart, allDayEnd);
+            }
+        }
+
         var account = await ToolGuard.RequireAccountAsync(
             accountRegistry, accountId, AccountPermission.CalendarWrite);
 
@@ -42,7 +56,7 @@ public sealed class UpdateEventTool(
         {
             var provider = providerFactory.GetProvider(account.Provider);
             await provider.UpdateEventAsync(
-                accountId, calendarId, eventId, subject, start, end, location, attendees, timeZone, CancellationToken.None);
+                accountId, calendarId, eventId, subject, start, end, location, attendees, timeZone, isAllDay, CancellationToken.None);
 
             return JsonSerializer.Serialize(new
             {

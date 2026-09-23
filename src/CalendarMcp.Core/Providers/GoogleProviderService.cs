@@ -827,6 +827,7 @@ public class GoogleProviderService : IGoogleProviderService
         List<string>? attendees = null,
         string? body = null,
         string? timeZone = null,
+        bool isAllDay = false,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -841,16 +842,8 @@ public class GoogleProviderService : IGoogleProviderService
                 Summary = subject,
                 Description = body,
                 Location = location,
-                Start = new EventDateTime
-                {
-                    DateTimeRaw = start.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = timeZone ?? "UTC"
-                },
-                End = new EventDateTime
-                {
-                    DateTimeRaw = end.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = timeZone ?? "UTC"
-                }
+                Start = EventTimeBuilder.ToGoogle(start, timeZone, isAllDay),
+                End = EventTimeBuilder.ToGoogle(end, timeZone, isAllDay)
             };
 
             if (attendees != null && attendees.Count > 0)
@@ -884,6 +877,7 @@ public class GoogleProviderService : IGoogleProviderService
         string? location = null,
         List<string>? attendees = null,
         string? timeZone = null,
+        bool? isAllDay = null,
         CancellationToken cancellationToken = default)
     {
         var credential = await GetCredentialAsync(accountId, cancellationToken);
@@ -904,21 +898,14 @@ public class GoogleProviderService : IGoogleProviderService
             {
                 existingEvent.Location = location;
             }
+            // Replacing the whole EventDateTime switches between date (all-day) and dateTime.
             if (start.HasValue)
             {
-                existingEvent.Start = new EventDateTime
-                {
-                    DateTimeRaw = start.Value.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = timeZone ?? "UTC"
-                };
+                existingEvent.Start = EventTimeBuilder.ToGoogle(start.Value, timeZone, isAllDay == true);
             }
             if (end.HasValue)
             {
-                existingEvent.End = new EventDateTime
-                {
-                    DateTimeRaw = end.Value.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = timeZone ?? "UTC"
-                };
+                existingEvent.End = EventTimeBuilder.ToGoogle(end.Value, timeZone, isAllDay == true);
             }
             if (attendees != null)
             {

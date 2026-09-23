@@ -98,6 +98,7 @@ public interface IProviderService
         List<string>? attendees = null,
         string? body = null,
         string? timeZone = null,
+        bool isAllDay = false,
         CancellationToken cancellationToken = default);
     
     Task UpdateEventAsync(
@@ -110,6 +111,7 @@ public interface IProviderService
         string? location = null,
         List<string>? attendees = null,
         string? timeZone = null,
+        bool? isAllDay = null,
         CancellationToken cancellationToken = default);
     
     Task DeleteEventAsync(

@@ -27,7 +27,7 @@ public class CreateEventToolTests
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.CreateEventAsync(
             "acc-1", Arg.Any<string?>(), "Meeting", Arg.Any<DateTime>(), Arg.Any<DateTime>(),
-            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<string?>(), false, Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult("new-event-id"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -76,7 +76,7 @@ public class CreateEventToolTests
         var provExp = new IProviderServiceCreateExpectations();
         provExp.Setups.CreateEventAsync(
             "acc-1", Arg.Any<string?>(), "Meeting", Arg.Any<DateTime>(), Arg.Any<DateTime>(),
-            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), Arg.Any<string?>(), false, Arg.Any<CancellationToken>())
             .ReturnValue(Task.FromResult("ev-id"));
 
         var factExp = new IProviderServiceFactoryCreateExpectations();
@@ -111,5 +111,54 @@ public class CreateEventToolTests
             () => tool.CreateEvent("Meeting", Start, End));
         Assert.IsTrue(ex.Message.Contains("No enabled account"));
         regExp.Verify();
+    }
+
+    [TestMethod]
+    [DataRow(10, 15, 1, 2, DisplayName = "Same date means one day; times ignored")]
+    [DataRow(9, 0, 3, 3, DisplayName = "Multi-day range kept; times ignored")]
+    public async Task CreateEvent_AllDay_PassesMidnightDatesToProvider(int startHour, int endHour, int endDay, int expectedEndDay)
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "google");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.CreateEventAsync(
+            "acc-1", Arg.Any<string?>(), "Offsite", new DateTime(2026, 10, 1), new DateTime(2026, 10, expectedEndDay),
+            Arg.Any<string?>(), Arg.Any<List<string>?>(), Arg.Any<string?>(), "America/Chicago", true, Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult("all-day-id"));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("google").ReturnValue(provExp.Instance());
+
+        var tool = new CreateEventTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<CreateEventTool>.Instance);
+
+        var result = await tool.CreateEvent("Offsite",
+            new DateTime(2026, 10, 1, startHour, 0, 0), new DateTime(2026, 10, endDay, endHour, 0, 0),
+            "acc-1", timeZone: "America/Chicago", isAllDay: true);
+
+        Assert.AreEqual("all-day-id", JsonDocument.Parse(result).RootElement.GetProperty("eventId").GetString());
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task CreateEvent_AllDay_EndBeforeStart_ThrowsWithoutCallingProvider()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new CreateEventTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<CreateEventTool>.Instance);
+
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(() => tool.CreateEvent(
+            "Offsite", new DateTime(2026, 10, 3), new DateTime(2026, 10, 1), "acc-1", isAllDay: true));
+
+        StringAssert.Contains(ex.Message, "exclusive");
+        regExp.Verify();
+        factExp.Verify();
     }
 }

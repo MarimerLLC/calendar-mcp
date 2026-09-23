@@ -308,14 +308,14 @@ public class IcsProviderService : IIcsProviderService
         string accountId, string? calendarId, string subject,
         DateTime start, DateTime end, string? location = null,
         List<string>? attendees = null, string? body = null,
-        string? timeZone = null, CancellationToken cancellationToken = default)
+        string? timeZone = null, bool isAllDay = false, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider is read-only.");
 
     public Task UpdateEventAsync(
         string accountId, string calendarId, string eventId,
         string? subject = null, DateTime? start = null, DateTime? end = null,
         string? location = null, List<string>? attendees = null,
-        string? timeZone = null, CancellationToken cancellationToken = default)
+        string? timeZone = null, bool? isAllDay = null, CancellationToken cancellationToken = default)
         => throw new NotSupportedException("ICS provider is read-only.");
 
     public Task DeleteEventAsync(

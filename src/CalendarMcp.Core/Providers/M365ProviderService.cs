@@ -931,6 +931,7 @@ public class M365ProviderService : IM365ProviderService
         List<string>? attendees = null,
         string? body = null,
         string? timeZone = null,
+        bool isAllDay = false,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
@@ -943,16 +944,9 @@ public class M365ProviderService : IM365ProviderService
             var newEvent = new Event
             {
                 Subject = subject,
-                Start = new DateTimeTimeZone
-                {
-                    DateTime = start.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = timeZone ?? "UTC"
-                },
-                End = new DateTimeTimeZone
-                {
-                    DateTime = end.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = timeZone ?? "UTC"
-                }
+                IsAllDay = isAllDay,
+                Start = EventTimeBuilder.ToGraph(start, timeZone, isAllDay),
+                End = EventTimeBuilder.ToGraph(end, timeZone, isAllDay)
             };
 
             if (!string.IsNullOrEmpty(location))
@@ -1017,6 +1011,7 @@ public class M365ProviderService : IM365ProviderService
         string? location = null,
         List<string>? attendees = null,
         string? timeZone = null,
+        bool? isAllDay = null,
         CancellationToken cancellationToken = default)
     {
         var token = await GetAccessTokenAsync(accountId, cancellationToken);
@@ -1033,22 +1028,19 @@ public class M365ProviderService : IM365ProviderService
                 eventUpdate.Subject = subject;
             }
 
+            if (isAllDay.HasValue)
+            {
+                eventUpdate.IsAllDay = isAllDay.Value;
+            }
+
             if (start.HasValue)
             {
-                eventUpdate.Start = new DateTimeTimeZone
-                {
-                    DateTime = start.Value.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = timeZone ?? "UTC"
-                };
+                eventUpdate.Start = EventTimeBuilder.ToGraph(start.Value, timeZone, isAllDay == true);
             }
 
             if (end.HasValue)
             {
-                eventUpdate.End = new DateTimeTimeZone
-                {
-                    DateTime = end.Value.ToString("yyyy-MM-ddTHH:mm:ss"),
-                    TimeZone = timeZone ?? "UTC"
-                };
+                eventUpdate.End = EventTimeBuilder.ToGraph(end.Value, timeZone, isAllDay == true);
             }
 
             if (!string.IsNullOrEmpty(location))
