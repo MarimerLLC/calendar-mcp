@@ -3,6 +3,7 @@
 **Date**: September 23, 2026
 **Issue**: [#98](https://github.com/MarimerLLC/calendar-mcp/issues/98)
 **Follows**: [#87](https://github.com/MarimerLLC/calendar-mcp/issues/87)
+**Version**: 1.8.3
 
 ---
 
