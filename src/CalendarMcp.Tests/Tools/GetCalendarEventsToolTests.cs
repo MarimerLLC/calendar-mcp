@@ -663,4 +663,196 @@ public class GetCalendarEventsToolTests
         Assert.AreEqual("2026-09-23T15:00:00Z", evt.GetProperty("start_utc").GetString());
         Assert.AreEqual("2026-09-23T10:00:00", evt.GetProperty("start_local").GetString());
     }
+
+    private sealed record ProviderCall(DateTime? Start, DateTime? End, int Count);
+
+    private static IProviderServiceCreateExpectations ProviderCapturing(
+        string accountId, List<CalendarEvent> events, List<ProviderCall> calls)
+    {
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.GetCalendarEventsAsync(
+            accountId, Arg.Any<string?>(), Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Callback((string _, string? _, DateTime? start, DateTime? end, int count, CancellationToken _) =>
+            {
+                lock (calls)
+                {
+                    calls.Add(new ProviderCall(start, end, count));
+                }
+                return Task.FromResult<IEnumerable<CalendarEvent>>(events);
+            });
+        return provExp;
+    }
+
+    private static GetCalendarEventsTool CreateToolCapturing(List<CalendarEvent> events, List<ProviderCall> calls)
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365")
+            .ReturnValue(ProviderCapturing("acc-1", events, calls).Instance());
+
+        return new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+    }
+
+    private static CalendarEvent Timed(string id, DateTime startUtc, TimeSpan duration, string accountId = "acc-1") =>
+        TestData.CreateEvent(id: id, accountId: accountId,
+            start: DateTime.SpecifyKind(startUtc, DateTimeKind.Utc),
+            end: DateTime.SpecifyKind(startUtc + duration, DateTimeKind.Utc));
+
+    private static string[] EventIds(string result) =>
+        JsonDocument.Parse(result).RootElement.GetProperty("events").EnumerateArray()
+            .Select(e => e.GetProperty("id").GetString()!)
+            .ToArray();
+
+    [TestMethod]
+    [DataRow("America/Chicago", "2026-09-25T05:00:00Z", "2026-09-28T05:00:00Z")]
+    [DataRow("Asia/Tokyo", "2026-09-24T15:00:00Z", "2026-09-27T15:00:00Z")]
+    public async Task GetCalendarEvents_QueriesProviderInUtcWithOneDayMargin(
+        string zone, string expectedStart, string expectedEnd)
+    {
+        var calls = new List<ProviderCall>();
+        var tool = CreateToolCapturing([], calls);
+
+        await tool.GetCalendarEvents(zone, new DateTime(2026, 9, 26), new DateTime(2026, 9, 26), "acc-1");
+
+        var call = calls.Single();
+        Assert.AreEqual(DateTimeKind.Utc, call.Start!.Value.Kind);
+        Assert.AreEqual(DateTimeKind.Utc, call.End!.Value.Kind);
+        Assert.AreEqual(expectedStart, call.Start.Value.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+        Assert.AreEqual(expectedEnd, call.End.Value.ToString("yyyy-MM-ddTHH:mm:ssZ"));
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_Chicago_KeepsOnlyEventsOnTheLocalDay()
+    {
+        var events = new List<CalendarEvent>
+        {
+            // 17:45–20:00 CDT on the 25th: overlapped the old UTC day of the 26th.
+            Timed("flight-25th", new DateTime(2026, 9, 25, 22, 45, 0), TimeSpan.FromMinutes(135)),
+            // 20:00 CDT on the 26th is 01:00Z on the 27th: past the old UTC day.
+            Timed("evening-26th", new DateTime(2026, 9, 27, 1, 0, 0), TimeSpan.FromHours(1)),
+            // 00:30 CDT on the 27th.
+            Timed("early-27th", new DateTime(2026, 9, 27, 5, 30, 0), TimeSpan.FromHours(1)),
+        };
+        var tool = CreateToolCapturing(events, []);
+
+        var result = await tool.GetCalendarEvents("America/Chicago", new DateTime(2026, 9, 26), new DateTime(2026, 9, 26), "acc-1");
+
+        CollectionAssert.AreEqual(new[] { "evening-26th" }, EventIds(result));
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_Tokyo_KeepsOnlyEventsOnTheLocalDay()
+    {
+        var events = new List<CalendarEvent>
+        {
+            // 23:30–24:00 JST on the 25th.
+            Timed("late-25th", new DateTime(2026, 9, 25, 14, 30, 0), TimeSpan.FromMinutes(30)),
+            // 23:30–24:00 JST on the 26th.
+            Timed("late-26th", new DateTime(2026, 9, 26, 14, 30, 0), TimeSpan.FromMinutes(30)),
+        };
+        var tool = CreateToolCapturing(events, []);
+
+        var result = await tool.GetCalendarEvents("Asia/Tokyo", new DateTime(2026, 9, 26), new DateTime(2026, 9, 26), "acc-1");
+
+        CollectionAssert.AreEqual(new[] { "late-26th" }, EventIds(result));
+    }
+
+    [TestMethod]
+    [DataRow("America/Chicago")]
+    [DataRow("Asia/Tokyo")]
+    public async Task GetCalendarEvents_ExcludesNeighboringAllDayEvents(string zone)
+    {
+        var events = new List<CalendarEvent>
+        {
+            TestData.CreateAllDayEvent(new DateOnly(2026, 9, 25), id: "all-day-25th", accountId: "acc-1"),
+            TestData.CreateAllDayEvent(new DateOnly(2026, 9, 26), id: "all-day-26th", accountId: "acc-1"),
+            TestData.CreateAllDayEvent(new DateOnly(2026, 9, 27), id: "all-day-27th", accountId: "acc-1"),
+        };
+        var tool = CreateToolCapturing(events, []);
+
+        var result = await tool.GetCalendarEvents(zone, new DateTime(2026, 9, 26), new DateTime(2026, 9, 26), "acc-1");
+
+        CollectionAssert.AreEqual(new[] { "all-day-26th" }, EventIds(result));
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_DstFallBackDay_CoversAll25Hours()
+    {
+        // 2026-11-01 in Chicago runs from 00:00 CDT (05:00Z) to 00:00 CST (06:00Z on the 2nd).
+        var events = new List<CalendarEvent>
+        {
+            // 23:30 CST on the 1st.
+            Timed("late-1st", new DateTime(2026, 11, 2, 5, 30, 0), TimeSpan.FromMinutes(30)),
+            // 00:30 CST on the 2nd.
+            Timed("early-2nd", new DateTime(2026, 11, 2, 6, 30, 0), TimeSpan.FromMinutes(30)),
+        };
+        var calls = new List<ProviderCall>();
+        var tool = CreateToolCapturing(events, calls);
+
+        var result = await tool.GetCalendarEvents("America/Chicago", new DateTime(2026, 11, 1), new DateTime(2026, 11, 1), "acc-1");
+
+        CollectionAssert.AreEqual(new[] { "late-1st" }, EventIds(result));
+        var call = calls.Single();
+        Assert.AreEqual(new DateTime(2026, 10, 31, 5, 0, 0, DateTimeKind.Utc), call.Start);
+        Assert.AreEqual(new DateTime(2026, 11, 3, 6, 0, 0, DateTimeKind.Utc), call.End);
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_Count_OverFetchesForMarginAndAppliesPerAccount()
+    {
+        // Chicago 2026-09-26 runs from 05:00Z on the 26th to 05:00Z on the 27th.
+        static List<CalendarEvent> EventsFor(string accountId) =>
+        [
+            Timed($"{accountId}-margin-1", new DateTime(2026, 9, 25, 14, 0, 0), TimeSpan.FromHours(1), accountId),
+            Timed($"{accountId}-margin-2", new DateTime(2026, 9, 25, 15, 0, 0), TimeSpan.FromHours(1), accountId),
+            Timed($"{accountId}-in-1", new DateTime(2026, 9, 26, 14, 0, 0), TimeSpan.FromHours(1), accountId),
+            Timed($"{accountId}-in-2", new DateTime(2026, 9, 26, 16, 0, 0), TimeSpan.FromHours(1), accountId),
+            Timed($"{accountId}-in-3", new DateTime(2026, 9, 26, 18, 0, 0), TimeSpan.FromHours(1), accountId),
+            Timed($"{accountId}-margin-3", new DateTime(2026, 9, 27, 14, 0, 0), TimeSpan.FromHours(1), accountId),
+        ];
+
+        var acc1 = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+        var acc2 = TestData.CreateAccount(id: "acc-2", provider: "google");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetEnabledAccounts().ReturnValue([acc1, acc2]);
+
+        var calls = new List<ProviderCall>();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(ProviderCapturing("acc-1", EventsFor("acc-1"), calls).Instance());
+        factExp.Setups.GetProvider("google").ReturnValue(ProviderCapturing("acc-2", EventsFor("acc-2"), calls).Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents("America/Chicago", new DateTime(2026, 9, 26), new DateTime(2026, 9, 26), null, count: 2);
+
+        // One local day plus two margin days: ceil(2 * 3 / 1) = 6 per provider call.
+        Assert.AreEqual(2, calls.Count);
+        Assert.IsTrue(calls.All(c => c.Count == 6));
+        CollectionAssert.AreEquivalent(
+            new[] { "acc-1-in-1", "acc-1-in-2", "acc-2-in-1", "acc-2-in-2" },
+            EventIds(result));
+    }
+
+    [TestMethod]
+    [DataRow(50, 7, 65)]      // ceil(50 * 9 / 7)
+    [DataRow(500, 1, 1000)]   // ceil(500 * 3 / 1), capped at Graph's $top limit
+    public async Task GetCalendarEvents_FetchCount_ScalesWithWindow(int count, int days, int expected)
+    {
+        var calls = new List<ProviderCall>();
+        var tool = CreateToolCapturing([], calls);
+
+        var first = new DateTime(2026, 9, 26);
+        await tool.GetCalendarEvents("America/Chicago", first, first.AddDays(days - 1), "acc-1", count: count);
+
+        Assert.AreEqual(expected, calls.Single().Count);
+    }
 }

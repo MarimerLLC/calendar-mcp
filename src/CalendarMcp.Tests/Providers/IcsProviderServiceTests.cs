@@ -141,4 +141,46 @@ public class IcsProviderServiceTests
         Assert.IsNull(evt.EndDate);
         Assert.AreEqual(new DateTimeOffset(2026, 9, 23, 15, 0, 0, TimeSpan.Zero), evt.Start);
     }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_TimedEvents_WindowIsUtcNotHostLocal()
+    {
+        // The window is 2026-09-23 00:00Z to 2026-09-24 00:00Z. Its bounds are Unspecified:
+        // the contract makes them UTC regardless of Kind. The zoned recurring events catch a
+        // window read as wall-clock time in the event's zone: 08:30 JST on the 24th is 23:30Z
+        // on the 23rd, and 20:00 CDT on the 22nd is 01:00Z on the 23rd.
+        var provider = CreateProviderWithFeed(
+            "BEGIN:VEVENT\r\nUID:before\r\nSUMMARY:Before\r\n" +
+            "DTSTART:20260922T233000Z\r\nDTEND:20260922T235000Z\r\nEND:VEVENT\r\n" +
+            "BEGIN:VEVENT\r\nUID:inside\r\nSUMMARY:Inside\r\n" +
+            "DTSTART:20260923T120000Z\r\nDTEND:20260923T130000Z\r\nEND:VEVENT\r\n" +
+            "BEGIN:VEVENT\r\nUID:after\r\nSUMMARY:After\r\n" +
+            "DTSTART:20260924T003000Z\r\nDTEND:20260924T005000Z\r\nEND:VEVENT\r\n" +
+            "BEGIN:VEVENT\r\nUID:daily-early\r\nSUMMARY:Daily early\r\n" +
+            "DTSTART:20260920T003000Z\r\nDTEND:20260920T005000Z\r\n" +
+            "RRULE:FREQ=DAILY;COUNT=10\r\nEND:VEVENT\r\n" +
+            "BEGIN:VEVENT\r\nUID:daily-late\r\nSUMMARY:Daily late\r\n" +
+            "DTSTART:20260920T233000Z\r\nDTEND:20260920T235000Z\r\n" +
+            "RRULE:FREQ=DAILY;COUNT=10\r\nEND:VEVENT\r\n" +
+            "BEGIN:VEVENT\r\nUID:daily-tokyo\r\nSUMMARY:Daily Tokyo\r\n" +
+            "DTSTART;TZID=Asia/Tokyo:20260920T083000\r\nDTEND;TZID=Asia/Tokyo:20260920T085000\r\n" +
+            "RRULE:FREQ=DAILY;COUNT=10\r\nEND:VEVENT\r\n" +
+            "BEGIN:VEVENT\r\nUID:daily-chicago\r\nSUMMARY:Daily Chicago\r\n" +
+            "DTSTART;TZID=America/Chicago:20260920T200000\r\nDTEND;TZID=America/Chicago:20260920T202000\r\n" +
+            "RRULE:FREQ=DAILY;COUNT=10\r\nEND:VEVENT\r\n");
+
+        var events = (await provider.GetCalendarEventsAsync("acc-ics", null,
+            new DateTime(2026, 9, 23), new DateTime(2026, 9, 24))).ToList();
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                ("daily-early", new DateTimeOffset(2026, 9, 23, 0, 30, 0, TimeSpan.Zero)),
+                ("daily-chicago", new DateTimeOffset(2026, 9, 23, 1, 0, 0, TimeSpan.Zero)),
+                ("inside", new DateTimeOffset(2026, 9, 23, 12, 0, 0, TimeSpan.Zero)),
+                ("daily-late", new DateTimeOffset(2026, 9, 23, 23, 30, 0, TimeSpan.Zero)),
+                ("daily-tokyo", new DateTimeOffset(2026, 9, 23, 23, 30, 0, TimeSpan.Zero)),
+            },
+            events.Select(e => (e.Id, e.Start)).ToArray());
+    }
 }

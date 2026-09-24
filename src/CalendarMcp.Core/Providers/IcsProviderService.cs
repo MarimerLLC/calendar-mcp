@@ -143,6 +143,8 @@ public class IcsProviderService : IIcsProviderService
 
         var start = startDate ?? DateTime.UtcNow.Date;
         var end = endDate ?? start.AddDays(7);
+        var windowStart = new DateTimeOffset(DateTime.SpecifyKind(start, DateTimeKind.Utc));
+        var windowEnd = new DateTimeOffset(DateTime.SpecifyKind(end, DateTimeKind.Utc));
 
         var events = new List<CalendarEvent>();
 
@@ -154,15 +156,17 @@ public class IcsProviderService : IIcsProviderService
 
             if (evt.RecurrenceRules?.Count > 0 || evt.RecurrenceDates?.Count > 0)
             {
-                // Expand recurring events
+                // Expand recurring events. Ical.Net 4.3.1 selects occurrences by wall-clock time
+                // in the event's own zone and ignores the bounds' zone, which can be off by up
+                // to 14h, so expand with a day of slack and filter on the UTC instants below.
                 var occurrences = evt.GetOccurrences(
-                    new CalDateTime(start),
-                    new CalDateTime(end));
+                    new CalDateTime(start.AddDays(-1), "UTC"),
+                    new CalDateTime(end.AddDays(1), "UTC"));
 
                 foreach (var occurrence in occurrences)
                 {
                     var mapped = MapToCalendarEvent(evt, accountId, occurrence);
-                    if (mapped != null)
+                    if (mapped != null && mapped.Start < windowEnd && mapped.End > windowStart)
                         events.Add(mapped);
                 }
             }

@@ -85,6 +85,12 @@ public interface IProviderService
         string accountId,
         CancellationToken cancellationToken = default);
     
+    /// <summary>
+    /// Returns the events that overlap [<paramref name="startDate"/>, <paramref name="endDate"/>).
+    /// </summary>
+    /// <param name="startDate">Start of the window as a UTC instant (the Kind is ignored).</param>
+    /// <param name="endDate">End of the window (exclusive) as a UTC instant (the Kind is ignored).</param>
+    /// <param name="count">Maximum number of events to return from this call, in start order.</param>
     Task<IEnumerable<CalendarEvent>> GetCalendarEventsAsync(
         string accountId,
         string? calendarId = null,
