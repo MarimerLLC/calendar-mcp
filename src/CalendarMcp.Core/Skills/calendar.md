@@ -31,8 +31,12 @@ used.
 
 - `timeZone` (required) — IANA name; controls the `_local` times in
   output and how `startDate`/`endDate` are interpreted.
+- `startDate`/`endDate` are local dates in `timeZone`, and `endDate` is
+  inclusive. The result is the events that overlap those local days, from
+  local midnight on `startDate` to local midnight after `endDate`, so an
+  evening event on the day before never shows up.
 - `startDate` defaults to today (in `timeZone`); `endDate` defaults to
-  7 days after `startDate`.
+  6 days after `startDate` (7 days in all).
 - `accountId` fans out across all enabled accounts when omitted (like
   `list_calendars`). Provide it to scope to one account, or provide
   `calendarId` alone to resolve the account when it uniquely identifies one.

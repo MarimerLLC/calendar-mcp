@@ -18,11 +18,11 @@ public sealed class GetCalendarEventsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetCalendarEventsTool> logger)
 {
-    [McpServerTool, Description("Get calendar events for a date range from one or all accounts. The timeZone parameter is required. Omit accountId (and calendarId) to query all enabled accounts at once; provide accountId to scope to one account, or provide calendarId alone to resolve the account automatically when it uniquely identifies a single account. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. All-day events start and end at local midnight in timeZone and also carry start_date/end_date (yyyy-MM-dd, end date exclusive); these are null for timed events. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
+    [McpServerTool, Description("Get calendar events for a range of local dates from one or all accounts. The timeZone parameter is required: startDate and endDate are calendar dates in that zone, and the result holds the events that overlap those local days (from local midnight on startDate to local midnight after endDate). Omit accountId (and calendarId) to query all enabled accounts at once; provide accountId to scope to one account, or provide calendarId alone to resolve the account automatically when it uniquely identifies a single account. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. All-day events start and end at local midnight in timeZone and also carry start_date/end_date (yyyy-MM-dd, end date exclusive); these are null for timed events. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
     public async Task<string> GetCalendarEvents(
-        [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone. Required.")] string timeZone,
-        [Description("Start of the date range (ISO 8601 format, e.g. `2026-02-20`). Defaults to today.")] DateTime? startDate = null,
-        [Description("End of the date range, inclusive (ISO 8601 format, e.g. `2026-02-27`). Defaults to 7 days after startDate.")] DateTime? endDate = null,
+        [Description("IANA timezone name (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). startDate and endDate are interpreted as local dates in this zone, and all event times are returned in both UTC and this local timezone. Required.")] string timeZone,
+        [Description("First local date of the range in timeZone (ISO 8601 date, e.g. `2026-02-20`). Any time of day is ignored. Defaults to today in timeZone.")] DateTime? startDate = null,
+        [Description("Last local date of the range in timeZone, inclusive (ISO 8601 date, e.g. `2026-02-27`). Any time of day is ignored. Defaults to 6 days after startDate (a 7-day range).")] DateTime? endDate = null,
         [Description("Account ID to query, or omit to query all enabled accounts. Obtain from list_accounts.")] string? accountId = null,
         [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars, or pass 'primary' for the account's default calendar (also the value returned for default-calendar events). Requires accountId when using 'primary'. If accountId is omitted, calendarId is used to identify the account automatically when it exists in exactly one account.")] string? calendarId = null,
         [Description("Maximum number of events to return per account (default 50)")] int count = 50)
@@ -148,11 +148,31 @@ public sealed class GetCalendarEventsTool(
                 validAccounts, AccountPermission.CalendarRead, logger, "get_calendar_events");
         }
 
-        var resolvedStart = startDate ?? TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz).Date;
-        var resolvedEnd = endDate.HasValue ? endDate.Value.Date.AddDays(1) : resolvedStart.AddDays(7);
+        // startDate/endDate are local calendar dates in tz; endDay is exclusive.
+        var firstDay = startDate.HasValue
+            ? DateOnly.FromDateTime(startDate.Value)
+            : DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz));
+        var endDay = endDate.HasValue ? DateOnly.FromDateTime(endDate.Value).AddDays(1) : firstDay.AddDays(7);
 
-        logger.LogInformation("Getting calendar events: startDate={StartDate}, endDate={EndDate}, accountCount={AccountCount}, count={Count}, timeZone={TimeZone}",
-            resolvedStart, resolvedEnd, validAccounts.Count, count, timeZone);
+        // The local days as instants. Events are kept when their effective range overlaps this window.
+        var windowStart = TimeZoneHelper.LocalMidnight(firstDay, tz);
+        var windowEnd = TimeZoneHelper.LocalMidnight(endDay, tz);
+
+        // Providers take UTC instants. Widen the query by a day on each side: Graph and Google
+        // evaluate all-day events in each calendar's own zone, which can be up to 26h away from
+        // tz, so an exact query could miss an all-day event on the first or last day. The
+        // margin is trimmed by the local-window filter below.
+        var queryStart = windowStart.AddDays(-1).UtcDateTime;
+        var queryEnd = windowEnd.AddDays(1).UtcDateTime;
+
+        // Margin-day events take provider slots in start order, so scale the per-call cap to
+        // keep in-window events from being pushed past it.
+        var days = Math.Max(endDay.DayNumber - firstDay.DayNumber, 1);
+        var scaledCount = (int)Math.Min(((long)count * (days + 2) + days - 1) / days, MaxProviderFetchCount);
+        var fetchCount = Math.Max(count, scaledCount);
+
+        logger.LogInformation("Getting calendar events: firstDay={FirstDay}, endDay={EndDay} (exclusive), timeZone={TimeZone}, window={WindowStart:o}..{WindowEnd:o}, query={QueryStart:o}..{QueryEnd:o}, accountCount={AccountCount}, count={Count}, fetchCount={FetchCount}",
+            firstDay, endDay, timeZone, windowStart.UtcDateTime, windowEnd.UtcDateTime, queryStart, queryEnd, validAccounts.Count, count, fetchCount);
 
         try
         {
@@ -191,8 +211,14 @@ public sealed class GetCalendarEventsTool(
                     }
 
                     var events = await provider.GetCalendarEventsAsync(
-                        account.Id, calendarId, resolvedStart, resolvedEnd, count, CancellationToken.None);
-                    return events;
+                        account.Id, calendarId, queryStart, queryEnd, fetchCount, CancellationToken.None);
+
+                    // Keep only events on the requested local days, then apply count per account.
+                    return events
+                        .Where(e => OverlapsWindow(TimeZoneHelper.GetEffectiveRange(e, tz), windowStart, windowEnd))
+                        .OrderBy(e => TimeZoneHelper.GetEffectiveRange(e, tz).Start)
+                        .Take(count)
+                        .ToList();
                 }
                 catch (Exception ex)
                 {
@@ -240,8 +266,8 @@ public sealed class GetCalendarEventsTool(
                 warnings = warnings.Count > 0 ? warnings : null
             };
 
-            logger.LogInformation("Retrieved {Count} events from {AccountCount} accounts between {Start} and {End}",
-                allEvents.Count, validAccounts.Count, resolvedStart, resolvedEnd);
+            logger.LogInformation("Retrieved {Count} events from {AccountCount} accounts for {FirstDay}..{EndDay} (exclusive) in {TimeZone}",
+                allEvents.Count, validAccounts.Count, firstDay, endDay, timeZone);
 
             return JsonSerializer.Serialize(response, new JsonSerializerOptions
             {
@@ -254,6 +280,19 @@ public sealed class GetCalendarEventsTool(
             throw ToolGuard.Failure("get calendar events", ex);
         }
     }
+
+    /// <summary>
+    /// Upper bound on the per-call count sent to providers (Microsoft Graph's $top limit).
+    /// </summary>
+    private const int MaxProviderFetchCount = 1000;
+
+    /// <summary>
+    /// True when an event's effective range overlaps [windowStart, windowEnd). A zero-length
+    /// event counts when its start falls inside the window.
+    /// </summary>
+    private static bool OverlapsWindow(
+        (DateTimeOffset Start, DateTimeOffset End) range, DateTimeOffset windowStart, DateTimeOffset windowEnd) =>
+        range.Start < windowEnd && (range.End > windowStart || range.Start >= windowStart);
 
     /// <summary>
     /// "primary" is the alias every provider uses for an account's default calendar, and the
