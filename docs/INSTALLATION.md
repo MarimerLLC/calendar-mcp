@@ -10,11 +10,14 @@ This guide provides step-by-step instructions for installing and configuring the
   - [Option 2: Build from Source](#option-2-build-from-source)
 - [Configuration](#configuration)
   - [Setting up Microsoft 365 / Outlook.com Accounts](#setting-up-microsoft-365--outlookcom-accounts)
+  - [Setting up On-premises Exchange (EWS)](#setting-up-on-premises-exchange-ews)
   - [Setting up Google Workspace / Gmail Accounts](#setting-up-google-workspace--gmail-accounts)
 - [MCP Client Configuration](#mcp-client-configuration)
   - [Claude Desktop](#claude-desktop)
+  - [OpenCode](#opencode)
   - [VS Code with GitHub Copilot](#vs-code-with-github-copilot)
   - [Other MCP Clients](#other-mcp-clients)
+- [Deployment](#deployment)
 - [Verification](#verification)
 - [Troubleshooting](#troubleshooting)
 
@@ -28,8 +31,10 @@ This guide provides step-by-step instructions for installing and configuring the
   - **macOS**: macOS 10.15 or later (x64 or ARM64/Apple Silicon)
 
 ### For Building from Source
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) or later
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or later
 - Git (for cloning the repository)
+
+> The projects target `net10.0`. Building with an older SDK fails with an unsupported-framework error.
 
 ## Installation Methods
 
@@ -130,14 +135,6 @@ source ~/.bashrc  # or source ~/.zshrc
 ```
 
 ### Option 2: Build from Source
-```
-
-Then reload your shell configuration:
-```bash
-source ~/.bashrc  # or source ~/.zshrc
-```
-
-### Option 2: Build from Source
 
 If you prefer to build from source or need the latest development version:
 
@@ -152,7 +149,7 @@ cd calendar-mcp
 
 ```bash
 # Build in release mode
-dotnet build src/calendar-mcp.slnx --configuration Release
+dotnet build calendar-mcp.slnx --configuration Release
 
 # Or publish as self-contained for your platform
 # Windows
@@ -190,6 +187,33 @@ CalendarMcp.Cli add-m365-account
 ./CalendarMcp.Cli add-m365-account    # Linux/macOS
 .\CalendarMcp.Cli.exe add-m365-account  # Windows
 ```
+
+### Setting up On-premises Exchange (EWS)
+
+Use the `exchange` provider when the mailbox lives on an Exchange server that exposes an EWS
+endpoint and allows Basic authentication over HTTPS. See the detailed
+[On-premises Exchange Setup Guide](EWS-ONPREM-SETUP.md) for the full walkthrough.
+
+**Quick Start:**
+
+```bash
+# 1. Create a local config from the safe template
+cp config/appsettings.example.json config/appsettings.json
+
+# 2. Fill in the account
+#    "ProviderConfig": {
+#      "ewsUrl": "https://mail.example.com/EWS/Exchange.asmx",
+#      "username": "user@example.com",
+#      "password": "your-password"
+#    }
+
+# 3. Verify
+CalendarMcp.Cli list-accounts
+CalendarMcp.Cli test-account <account-id>
+```
+
+`config/appsettings.json` holds the password in plaintext and is ignored by Git. Do not commit it,
+and do not reuse that password outside this server.
 
 ### Setting up Google Workspace / Gmail Accounts
 
@@ -257,6 +281,31 @@ See the detailed [Claude Desktop Setup Guide](CLAUDE-DESKTOP-SETUP.md) for:
 
 3. Restart Claude Desktop
 
+### OpenCode
+
+Add the server to `~/.config/opencode/opencode.jsonc` (Windows:
+`C:\Users\<user>\.config\opencode\opencode.jsonc`):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "calendar": {
+      "type": "local",
+      "command": ["E:\\project\\calendar-mcp\\publish\\win-x64\\CalendarMcp.StdioServer.exe"],
+      "enabled": true,
+      "environment": {
+        "CALENDAR_MCP_CONFIG": "E:\\project\\calendar-mcp\\config"
+      }
+    }
+  }
+}
+```
+
+`CALENDAR_MCP_CONFIG` must point at the directory holding `appsettings.json`, not at the file
+itself. Restart OpenCode after editing the config, then run `opencode mcp list` to confirm the
+server reports `connected`.
+
 ### VS Code with GitHub Copilot
 
 VS Code support for MCP servers is still emerging. As of now:
@@ -276,6 +325,11 @@ Any MCP-compatible client can use this server. The key configuration elements ar
 - **Environment**: Optional environment variables
 
 Refer to your MCP client's documentation for specific configuration instructions.
+
+## Deployment
+
+For repeatable installs, self-contained publishing, upgrades, and rollbacks, see the
+[Deployment Guide](DEPLOYMENT.md).
 
 ## Verification
 

@@ -71,7 +71,8 @@ public static partial class AccountValidation
     /// <summary>Known provider types.</summary>
     public static readonly IReadOnlySet<string> KnownProviders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "microsoft365", "outlook.com", "google", "ics", "json", "imap"
+        "microsoft365", "outlook.com", "google", "ics", "json", "imap",
+        "exchange", "ews", "exchange-ews", "on-prem-exchange"
     };
 
     /// <summary>
@@ -118,8 +119,22 @@ public static partial class AccountValidation
             "ics" => ValidateIcsConfig(config),
             "json" => ValidateJsonConfig(config),
             "imap" => ValidateRequiredKeys(config, "imapHost", "smtpHost", "username", "password"),
+            "exchange" or "ews" or "exchange-ews" or "on-prem-exchange" => ValidateExchangeConfig(config),
             _ => (false, $"Unknown provider '{provider}'.")
         };
+    }
+
+    private static (bool, string?) ValidateExchangeConfig(Dictionary<string, string> config)
+    {
+        var required = ValidateRequiredKeys(config, "ewsUrl", "username", "password");
+        if (!required.Item1)
+            return required;
+
+        var url = config.First(kv => kv.Key.Equals("ewsUrl", StringComparison.OrdinalIgnoreCase)).Value;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            return (false, "ewsUrl must be a valid HTTPS URL ending in /EWS/Exchange.asmx.");
+
+        return (true, null);
     }
 
     private static (bool, string?) ValidateRequiredKeys(Dictionary<string, string> config, params string[] keys)

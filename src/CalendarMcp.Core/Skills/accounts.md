@@ -57,6 +57,7 @@ strings:
 | `google` | Google Workspace / Gmail |
 | `outlook.com` | Consumer Outlook.com / Hotmail (Graph) |
 | `imap` | IMAP + SMTP (unattended mailboxes) |
+| `exchange` | On-premises Exchange via EWS/Basic (calendar + email; no contacts) |
 | `ics` | Subscribed iCalendar URL (calendar only, read-only) |
 | `json` | JSON file (read-only; calendar + optional email/contacts) |
 

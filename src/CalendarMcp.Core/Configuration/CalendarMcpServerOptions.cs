@@ -13,7 +13,8 @@ public static class CalendarMcpServerOptions
     private const string Description =
         "Unified access to email, calendar, and contacts across Microsoft 365, " +
         "Google Workspace/Gmail, Outlook.com, and IMAP/SMTP mailboxes, plus " +
-        "read-only iCalendar (.ics) URLs and JSON-file calendar sources. " +
+        "on-premises Exchange through EWS, read-only iCalendar (.ics) URLs, and " +
+        "JSON-file calendar sources. " +
         "Call the get_guide tool (no arguments) for the index of in-depth " +
         "topical guides covering accounts, email, calendar, contacts, " +
         "attachments, end-to-end scenarios, and per-provider behavior.";
@@ -40,6 +41,7 @@ public static class CalendarMcpServerOptions
 
         Provider capability summary:
         - Microsoft 365 / Google Workspace / Outlook.com: email, calendar, contacts (read/write)
+        - On-premises Exchange (EWS): email and calendar (read/write); contacts are not supported
         - IMAP + SMTP: email only (read/write)
         - iCalendar (.ics) URL: calendar (read-only)
         - JSON file: calendar plus optional email/contacts (read-only)

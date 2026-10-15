@@ -60,6 +60,11 @@ public static class AccountCapabilities
             [
                 new AccountCapability(Email, false)
             ],
+            "exchange" or "ews" or "exchange-ews" or "on-prem-exchange" =>
+            [
+                new AccountCapability(Calendar, false),
+                new AccountCapability(Email, false)
+            ],
             "json" or "json-calendar" => GetJsonCapabilities(account),
             _ =>
             [

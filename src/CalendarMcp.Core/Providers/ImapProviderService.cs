@@ -454,6 +454,12 @@ public class ImapProviderService : IImapProviderService, IAsyncDisposable, IDisp
             }
 
             var part = parts[index];
+            if (part.Content is null)
+            {
+                _logger.LogWarning("Attachment part {Index} has no content on message {EmailId}", index, emailId);
+                return null;
+            }
+
             using var ms = new MemoryStream();
             await part.Content.DecodeToAsync(ms, cancellationToken);
 

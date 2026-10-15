@@ -4,6 +4,23 @@ Per-provider behavior, quirks, and capability nuances. The `provider`
 field returned by `list_accounts` selects which of these applies to a
 given account.
 
+## On-premises Exchange (`exchange`)
+
+- **Auth**: HTTPS EWS endpoint with Basic username/password. Configure
+  `ewsUrl`, `username`, and `password` in `ProviderConfig`.
+- **Capabilities**: email and calendar (read/write); contacts are not
+  supported.
+- **Calendar**: events, create/update/delete/respond, and attendee free/busy.
+- **Email**: list/search/details, send, delete, mark read/unread, move.
+  Attachment metadata is available, but attachment bytes and outbound
+  attachments are not implemented.
+- **Search**: uses EWS AQS `QueryString`; EWS rejects combining it with a
+  `Restriction`. Explicit dates use the Exchange server's locale format;
+  the configured server is day-first (`dd/MM/yyyy`).
+- **Zoom**: the provider does not create Zoom meetings. Add an existing Zoom
+  URL to the event's location or body; details return the detected URL.
+- See `docs/EWS-ONPREM-SETUP.md` for the account configuration template.
+
 ## Microsoft 365 (`microsoft365`)
 
 - **Auth**: Entra ID OAuth via MSAL (interactive once, then refreshed

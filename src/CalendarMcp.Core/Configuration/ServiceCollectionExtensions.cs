@@ -20,7 +20,7 @@ public static class ServiceCollectionExtensions
         // Register authentication services
         services.AddSingleton<IM365AuthenticationService, M365AuthenticationService>();
         services.AddSingleton<IGoogleAuthenticationService, GoogleAuthenticationService>();
-        
+
         // Register provider services
         services.AddSingleton<IM365ProviderService, M365ProviderService>();
         services.AddSingleton<IGoogleProviderService, GoogleProviderService>();
@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIcsProviderService, IcsProviderService>();
         services.AddSingleton<IJsonCalendarProviderService, JsonCalendarProviderService>();
         services.AddSingleton<IImapProviderService, ImapProviderService>();
+        services.AddSingleton<IExchangeProviderService, ExchangeEwsProviderService>();
         services.AddSingleton<IProviderServiceFactory, ProviderServiceFactory>();
 
         // DataProtection + PasswordProtector for at-rest encryption of provider passwords
@@ -35,6 +36,10 @@ public static class ServiceCollectionExtensions
 
         // Register HttpClient for ICS provider
         services.AddHttpClient("IcsProvider");
+
+        // EWS uses the platform TLS stack (Schannel on Windows), which supports the
+        // cipher suites required by some on-premises Exchange/IIS installations.
+        services.AddHttpClient("ExchangeEws", client => client.Timeout = TimeSpan.FromSeconds(60));
 
         // Register HttpClient for unsubscribe requests
         services.AddHttpClient("Unsubscribe", client =>
@@ -44,7 +49,7 @@ public static class ServiceCollectionExtensions
 
         // Register unsubscribe executor
         services.AddSingleton<UnsubscribeExecutor>();
-        
+
         // Register account registry
         services.AddSingleton<IAccountRegistry, AccountRegistry>();
 
@@ -53,7 +58,7 @@ public static class ServiceCollectionExtensions
         // consume is sufficient there).
         services.AddOptions<AttachmentStoreOptions>();
         services.AddSingleton<IAttachmentStore, InMemoryAttachmentStore>();
-        
+
         // Register MCP tools (method-based pattern - just register the classes)
         services.AddSingleton<ListAccountsTool>();
         services.AddSingleton<GetGuideTool>();
@@ -72,6 +77,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GetCalendarEventsTool>();
         services.AddSingleton<GetCalendarEventDetailsTool>();
         services.AddSingleton<CreateEventTool>();
+        services.AddSingleton<UpdateEventTool>();
+        services.AddSingleton<FindAvailableTimesTool>();
         services.AddSingleton<DeleteEventTool>();
         services.AddSingleton<RespondToEventTool>();
         services.AddSingleton<GetUnsubscribeInfoTool>();
