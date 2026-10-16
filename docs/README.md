@@ -25,8 +25,9 @@ This documentation is organized into focused topics:
 
 ### Authentication & Security
 - **[Authentication](authentication.md)** - Complete auth flows, token management, and per-account isolation
-- **[Providers](providers.md)** - Provider service implementations (M365, Google, Outlook.com)
+- **[Providers](providers.md)** - Provider service implementations (M365, Google, Outlook.com, IMAP, DAV, …)
 - **[Security](security.md)** - Security considerations, credential storage, and best practices
+- **[iCloud CalDAV/CardDAV Setup](ICLOUD-DAV-SETUP.md)** - App-specific passwords and DAV presets for iCloud / Nextcloud / Fastmail
 
 ### Configuration & Setup
 - **[Configuration](configuration.md)** - All configuration examples (accounts, router, telemetry)

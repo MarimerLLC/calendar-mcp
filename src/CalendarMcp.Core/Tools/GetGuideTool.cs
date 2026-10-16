@@ -31,7 +31,7 @@ public sealed class GetGuideTool(ILogger<GetGuideTool> logger)
         ["contacts"] = "Contact tools: list, search, view, create, update, delete across providers that support contacts.",
         ["attachments"] = "Non-obvious attachment flow: stash vs inline modes, upload/forward patterns, size limits.",
         ["scenarios"] = "End-to-end workflows wiring tools together: triage, scheduling, forwarding, bulk cleanup.",
-        ["providers"] = "Per-provider behavior: Microsoft 365, Google, Outlook.com, IMAP/SMTP, ICS, JSON.",
+        ["providers"] = "Per-provider behavior: Microsoft 365, Google, Outlook.com, IMAP/SMTP, CalDAV/CardDAV (dav), ICS, JSON.",
     };
 
     [McpServerTool, Description(

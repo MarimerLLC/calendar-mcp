@@ -1,5 +1,6 @@
 using CalendarMcp.Core.Prompts;
 using CalendarMcp.Core.Providers;
+using CalendarMcp.Core.Providers.Dav;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Core.Utilities;
@@ -28,6 +29,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIcsProviderService, IcsProviderService>();
         services.AddSingleton<IJsonCalendarProviderService, JsonCalendarProviderService>();
         services.AddSingleton<IImapProviderService, ImapProviderService>();
+        services.AddSingleton<DavHttpClient>();
+        services.AddSingleton<DavDiscovery>();
+        services.AddSingleton<IDavProviderService, DavProviderService>();
         services.AddSingleton<IProviderServiceFactory, ProviderServiceFactory>();
 
         // DataProtection + PasswordProtector for at-rest encryption of provider passwords
@@ -35,6 +39,13 @@ public static class ServiceCollectionExtensions
 
         // Register HttpClient for ICS provider
         services.AddHttpClient("IcsProvider");
+
+        // DAV client follows redirects manually inside DavHttpClient.
+        services.AddHttpClient(DavHttpClient.HttpClientName)
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = false
+            });
 
         // Register HttpClient for unsubscribe requests
         services.AddHttpClient("Unsubscribe", client =>

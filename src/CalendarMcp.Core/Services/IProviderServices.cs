@@ -44,3 +44,11 @@ public interface IJsonCalendarProviderService : IProviderService
 public interface IImapProviderService : IProviderService
 {
 }
+
+/// <summary>
+/// CalDAV/CardDAV provider service for generic DAV servers and iCloud.
+/// Calendar and contacts read/write; email methods throw NotSupportedException.
+/// </summary>
+public interface IDavProviderService : IProviderService
+{
+}

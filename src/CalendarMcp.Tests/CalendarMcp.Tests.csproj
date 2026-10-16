@@ -21,4 +21,7 @@
     <ProjectReference Include="../CalendarMcp.Auth/CalendarMcp.Auth.csproj" />
     <ProjectReference Include="../CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="TestData/**/*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

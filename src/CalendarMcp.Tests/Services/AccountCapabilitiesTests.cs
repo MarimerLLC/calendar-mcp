@@ -20,6 +20,9 @@ public class AccountCapabilitiesTests
     [DataRow("icalendar")]
     [DataRow("json")]
     [DataRow("json-calendar")]
+    [DataRow("dav")]
+    [DataRow("caldav")]
+    [DataRow("carddav")]
     [DataRow("some-unknown-provider")]
     public void HasCalendar_CalendarCapableProviders_ReturnsTrue(string provider)
     {
@@ -50,6 +53,24 @@ public class AccountCapabilitiesTests
         CollectionAssert.AreEquivalent(
             new[] { AccountCapabilities.Email },
             caps.Select(c => c.Name).ToArray());
+    }
+
+    [TestMethod]
+    public void GetCapabilities_Dav_IsCalendarAndContacts()
+    {
+        var account = TestData.CreateAccount(provider: "dav", providerConfig: new Dictionary<string, string>
+        {
+            ["preset"] = "icloud",
+            ["username"] = "a@icloud.com",
+            ["password"] = "x",
+            ["enableCalendar"] = "true",
+            ["enableContacts"] = "true"
+        });
+        var names = AccountCapabilities.GetCapabilities(account).Select(c => c.Name).ToArray();
+        CollectionAssert.AreEquivalent(
+            new[] { AccountCapabilities.Calendar, AccountCapabilities.Contacts },
+            names);
+        Assert.IsFalse(AccountCapabilities.GetCapabilities(account).Any(c => c.ReadOnly));
     }
 
     [TestMethod]

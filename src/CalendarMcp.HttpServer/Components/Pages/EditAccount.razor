@@ -249,6 +249,58 @@ else if (_model is not null)
                     </div>
                 </details>
                 break;
+
+            case "dav":
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Preset</label>
+                        <InputSelect class="form-select" @bind-Value="_model.DavPreset">
+                            <option value="icloud">iCloud</option>
+                            <option value="icloud-cn">iCloud (China)</option>
+                            <option value="fastmail">Fastmail</option>
+                            <option value="nextcloud">Nextcloud</option>
+                            <option value="generic">Custom / Generic</option>
+                        </InputSelect>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Username</label>
+                        <InputText class="form-control" @bind-Value="_model.Username" placeholder="@GetDavUsernamePlaceholder(_model.DavPreset)" />
+                        <div class="form-text">@GetDavUsernameHelp(_model.DavPreset)</div>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Password</label>
+                        <InputText class="form-control" type="password" @bind-Value="_model.Password"
+                                   placeholder="@GetDavPasswordPlaceholder(_model.DavPreset)" />
+                        <div class="form-text">
+                            @((MarkupString)GetDavPasswordHelpHtml(_model.DavPreset))
+                        </div>
+                    </div>
+                </div>
+                <div class="row mb-2">
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" @bind-Value="_model.EnableCalendar" />
+                            <label class="form-check-label">Enable CalDAV (calendar)</label>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-check">
+                            <InputCheckbox class="form-check-input" @bind-Value="_model.EnableContacts" />
+                            <label class="form-check-label">Enable CardDAV (contacts)</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">CalDAV URL</label>
+                        <InputText class="form-control" @bind-Value="_model.CalDavUrl" placeholder="@GetDavCalDavPlaceholder(_model.DavPreset)" />
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">CardDAV URL</label>
+                        <InputText class="form-control" @bind-Value="_model.CardDavUrl" placeholder="@GetDavCardDavPlaceholder(_model.DavPreset)" />
+                    </div>
+                </div>
+                break;
         }
 
         <PermissionsEditor Model="_model" />
@@ -390,4 +442,56 @@ else if (_model is not null)
 
     private static bool HasEmailSupport(string provider) =>
         provider is "microsoft365" or "outlook.com" or "google";
+
+    private static string GetDavUsernamePlaceholder(string? preset) => preset switch
+    {
+        "icloud" or "icloud-cn" => "you@icloud.com",
+        "fastmail" => "you@fastmail.com",
+        "nextcloud" => "username",
+        _ => "username@example.com"
+    };
+
+    private static string GetDavUsernameHelp(string? preset) => preset switch
+    {
+        "icloud" or "icloud-cn" => "Apple ID email for iCloud.",
+        "fastmail" => "Your Fastmail email address.",
+        "nextcloud" => "Nextcloud login username.",
+        _ => "DAV account username (often your email)."
+    };
+
+    private static string GetDavPasswordPlaceholder(string? preset) => preset switch
+    {
+        "icloud" or "icloud-cn" or "fastmail" => "App-specific password",
+        _ => "Password"
+    };
+
+    private static string GetDavPasswordHelpHtml(string? preset) => preset switch
+    {
+        "icloud" or "icloud-cn" =>
+            """For iCloud use an <a href="https://account.apple.com" target="_blank" rel="noopener">app-specific password</a>. Stored encrypted via ASP.NET DataProtection.""",
+        "fastmail" =>
+            """Use a Fastmail <a href="https://www.fastmail.com/help/clients/apppassword.html" target="_blank" rel="noopener">app password</a>. Stored encrypted via ASP.NET DataProtection.""",
+        "nextcloud" =>
+            "Nextcloud password or app password. Stored encrypted via ASP.NET DataProtection.",
+        _ =>
+            "DAV password (or app password if the server requires one). Stored encrypted via ASP.NET DataProtection."
+    };
+
+    private static string GetDavCalDavPlaceholder(string? preset) => preset switch
+    {
+        "icloud" => "https://caldav.icloud.com/",
+        "icloud-cn" => "https://caldav.icloud.com.cn/",
+        "fastmail" => "https://dav.fastmail.com/",
+        "nextcloud" => "https://cloud.example.com/remote.php/dav/",
+        _ => "https://caldav.example.com/"
+    };
+
+    private static string GetDavCardDavPlaceholder(string? preset) => preset switch
+    {
+        "icloud" => "https://contacts.icloud.com/",
+        "icloud-cn" => "https://contacts.icloud.com.cn/",
+        "fastmail" => "https://dav.fastmail.com/",
+        "nextcloud" => "https://cloud.example.com/remote.php/dav/",
+        _ => "https://carddav.example.com/"
+    };
 }

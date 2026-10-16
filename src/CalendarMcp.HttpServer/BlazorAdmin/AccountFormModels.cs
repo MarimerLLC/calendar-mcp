@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Providers;
+using CalendarMcp.Core.Providers.Dav;
 using CalendarMcp.Core.Security;
 using CalendarMcp.Core.Services;
 
@@ -118,6 +119,21 @@ public class CreateAccountFormModel : AccountFormBase
     public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
     public string JunkFolder { get; set; } = ImapProviderService.DefaultJunk;
 
+    // CalDAV / CardDAV
+    public void ApplyDavPresetDefaults()
+    {
+        var config = new Dictionary<string, string>();
+        DavHostPolicy.ApplyPreset(DavPreset, config);
+        CalDavUrl = config.GetValueOrDefault("caldavUrl", "");
+        CardDavUrl = config.GetValueOrDefault("carddavUrl", "");
+    }
+
+    public string DavPreset { get; set; } = DavHostPolicy.PresetIcloud;
+    public string CalDavUrl { get; set; } = "";
+    public string CardDavUrl { get; set; } = "";
+    public bool EnableCalendar { get; set; } = true;
+    public bool EnableContacts { get; set; } = true;
+
     public override AccountInfo ToAccountInfo(PasswordProtector? passwordProtector = null)
     {
         var providerConfig = BuildProviderConfig(passwordProtector);
@@ -158,8 +174,39 @@ public class CreateAccountFormModel : AccountFormBase
         },
         "json" => BuildJsonProviderConfig(),
         "imap" => BuildImapProviderConfig(passwordProtector),
+        "dav" or "caldav" or "carddav" => BuildDavProviderConfig(passwordProtector),
         _ => []
     };
+
+    private Dictionary<string, string> BuildDavProviderConfig(PasswordProtector? passwordProtector)
+    {
+        var encryptedPassword = passwordProtector is not null
+            ? passwordProtector.Protect(Password)
+            : Password;
+
+        var config = new Dictionary<string, string>
+        {
+            ["preset"] = string.IsNullOrWhiteSpace(DavPreset) ? DavHostPolicy.PresetGeneric : DavPreset,
+            ["username"] = Username,
+            ["password"] = encryptedPassword,
+            ["enableCalendar"] = EnableCalendar ? "true" : "false",
+            ["enableContacts"] = EnableContacts ? "true" : "false"
+        };
+
+        DavHostPolicy.ApplyPreset(config["preset"], config);
+
+        if (!string.IsNullOrWhiteSpace(CalDavUrl))
+            config["caldavUrl"] = CalDavUrl;
+        if (!string.IsNullOrWhiteSpace(CardDavUrl))
+            config["carddavUrl"] = CardDavUrl;
+
+        if (!EnableCalendar)
+            config.Remove("caldavUrl");
+        if (!EnableContacts)
+            config.Remove("carddavUrl");
+
+        return config;
+    }
 
     private Dictionary<string, string> BuildImapProviderConfig(PasswordProtector? passwordProtector)
     {
@@ -260,6 +307,13 @@ public class EditAccountFormModel : AccountFormBase
     public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
     public string JunkFolder { get; set; } = ImapProviderService.DefaultJunk;
 
+    // CalDAV / CardDAV
+    public string DavPreset { get; set; } = DavHostPolicy.PresetIcloud;
+    public string CalDavUrl { get; set; } = "";
+    public string CardDavUrl { get; set; } = "";
+    public bool EnableCalendar { get; set; } = true;
+    public bool EnableContacts { get; set; } = true;
+
     public static EditAccountFormModel FromAccountInfo(AccountInfo account, PasswordProtector? passwordProtector = null)
     {
         var model = new EditAccountFormModel
@@ -328,6 +382,28 @@ public class EditAccountFormModel : AccountFormBase
                 model.JunkFolder = GetConfigValue(config, "junkFolder");
                 if (string.IsNullOrEmpty(model.JunkFolder)) model.JunkFolder = ImapProviderService.DefaultJunk;
                 break;
+            case "dav" or "caldav" or "carddav":
+                model.DavPreset = GetConfigValue(config, "preset");
+                if (string.IsNullOrEmpty(model.DavPreset)) model.DavPreset = DavHostPolicy.PresetGeneric;
+                model.CalDavUrl = GetConfigValue(config, "caldavUrl");
+                model.CardDavUrl = GetConfigValue(config, "carddavUrl");
+                model.Username = GetConfigValue(config, "username");
+                var davPassword = GetConfigValue(config, "password");
+                model.Password = passwordProtector is not null
+                    ? passwordProtector.Unprotect(davPassword)
+                    : davPassword;
+                model.EnableCalendar = !string.Equals(GetConfigValue(config, "enableCalendar"), "false", StringComparison.OrdinalIgnoreCase);
+                model.EnableContacts = !string.Equals(GetConfigValue(config, "enableContacts"), "false", StringComparison.OrdinalIgnoreCase);
+                if (string.IsNullOrWhiteSpace(GetConfigValue(config, "enableCalendar")) && string.IsNullOrWhiteSpace(model.CalDavUrl))
+                    model.EnableCalendar = false;
+                if (string.IsNullOrWhiteSpace(GetConfigValue(config, "enableContacts")) && string.IsNullOrWhiteSpace(model.CardDavUrl))
+                    model.EnableContacts = false;
+                if (!model.EnableCalendar && !model.EnableContacts)
+                {
+                    model.EnableCalendar = !string.IsNullOrWhiteSpace(model.CalDavUrl);
+                    model.EnableContacts = !string.IsNullOrWhiteSpace(model.CardDavUrl);
+                }
+                break;
         }
 
         return model;
@@ -372,8 +448,39 @@ public class EditAccountFormModel : AccountFormBase
         },
         "json" => BuildJsonProviderConfig(),
         "imap" => BuildImapProviderConfig(passwordProtector),
+        "dav" or "caldav" or "carddav" => BuildDavProviderConfig(passwordProtector),
         _ => []
     };
+
+    private Dictionary<string, string> BuildDavProviderConfig(PasswordProtector? passwordProtector)
+    {
+        var encryptedPassword = passwordProtector is not null
+            ? passwordProtector.Protect(Password)
+            : Password;
+
+        var config = new Dictionary<string, string>
+        {
+            ["preset"] = string.IsNullOrWhiteSpace(DavPreset) ? DavHostPolicy.PresetGeneric : DavPreset,
+            ["username"] = Username,
+            ["password"] = encryptedPassword,
+            ["enableCalendar"] = EnableCalendar ? "true" : "false",
+            ["enableContacts"] = EnableContacts ? "true" : "false"
+        };
+
+        DavHostPolicy.ApplyPreset(config["preset"], config);
+
+        if (!string.IsNullOrWhiteSpace(CalDavUrl))
+            config["caldavUrl"] = CalDavUrl;
+        if (!string.IsNullOrWhiteSpace(CardDavUrl))
+            config["carddavUrl"] = CardDavUrl;
+
+        if (!EnableCalendar)
+            config.Remove("caldavUrl");
+        if (!EnableContacts)
+            config.Remove("carddavUrl");
+
+        return config;
+    }
 
     private Dictionary<string, string> BuildImapProviderConfig(PasswordProtector? passwordProtector)
     {

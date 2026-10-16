@@ -60,6 +60,7 @@ public static class AccountCapabilities
             [
                 new AccountCapability(Email, false)
             ],
+            "dav" or "caldav" or "carddav" => GetDavCapabilities(account),
             "json" or "json-calendar" => GetJsonCapabilities(account),
             _ =>
             [
@@ -150,6 +151,55 @@ public static class AccountCapabilities
         AccountPermission.ContactsWrite => (Contacts, true),
         _ => (string.Empty, false)
     };
+
+    /// <summary>
+    /// DAV accounts expose calendar and/or contacts depending on configured URLs / enable flags.
+    /// </summary>
+    private static IReadOnlyList<AccountCapability> GetDavCapabilities(AccountInfo account)
+    {
+        var config = account.ProviderConfig;
+        var preset = GetConfig(config, "preset");
+        var working = new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase);
+        Providers.Dav.DavHostPolicy.ApplyPreset(preset, working);
+
+        var caldavUrl = GetConfig(working, "caldavUrl");
+        var carddavUrl = GetConfig(working, "carddavUrl");
+        var enableCalendar = ParseEnable(GetConfig(working, "enableCalendar"), !string.IsNullOrWhiteSpace(caldavUrl));
+        var enableContacts = ParseEnable(GetConfig(working, "enableContacts"), !string.IsNullOrWhiteSpace(carddavUrl));
+
+        var capabilities = new List<AccountCapability>();
+        if (enableCalendar)
+            capabilities.Add(new AccountCapability(Calendar, false));
+        if (enableContacts)
+            capabilities.Add(new AccountCapability(Contacts, false));
+
+        // If nothing was configured yet (e.g. empty form), advertise both so the UI
+        // shows the relevant permission toggles for a typical DAV account.
+        if (capabilities.Count == 0
+            && GetConfig(config, "enableCalendar") is null
+            && GetConfig(config, "enableContacts") is null)
+        {
+            capabilities.Add(new AccountCapability(Calendar, false));
+            capabilities.Add(new AccountCapability(Contacts, false));
+        }
+
+        return capabilities;
+
+        static string? GetConfig(IDictionary<string, string> d, string key)
+        {
+            foreach (var kv in d)
+            {
+                if (kv.Key.Equals(key, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value))
+                    return kv.Value;
+            }
+            return null;
+        }
+
+        static bool ParseEnable(string? value, bool defaultValue) =>
+            value is null
+                ? defaultValue
+                : value.Equals("true", StringComparison.OrdinalIgnoreCase) || value == "1";
+    }
 
     /// <summary>
     /// JSON accounts have optional email and contacts support depending on configured file paths.

@@ -57,6 +57,7 @@ strings:
 | `google` | Google Workspace / Gmail |
 | `outlook.com` | Consumer Outlook.com / Hotmail (Graph) |
 | `imap` | IMAP + SMTP (unattended mailboxes) |
+| `dav` | CalDAV + CardDAV (iCloud, Nextcloud, Fastmail, custom; aliases `caldav` / `carddav`) |
 | `ics` | Subscribed iCalendar URL (calendar only, read-only) |
 | `json` | JSON file (read-only; calendar + optional email/contacts) |
 

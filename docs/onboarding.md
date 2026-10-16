@@ -111,31 +111,18 @@ dotnet run
 calendar-mcp-setup add-account
 
 # Interactive prompts:
-# 1. Account type? (microsoft365 / google / outlook.com)
+# 1. Account type via dedicated commands:
+#      add-m365-account / add-outlook-account / add-google-account /
+#      add-dav-account / add-ics-account / add-json-account
 # 2. Account ID (unique identifier, e.g., "work-account")
 # 3. Display name (e.g., "Work Account")
-# 4. Priority (default: 999)
-# 5. Email domains for routing (e.g., "company.com,example.net")
-# 
-# For Microsoft 365:
-#   6. Tenant ID
-#   7. Client ID
-#   8. Scopes (default: Mail.Read,Mail.Send,Calendars.ReadWrite,Contacts.ReadWrite)
+# …
 #
-# For Google:
-#   6. Client ID
-#   7. Client Secret
-#   8. User Email
-#   9. Scopes (default: gmail.readonly,gmail.send,calendar,contacts)
-#
-# For Outlook.com:
-#   6. Client ID
-#   7. Scopes (default: Mail.Read,Mail.Send,Calendars.ReadWrite,Contacts.ReadWrite)
-#
-# → Opens browser for OAuth authentication
-# → Saves token to credential store
-# → Adds account to appsettings.json
-```
+# For CalDAV/CardDAV (add-dav-account):
+#   preset (icloud / fastmail / nextcloud / …), username, app password,
+#   CalDAV/CardDAV URLs (seeded by preset), optional live PROPFIND validation
+#   → Password stored as ENC:… via DataProtection (no OAuth browser step)
+#```
 
 #### List Accounts
 

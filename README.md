@@ -1,6 +1,6 @@
 # Calendar & Email MCP Server
 
-A Model Context Protocol (MCP) server that gives AI assistants access to email, calendar, and contact data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, IMAP/SMTP mailboxes, ICS feeds, and JSON calendar files.
+A Model Context Protocol (MCP) server that gives AI assistants access to email, calendar, and contact data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, IMAP/SMTP mailboxes, CalDAV/CardDAV (including iCloud), ICS feeds, and JSON calendar files.
 
 ## Overview
 
@@ -14,6 +14,7 @@ Calendar-MCP aggregates email, calendar, and contact information from multiple p
 | Outlook.com | Yes | Yes | Yes | OAuth 2.0 (MSAL) |
 | Google Workspace / Gmail | Yes | Yes | Yes | OAuth 2.0 |
 | IMAP/SMTP | Yes | -- | -- | Username + app password (encrypted at rest) |
+| CalDAV / CardDAV | -- | Yes | Yes | Username + app password (iCloud, Nextcloud, Fastmail, …) |
 | ICS Calendar Feeds | -- | Read-only | -- | None (public URLs) |
 | JSON Calendar Files | -- | Read-only | -- | None (local files) |
 
@@ -91,6 +92,9 @@ CalendarMcp.Cli add-m365-account
 # Google Workspace or Gmail
 CalendarMcp.Cli add-google-account
 
+# CalDAV / CardDAV (iCloud, Fastmail, Nextcloud, custom)
+CalendarMcp.Cli add-dav-account
+
 # Verify
 CalendarMcp.Cli list-accounts
 CalendarMcp.Cli test-account <account-id>
@@ -99,7 +103,8 @@ CalendarMcp.Cli test-account <account-id>
 Account setup guides:
 - [Microsoft 365 / Outlook.com Setup](docs/M365-SETUP.md)
 - [Google / Gmail Setup](docs/GOOGLE-SETUP.md)
-
+- [iCloud CalDAV / CardDAV Setup](docs/ICLOUD-DAV-SETUP.md)
+- [IMAP/SMTP Setup](docs/IMAP-SETUP.md)
 ### Connect Your AI Assistant
 
 **Claude Desktop** — add to your config (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
