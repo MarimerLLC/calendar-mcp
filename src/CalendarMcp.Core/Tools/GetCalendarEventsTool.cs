@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Models;
+using CalendarMcp.Core.Providers;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
@@ -45,13 +46,14 @@ public sealed class GetCalendarEventsTool(
         List<AccountInfo> validAccounts;
         if (!string.IsNullOrEmpty(accountId))
         {
-            validAccounts = new List<AccountInfo> { await ToolGuard.RequireAccountAsync(accountRegistry, accountId) };
+            var account = await ToolGuard.RequireAccountAsync(accountRegistry, accountId);
+            validAccounts = new List<AccountInfo> { account };
             // "primary" is a universal alias for each account's default calendar. It never
             // appears in ListCalendarsAsync output (providers return real calendar ids), and
             // it's what the tool emits as the calendarId for default-calendar events — so skip
             // validation and let the provider resolve it. Validating it would wrongly warn
             // "not found" and skip the fetch.
-            validateCalendarId = !string.IsNullOrEmpty(calendarId) && !IsPrimaryAlias(calendarId);
+            validateCalendarId = !string.IsNullOrEmpty(calendarId) && !IsDefaultCalendarAlias(calendarId, account);
         }
         else if (!string.IsNullOrEmpty(calendarId))
         {
@@ -297,8 +299,11 @@ public sealed class GetCalendarEventsTool(
     /// <summary>
     /// "primary" is the alias every provider uses for an account's default calendar, and the
     /// calendarId the tool emits for default-calendar events. It is accepted as input but is
-    /// never returned by ListCalendarsAsync, so it must bypass calendarId validation.
+    /// never returned by ListCalendarsAsync, so it must bypass calendarId validation. The
+    /// Graph providers also resolve the other spellings in <see cref="CalendarIdAliases"/>.
     /// </summary>
-    private static bool IsPrimaryAlias(string? calendarId) =>
-        string.Equals(calendarId, "primary", StringComparison.Ordinal);
+    private static bool IsDefaultCalendarAlias(string calendarId, AccountInfo account) =>
+        CalendarIdAliases.ProviderResolvesAliases(account.Provider)
+            ? CalendarIdAliases.IsDefaultCalendar(calendarId)
+            : string.Equals(calendarId, CalendarIdAliases.Primary, StringComparison.Ordinal);
 }
