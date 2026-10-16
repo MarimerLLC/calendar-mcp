@@ -63,7 +63,9 @@ Full event including description/body. All four parameters are required.
 - Omitting `accountId` uses the first configured account, which is
   almost never what you want. Always pass `accountId` explicitly when
   creating events.
-- Omitting `calendarId` uses the account's default calendar.
+- Omitting `calendarId` uses the account's default calendar. `primary`
+  is also accepted for the default calendar; any other value
+  must be an id from `list_calendars`.
 - `attendees` is an array of email addresses.
 
 ### `update_event(accountId, calendarId, eventId, subject?, start?, end?, location?, attendees?[], timeZone?, isAllDay?)`

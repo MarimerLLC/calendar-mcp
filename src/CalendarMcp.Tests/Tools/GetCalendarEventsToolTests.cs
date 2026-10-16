@@ -296,6 +296,84 @@ public class GetCalendarEventsToolTests
     }
 
     [TestMethod]
+    [DataRow("microsoft365", "Default")]
+    [DataRow("outlook.com", "PRIMARY")]
+    public async Task GetCalendarEvents_GraphAccountWithAliasSpelling_SkipsValidation(string provider, string alias)
+    {
+        // The Graph providers resolve "default" and any casing of "primary" to the default
+        // calendar, so those spellings must not be validated against ListCalendarsAsync either.
+        var account = TestData.CreateAccount(id: "acc-1", provider: provider);
+        var events = new List<CalendarEvent>
+        {
+            TestData.CreateEvent(id: "ev1", accountId: "acc-1", calendarId: "primary", subject: "Meeting",
+                start: new DateTime(2025, 1, 10, 15, 0, 0, DateTimeKind.Utc),
+                end: new DateTime(2025, 1, 10, 16, 0, 0, DateTimeKind.Utc))
+        };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        // No ListCalendarsAsync setup: calling it would fail the test.
+        provExp.Setups.GetCalendarEventsAsync(
+            "acc-1", alias, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
+            Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarEvent>>(events));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider(provider).ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-1", alias);
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual(1, doc.RootElement.GetProperty("events").GetArrayLength());
+        Assert.AreEqual(JsonValueKind.Null, doc.RootElement.GetProperty("warnings").ValueKind);
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
+    public async Task GetCalendarEvents_GoogleAccountWithDefaultAlias_StillValidates()
+    {
+        // Google is unchanged: only the exact "primary" bypasses validation, so "default"
+        // is checked against the account's calendars and reported as not found.
+        var account = TestData.CreateAccount(id: "acc-g", provider: "google");
+        var calendars = new List<CalendarInfo> { TestData.CreateCalendar(id: "me@example.com", accountId: "acc-g") };
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-g")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.ListCalendarsAsync("acc-g", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>(calendars));
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("google").ReturnValue(provExp.Instance());
+
+        var tool = new GetCalendarEventsTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<GetCalendarEventsTool>.Instance);
+
+        var result = await tool.GetCalendarEvents(TestTimeZone, Start, End, "acc-g", "default");
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual(0, doc.RootElement.GetProperty("events").GetArrayLength());
+        var warnings = doc.RootElement.GetProperty("warnings");
+        Assert.AreEqual(1, warnings.GetArrayLength());
+        StringAssert.Contains(warnings[0].GetProperty("warning").GetString(), "default");
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+
+    [TestMethod]
     public async Task GetCalendarEvents_AccountIdWithValidCalendarId_ReturnsEventsNoWarning()
     {
         var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");

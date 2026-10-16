@@ -22,7 +22,7 @@ public sealed class CreateEventTool(
         [Description("Event start date and time (ISO 8601 format). For an all-day event, a date (yyyy-MM-dd).")] DateTime start,
         [Description("Event end date and time (ISO 8601 format). For an all-day event, the exclusive end date (yyyy-MM-dd): a one-day event on 2026-10-01 ends 2026-10-02.")] DateTime end,
         [Description("Account ID to create the event in. Omitting uses the first configured account — provide explicitly to target the correct account. Obtain from list_accounts.")] string? accountId = null,
-        [Description("Calendar ID to create the event in, or omit for the default calendar. Obtain from list_calendars.")] string? calendarId = null,
+        [Description("Calendar ID to create the event in. Omit (or pass 'primary') for the default calendar; otherwise obtain from list_calendars.")] string? calendarId = null,
         [Description("Event location")] string? location = null,
         [Description("List of attendee email addresses")] List<string>? attendees = null,
         [Description("Event description/body")] string? body = null,
