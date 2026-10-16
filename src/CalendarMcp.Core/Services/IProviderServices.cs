@@ -44,3 +44,14 @@ public interface IJsonCalendarProviderService : IProviderService
 public interface IImapProviderService : IProviderService
 {
 }
+
+/// <summary>On-premises Exchange EWS provider, including attendee free/busy lookup.</summary>
+public interface IExchangeProviderService : IProviderService
+{
+    Task<IReadOnlyList<FreeBusyInterval>> GetFreeBusyAsync(
+        string accountId,
+        IReadOnlyList<string> emails,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        CancellationToken cancellationToken = default);
+}
