@@ -40,11 +40,24 @@ internal static class CalendarIdAliases
         accountType?.ToLowerInvariant() is "microsoft365" or "m365" or "outlook.com" or "outlook" or "hotmail";
 
     /// <summary>
+    /// Longest calendarId echoed back in <see cref="UnknownCalendarMessage"/>. Graph IDs run to
+    /// about 150 characters; the cap keeps the whole message under the formatter's length limit
+    /// so the recovery guidance after the ID is never truncated.
+    /// </summary>
+    private const int MaxEchoedIdLength = 160;
+
+    /// <summary>
     /// Client-facing message for a calendarId the account doesn't have.
     /// </summary>
-    public static string UnknownCalendarMessage(string calendarId) =>
-        $"calendarId \"{ProviderErrorFormatter.Sanitize(calendarId)}\" is not a calendar in this account; " +
-        "omit calendarId for the default calendar, or use an id from list_calendars.";
+    public static string UnknownCalendarMessage(string calendarId)
+    {
+        var id = ProviderErrorFormatter.Sanitize(calendarId);
+        if (id.Length > MaxEchoedIdLength)
+            id = id[..MaxEchoedIdLength].TrimEnd() + "…";
+
+        return $"calendarId \"{id}\" is not a calendar in this account; " +
+               "omit calendarId for the default calendar, or use an id from list_calendars.";
+    }
 
     /// <summary>
     /// When creating an event on a specific Graph calendar fails because that calendar ID is

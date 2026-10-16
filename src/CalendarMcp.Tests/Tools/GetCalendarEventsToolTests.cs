@@ -315,7 +315,11 @@ public class GetCalendarEventsToolTests
             .ReturnValue(Task.FromResult<AccountInfo?>(account));
 
         var provExp = new IProviderServiceCreateExpectations();
-        // No ListCalendarsAsync setup: calling it would fail the test.
+        // The tool swallows ListCalendarsAsync failures, so an unexpected call wouldn't throw
+        // out of the tool; expect zero calls so provExp.Verify() catches it instead.
+        provExp.Setups.ListCalendarsAsync("acc-1", Arg.Any<CancellationToken>())
+            .ReturnValue(Task.FromResult<IEnumerable<CalendarInfo>>([]))
+            .ExpectedCallCount(0);
         provExp.Setups.GetCalendarEventsAsync(
             "acc-1", alias, Arg.Any<DateTime?>(), Arg.Any<DateTime?>(),
             Arg.Any<int>(), Arg.Any<CancellationToken>())

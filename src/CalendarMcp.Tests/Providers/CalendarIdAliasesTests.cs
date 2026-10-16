@@ -89,6 +89,20 @@ public class CalendarIdAliasesTests
     }
 
     [TestMethod]
+    public void TranslateCreateFailure_LongCalendarId_KeepsRecoveryGuidance()
+    {
+        var longId = new string('A', 400);
+        var translated = CalendarIdAliases.TranslateCreateFailure(
+            longId, GraphError(400, "ErrorInvalidIdMalformed", "The Id is invalid."));
+
+        var message = ToolGuard.DescribeItemFailure("create event", translated!);
+
+        StringAssert.Contains(message, "omit calendarId");
+        StringAssert.Contains(message, "list_calendars");
+        Assert.IsFalse(message.Contains(longId), message);
+    }
+
+    [TestMethod]
     [DataRow(401, "InvalidAuthenticationToken")]
     [DataRow(403, "ErrorAccessDenied")]
     [DataRow(429, "ApplicationThrottled")]
