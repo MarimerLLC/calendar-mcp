@@ -58,6 +58,22 @@ The server exposes these tools to AI assistants:
 
 See [docs/mcp-tools.md](docs/mcp-tools.md) for full tool specifications.
 
+### Works Well with Scheduler
+
+Finding a meeting time with people outside your own organization means comparing calendars you can't see.
+[Scheduler](https://github.com/MarimerLLC/scheduler) is an MCP server for exactly that: the organizer proposes
+times, and everyone invited votes on each one from their own assistant or from a link in the invitation email,
+without anyone sharing a calendar. It never reads calendars itself, which is where Calendar-MCP comes in. With
+both connected, an assistant can:
+
+- **Organize:** find free times with `find_available_times`, propose them through Scheduler, and once a time
+  is picked, create the real meeting with `create_event`.
+- **Answer an invitation:** find Scheduler's emails (subjects start with `[sched:CODE]`) with
+  `search_emails`, check each proposed time with `get_calendar_events`, vote through Scheduler, and accept the
+  organizer's invitation later with `respond_to_event`.
+
+Neither depends on the other; Calendar-MCP works the same without Scheduler.
+
 ## Getting Started
 
 ### Prerequisites
