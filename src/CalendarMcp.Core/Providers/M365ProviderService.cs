@@ -673,6 +673,7 @@ public class M365ProviderService : IM365ProviderService
                         Body = evt.Body?.Content ?? string.Empty,
                         Organizer = evt.Organizer?.EmailAddress?.Address ?? string.Empty,
                         Attendees = evt.Attendees?.Select(a => a.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                        AttendeeDetails = MapAttendees(evt),
                         IsAllDay = evt.IsAllDay ?? false,
                         ResponseStatus = MapResponseStatus(evt.ResponseStatus?.Response)
                     });
@@ -749,16 +750,7 @@ public class M365ProviderService : IM365ProviderService
                 Organizer = evt.Organizer?.EmailAddress?.Address ?? string.Empty,
                 OrganizerName = evt.Organizer?.EmailAddress?.Name ?? string.Empty,
                 Attendees = evt.Attendees?.Select(a => a.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
-                AttendeeDetails = evt.Attendees?.Select(a => new Models.EventAttendee
-                {
-                    Email = a.EmailAddress?.Address ?? string.Empty,
-                    Name = a.EmailAddress?.Name ?? string.Empty,
-                    ResponseStatus = MapAttendeeResponseStatus(a.Status?.Response),
-                    Type = MapAttendeeType(a.Type),
-                    IsOrganizer = (a.EmailAddress?.Address ?? string.Empty).Equals(
-                        evt.Organizer?.EmailAddress?.Address ?? string.Empty, 
-                        StringComparison.OrdinalIgnoreCase)
-                }).ToList() ?? [],
+                AttendeeDetails = MapAttendees(evt),
                 IsAllDay = evt.IsAllDay ?? false,
                 ResponseStatus = MapResponseStatus(evt.ResponseStatus?.Response),
                 ShowAs = MapShowAs(evt.ShowAs),
@@ -822,6 +814,18 @@ public class M365ProviderService : IM365ProviderService
             _ => "notResponded"
         };
     }
+
+    internal static List<Models.EventAttendee> MapAttendees(Event evt) =>
+        evt.Attendees?.Select(a => new Models.EventAttendee
+        {
+            Email = a.EmailAddress?.Address ?? string.Empty,
+            Name = a.EmailAddress?.Name ?? string.Empty,
+            ResponseStatus = MapAttendeeResponseStatus(a.Status?.Response),
+            Type = MapAttendeeType(a.Type),
+            IsOrganizer = (a.EmailAddress?.Address ?? string.Empty).Equals(
+                evt.Organizer?.EmailAddress?.Address ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase)
+        }).ToList() ?? [];
 
     private static string MapAttendeeResponseStatus(ResponseType? response)
     {

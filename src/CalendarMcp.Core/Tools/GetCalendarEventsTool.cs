@@ -19,14 +19,15 @@ public sealed class GetCalendarEventsTool(
     IProviderServiceFactory providerFactory,
     ILogger<GetCalendarEventsTool> logger)
 {
-    [McpServerTool, Description("Get calendar events for a range of local dates from one or all accounts. The timeZone parameter is required: startDate and endDate are calendar dates in that zone, and the result holds the events that overlap those local days (from local midnight on startDate to local midnight after endDate). Omit accountId (and calendarId) to query all enabled accounts at once; provide accountId to scope to one account, or provide calendarId alone to resolve the account automatically when it uniquely identifies a single account. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer. All-day events start and end at local midnight in timeZone and also carry start_date/end_date (yyyy-MM-dd, end date exclusive); these are null for timed events. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
+    [McpServerTool, Description("Get calendar events for a range of local dates from one or all accounts. The timeZone parameter is required: startDate and endDate are calendar dates in that zone, and the result holds the events that overlap those local days (from local midnight on startDate to local midnight after endDate). Omit accountId (and calendarId) to query all enabled accounts at once; provide accountId to scope to one account, or provide calendarId alone to resolve the account automatically when it uniquely identifies a single account. Returns events sorted by start time, each with: id, accountId, calendarId, subject, start/end in both UTC and local time, timezone, location, attendees, isAllDay, organizer, and responseStatus (the account owner's own response: accepted, tentative, declined or notResponded; accepted when the owner organized the event). Set includeAttendeeDetails to also get attendeeDetails, each attendee's email, name, responseStatus, type and isOrganizer. All-day events start and end at local midnight in timeZone and also carry start_date/end_date (yyyy-MM-dd, end date exclusive); these are null for timed events. Use the returned accountId and id when calling delete_event, respond_to_event, or get_calendar_event_details.")]
     public async Task<string> GetCalendarEvents(
         [Description("IANA timezone name (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). startDate and endDate are interpreted as local dates in this zone, and all event times are returned in both UTC and this local timezone. Required.")] string timeZone,
         [Description("First local date of the range in timeZone (ISO 8601 date, e.g. `2026-02-20`). Any time of day is ignored. Defaults to today in timeZone.")] DateTime? startDate = null,
         [Description("Last local date of the range in timeZone, inclusive (ISO 8601 date, e.g. `2026-02-27`). Any time of day is ignored. Defaults to 6 days after startDate (a 7-day range).")] DateTime? endDate = null,
         [Description("Account ID to query, or omit to query all enabled accounts. Obtain from list_accounts.")] string? accountId = null,
         [Description("Calendar ID to query, or omit for all calendars. Obtain from list_calendars, or pass 'primary' for the account's default calendar (also the value returned for default-calendar events). Requires accountId when using 'primary'. If accountId is omitted, calendarId is used to identify the account automatically when it exists in exactly one account.")] string? calendarId = null,
-        [Description("Maximum number of events to return per account (default 50)")] int count = 50)
+        [Description("Maximum number of events to return per account (default 50)")] int count = 50,
+        [Description("Include attendeeDetails (each attendee's email, name, responseStatus, type, isOrganizer) on every event. Default false; large meetings make the result much bigger.")] bool includeAttendeeDetails = false)
     {
         var tz = TimeZoneHelper.TryGetTimeZone(timeZone);
         if (tz == null)
@@ -262,7 +263,18 @@ public sealed class GetCalendarEventsTool(
                         location = e.Location,
                         attendees = e.Attendees,
                         isAllDay = e.IsAllDay,
-                        organizer = e.Organizer
+                        organizer = e.Organizer,
+                        responseStatus = e.ResponseStatus,
+                        attendeeDetails = includeAttendeeDetails
+                            ? e.AttendeeDetails.Select(a => new
+                            {
+                                email = a.Email,
+                                name = a.Name,
+                                responseStatus = a.ResponseStatus,
+                                type = a.Type,
+                                isOrganizer = a.IsOrganizer
+                            })
+                            : null
                     };
                 }),
                 warnings = warnings.Count > 0 ? warnings : null

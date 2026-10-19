@@ -444,6 +444,7 @@ Get events (past/present/future) for specific account or all accounts.
 - `startDate`: Start of date range (ISO 8601)
 - `endDate`: End of date range (ISO 8601)
 - `count` (default: 50): Max events to return
+- `includeAttendeeDetails` (default: false): Add `attendeeDetails`, each attendee's response, to every event
 
 **Returns**:
 ```json
@@ -459,7 +460,17 @@ Get events (past/present/future) for specific account or all accounts.
       "location": "Conference Room A",
       "attendees": ["colleague@example.com"],
       "isAllDay": false,
-      "organizer": "me@example.com"
+      "organizer": "boss@example.com",
+      "responseStatus": "tentative",
+      "attendeeDetails": [
+        {
+          "email": "colleague@example.com",
+          "name": "Colleague",
+          "responseStatus": "accepted",
+          "type": "required",
+          "isOrganizer": false
+        }
+      ]
     }
   ]
 }
