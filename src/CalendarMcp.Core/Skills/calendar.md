@@ -27,7 +27,7 @@ returned `id` + `accountId` to scope `get_calendar_events` or
 `create_event` to a specific calendar; otherwise the default calendar is
 used.
 
-### `get_calendar_events(timeZone, startDate?, endDate?, accountId?, calendarId?, count=50)`
+### `get_calendar_events(timeZone, startDate?, endDate?, accountId?, calendarId?, count=50, includeAttendeeDetails=false)`
 
 - `timeZone` (required) — IANA name; controls the `_local` times in
   output and how `startDate`/`endDate` are interpreted.
@@ -41,11 +41,19 @@ used.
   `list_calendars`). Provide it to scope to one account, or provide
   `calendarId` alone to resolve the account when it uniquely identifies one.
 - `count` is per-account.
+- `includeAttendeeDetails` adds `attendeeDetails` to each event: every
+  attendee's `email, name, responseStatus, type, isOrganizer`. Leave it
+  off unless you need other people's responses; big meetings make the
+  result large.
 
 Returns events sorted by start time, each with `id, accountId,
 calendarId, subject, start_utc/start_local, end_utc/end_local,
-start_date/end_date, location, attendees, isAllDay, organizer`.
-`start_date`/`end_date` are set only for all-day events (null otherwise).
+start_date/end_date, location, attendees, isAllDay, organizer,
+responseStatus`. `start_date`/`end_date` are set only for all-day events
+(null otherwise). `responseStatus` is the account owner's own answer:
+`accepted`, `tentative`, `declined` or `notResponded`. Events the owner
+organized count as `accepted`. ICS accounts can't tell which attendee is
+the owner, so they always report `notResponded`.
 
 ### `get_calendar_event_details(accountId, calendarId, eventId, timeZone)`
 
@@ -181,7 +189,7 @@ update_event(accountId, calendarId, eventId,
 > contract that's easy to violate by hand.
 
 ```
-get_calendar_events(...)                       // find pending invites
+get_calendar_events(...)                       // pending invites: responseStatus == "notResponded"
 respond_to_event(eventId, "accept",
                accountId="...", calendarId="...",
                comment="Looking forward to it!")

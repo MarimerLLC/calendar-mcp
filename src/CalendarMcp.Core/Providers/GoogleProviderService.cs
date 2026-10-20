@@ -750,8 +750,9 @@ public class GoogleProviderService : IGoogleProviderService
                 Body = evt.Description ?? string.Empty,
                 Organizer = evt.Organizer?.Email ?? string.Empty,
                 Attendees = evt.Attendees?.Select(a => a.Email ?? string.Empty).ToList() ?? [],
+                AttendeeDetails = MapGoogleAttendees(evt.Attendees),
                 IsAllDay = !string.IsNullOrEmpty(evt.Start?.Date),
-                ResponseStatus = MapGoogleResponseStatus(evt.Attendees?.FirstOrDefault(a => a.Self == true)?.ResponseStatus)
+                ResponseStatus = GetSelfResponseStatus(evt)
             }).ToList();
 
             _logger.LogInformation("Retrieved {Count} events from Google account {AccountId}", result.Count, accountId);
@@ -784,9 +785,6 @@ public class GoogleProviderService : IGoogleProviderService
                 return null;
             }
 
-            // Get my response status
-            var myStatus = evt.Attendees?.FirstOrDefault(a => a.Self == true)?.ResponseStatus;
-
             var result = new CalendarEvent
             {
                 Id = evt.Id,
@@ -803,16 +801,9 @@ public class GoogleProviderService : IGoogleProviderService
                 Organizer = evt.Organizer?.Email ?? string.Empty,
                 OrganizerName = evt.Organizer?.DisplayName ?? string.Empty,
                 Attendees = evt.Attendees?.Select(a => a.Email ?? string.Empty).ToList() ?? [],
-                AttendeeDetails = evt.Attendees?.Select(a => new CalendarMcp.Core.Models.EventAttendee
-                {
-                    Email = a.Email ?? string.Empty,
-                    Name = a.DisplayName ?? string.Empty,
-                    ResponseStatus = MapGoogleResponseStatus(a.ResponseStatus),
-                    Type = a.Optional == true ? "optional" : (a.Resource == true ? "resource" : "required"),
-                    IsOrganizer = a.Organizer == true
-                }).ToList() ?? [],
+                AttendeeDetails = MapGoogleAttendees(evt.Attendees),
                 IsAllDay = !string.IsNullOrEmpty(evt.Start?.Date),
-                ResponseStatus = MapGoogleResponseStatus(myStatus),
+                ResponseStatus = GetSelfResponseStatus(evt),
                 ShowAs = MapGoogleTransparency(evt.Transparency),
                 Sensitivity = MapGoogleVisibility(evt.Visibility),
                 IsCancelled = evt.Status == "cancelled",
@@ -1600,6 +1591,30 @@ public class GoogleProviderService : IGoogleProviderService
             return TimeZoneHelper.UtcMidnight(date);
 
         return DateTimeOffset.MinValue;
+    }
+
+    internal static List<CalendarMcp.Core.Models.EventAttendee> MapGoogleAttendees(
+        IList<Google.Apis.Calendar.v3.Data.EventAttendee>? attendees) =>
+        attendees?.Select(a => new CalendarMcp.Core.Models.EventAttendee
+        {
+            Email = a.Email ?? string.Empty,
+            Name = a.DisplayName ?? string.Empty,
+            ResponseStatus = MapGoogleResponseStatus(a.ResponseStatus),
+            Type = a.Optional == true ? "optional" : (a.Resource == true ? "resource" : "required"),
+            IsOrganizer = a.Organizer == true
+        }).ToList() ?? [];
+
+    /// <summary>
+    /// The account owner's response. Google lists the owner as an attendee only when the event
+    /// has guests, so an event the owner organized with no guests counts as accepted, matching
+    /// what Graph reports for the organizer.
+    /// </summary>
+    internal static string GetSelfResponseStatus(Event evt)
+    {
+        var self = evt.Attendees?.FirstOrDefault(a => a.Self == true);
+        if (self != null)
+            return MapGoogleResponseStatus(self.ResponseStatus);
+        return evt.Organizer?.Self == true ? "accepted" : "notResponded";
     }
 
     private static string MapGoogleResponseStatus(string? responseStatus)
