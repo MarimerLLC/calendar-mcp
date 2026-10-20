@@ -16,6 +16,8 @@ public class AccountCapabilitiesTests
     [DataRow("outlook.com")]
     [DataRow("outlook")]
     [DataRow("hotmail")]
+    [DataRow("exchange")]
+    [DataRow("ews")]
     [DataRow("ics")]
     [DataRow("icalendar")]
     [DataRow("json")]
@@ -50,6 +52,17 @@ public class AccountCapabilitiesTests
         CollectionAssert.AreEquivalent(
             new[] { AccountCapabilities.Email },
             caps.Select(c => c.Name).ToArray());
+    }
+
+    [TestMethod]
+    public void GetCapabilities_Exchange_ProvidesCalendarAndEmailOnly()
+    {
+        var caps = AccountCapabilities.GetCapabilities(TestData.CreateAccount(provider: "exchange"));
+        CollectionAssert.AreEquivalent(
+            new[] { AccountCapabilities.Calendar, AccountCapabilities.Email },
+            caps.Select(c => c.Name).ToArray());
+        Assert.IsFalse(caps.Single(c => c.Name == AccountCapabilities.Calendar).ReadOnly);
+        Assert.IsFalse(caps.Single(c => c.Name == AccountCapabilities.Email).ReadOnly);
     }
 
     [TestMethod]

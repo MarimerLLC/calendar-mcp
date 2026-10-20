@@ -19,12 +19,12 @@ public class Program
         var configDir = ConfigurationPaths.GetDataDirectory();
         var logDir = ConfigurationPaths.GetLogDirectory();
         var configPath = ConfigurationPaths.GetConfigFilePath();
-        
+
         // Ensure directories exist
         ConfigurationPaths.EnsureDataDirectoryExists();
-        
+
         var otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
-        
+
         // If no OTLP endpoint, use Serilog for file logging as fallback
         if (string.IsNullOrEmpty(otlpEndpoint))
         {
@@ -39,7 +39,7 @@ public class Program
                     outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
         }
-        
+
         Log.Information("Adjutant Server starting. Config directory: {ConfigDir}", configDir);
 
         try
@@ -49,7 +49,7 @@ public class Program
                 {
                     // Clear default configuration sources
                     config.Sources.Clear();
-                    
+
                     // Add configuration from the user data directory (primary)
                     if (File.Exists(configPath))
                     {
@@ -68,14 +68,14 @@ public class Program
                         }
                         else
                         {
-                            Log.Warning("No appsettings.json found. Expected at: {UserConfigPath} or {AppConfigPath}", 
+                            Log.Warning("No appsettings.json found. Expected at: {UserConfigPath} or {AppConfigPath}",
                                 configPath, appConfigPath);
                         }
                     }
-                    
+
                     // Add environment variables (can override file settings)
                     config.AddEnvironmentVariables("CALENDAR_MCP_");
-                    
+
                     // Add command line args
                     config.AddCommandLine(args);
                 });
@@ -90,7 +90,7 @@ public class Program
                     {
                         options.SetResourceBuilder(ResourceBuilder.CreateDefault()
                             .AddService("calendar-mcp-stdio"));
-                        
+
                         options.AddOtlpExporter();
                         options.IncludeFormattedMessage = true;
                         options.IncludeScopes = true;
@@ -108,10 +108,10 @@ public class Program
                 // Configure Adjutant settings
                 services.Configure<CalendarMcpConfiguration>(
                     context.Configuration.GetSection("CalendarMcp"));
-                
+
                 // Add Adjutant core services (providers, tools, account registry)
                 services.AddCalendarMcpCore();
-                
+
                 // Configure MCP server with stdio transport and register tools
                 services.AddMcpServer(CalendarMcpServerOptions.Configure)
                     .WithTools<CalendarMcp.Core.Tools.ListAccountsTool>()
@@ -132,6 +132,7 @@ public class Program
                     .WithTools<CalendarMcp.Core.Tools.GetCalendarEventsTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetCalendarEventDetailsTool>()
                     .WithTools<CalendarMcp.Core.Tools.CreateEventTool>()
+                    .WithTools<CalendarMcp.Core.Tools.FindAvailableTimesTool>()
                     .WithTools<CalendarMcp.Core.Tools.DeleteEventTool>()
                     .WithTools<CalendarMcp.Core.Tools.RespondToEventTool>()
                     .WithTools<CalendarMcp.Core.Tools.GetUnsubscribeInfoTool>()

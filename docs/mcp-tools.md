@@ -477,14 +477,18 @@ Get events (past/present/future) for specific account or all accounts.
 ```
 
 #### `find_available_times`
-Find free time slots across specified or all calendars.
+Find free time slots across calendars. The on-prem Exchange provider checks the account owner's
+calendar and optionally calls EWS free/busy for the listed attendee mailboxes.
 
 **Parameters**:
-- `accountIds` (optional): Array of account IDs, or omit for all accounts
-- `duration`: Duration in minutes (e.g., 60 for 1 hour)
-- `startDate`: Start of search range
-- `endDate`: End of search range
-- `workingHoursOnly` (default: true): Only suggest during working hours
+- `timeZone` (required): IANA timezone, e.g. `Europe/Moscow`
+- `startDate` (optional): first local date (`yyyy-MM-dd`); defaults to today
+- `endDate` (optional): last local date inclusive; defaults to six days after `startDate`
+- `durationMinutes` (default: 30): desired meeting length, 5..480
+- `attendees` (optional): email addresses whose free/busy should be included
+- `accountId` (optional): Exchange account ID; otherwise first enabled Exchange account
+- `workDayStartHour` / `workDayEndHour` (defaults: 9 / 18): local working-hour bounds
+- `maxSlots` (default: 20): maximum slots returned
 
 **Returns**:
 ```json

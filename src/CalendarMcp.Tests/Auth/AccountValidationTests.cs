@@ -52,6 +52,8 @@ public class AccountValidationTests
     [DataRow("google")]
     [DataRow("ics")]
     [DataRow("json")]
+    [DataRow("exchange")]
+    [DataRow("ews")]
     public void ValidateProvider_KnownProviders_ReturnsTrue(string provider)
     {
         var (isValid, _) = AccountValidation.ValidateProvider(provider);
@@ -241,6 +243,33 @@ public class AccountValidationTests
         var (isValid, error) = AccountValidation.ValidateProviderConfig("imap", config);
         Assert.IsFalse(isValid);
         Assert.IsTrue(error?.Contains("password", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public void ValidateProviderConfig_Exchange_RequiresHttpsEndpointAndCredentials()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["ewsUrl"] = "https://exchange.example.com/EWS/Exchange.asmx",
+            ["username"] = "user@example.com",
+            ["password"] = "secret"
+        };
+        var (isValid, error) = AccountValidation.ValidateProviderConfig("exchange", config);
+        Assert.IsTrue(isValid, error);
+    }
+
+    [TestMethod]
+    public void ValidateProviderConfig_ExchangeRejectsHttpEndpoint()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["ewsUrl"] = "http://exchange.example.com/EWS/Exchange.asmx",
+            ["username"] = "user@example.com",
+            ["password"] = "secret"
+        };
+        var (isValid, error) = AccountValidation.ValidateProviderConfig("exchange", config);
+        Assert.IsFalse(isValid);
+        Assert.IsTrue(error?.Contains("HTTPS", StringComparison.OrdinalIgnoreCase));
     }
 
     [TestMethod]

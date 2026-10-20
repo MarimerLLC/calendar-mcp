@@ -111,7 +111,7 @@ dotnet run
 calendar-mcp-setup add-account
 
 # Interactive prompts:
-# 1. Account type? (microsoft365 / google / outlook.com)
+# 1. Account type? (microsoft365 / google / outlook.com / exchange)
 # 2. Account ID (unique identifier, e.g., "work-account")
 # 3. Display name (e.g., "Work Account")
 # 4. Priority (default: 999)

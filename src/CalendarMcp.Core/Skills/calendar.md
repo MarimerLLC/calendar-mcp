@@ -1,8 +1,8 @@
 # Calendar
 
 Calendar tools read, create, update, and respond to events across
-Microsoft 365, Google, Outlook.com, and read-only iCalendar/JSON
-sources.
+Microsoft 365, Google, Outlook.com, on-premises Exchange, and read-only
+iCalendar/JSON sources.
 
 ## Timezones are mandatory
 
@@ -99,6 +99,14 @@ attendees automatically.
 - `comment` is optional message text sent with the response.
 
 ## Prompt shortcuts
+
+`find_available_times` is implemented for the on-premises Exchange provider
+using EWS free/busy. It checks the owner's events and optional attendee
+mailboxes, during configurable local working hours. Availability queries
+for attendees can fail if Exchange does not grant the caller free/busy
+visibility; such failures are reported rather than treated as free time.
+If the account has 1,000 or more events in the range, the tool asks for a
+narrower range instead of guessing.
 
 This server exposes MCP prompts that wrap the common calendar
 workflows. When the host supports prompts, prefer them:
