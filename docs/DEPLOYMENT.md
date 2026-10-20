@@ -165,9 +165,11 @@ Restart the client after editing the configuration.
 1. Read-only smoke test first — confirm the current build still works:
 
    ```bash
-   CalendarMcp.Cli list-accounts
-   CalendarMcp.Cli test-account <account-id>
+   CalendarMcp.Cli list-accounts --config C:\CalendarMcp\config\appsettings.json
    ```
+
+   `test-account` only supports Microsoft 365, Outlook.com and Google accounts, so check an
+   Exchange account with the read-only MCP calls under [Verification](#verification).
 
 2. Stop every running server process. A running `CalendarMcp.StdioServer.exe` locks its own files,
    and publishing over a locked binary fails partway through:
@@ -192,7 +194,7 @@ Restart the client after editing the configuration.
    ```
 
    ```powershell
-   Rename-Item ".\publish\win-x64" "C:\CalendarMcp\bin"
+   Move-Item ".\publish\win-x64" "C:\CalendarMcp\bin"
    ```
 
 5. Restart the MCP client and re-run [Verification](#verification).
@@ -211,9 +213,11 @@ untouched by both directions, so no credential changes are needed.
 1. Accounts are visible:
 
    ```bash
-   CalendarMcp.Cli list-accounts
-   CalendarMcp.Cli test-account <account-id>
+   CalendarMcp.Cli list-accounts --config C:\CalendarMcp\config\appsettings.json
    ```
+
+   `test-account` only supports Microsoft 365, Outlook.com and Google accounts, so check an
+   Exchange account with the read-only MCP calls under [Verification](#verification).
 
 2. The MCP server handshakes:
 

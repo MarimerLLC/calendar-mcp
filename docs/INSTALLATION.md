@@ -207,10 +207,12 @@ cp config/appsettings.example.json config/appsettings.json
 #      "password": "your-password"
 #    }
 
-# 3. Verify
-CalendarMcp.Cli list-accounts
-CalendarMcp.Cli test-account <account-id>
+# 3. Verify the account is configured
+CalendarMcp.Cli list-accounts --config config/appsettings.json
 ```
+
+`test-account` doesn't support Exchange accounts. To check connectivity, start the server and make a
+read-only call such as `get_calendar_events` for a known day.
 
 `config/appsettings.json` holds the password in plaintext and is ignored by Git. Do not commit it,
 and do not reuse that password outside this server.

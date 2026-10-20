@@ -11,6 +11,8 @@ given account.
 - **Capabilities**: email and calendar (read/write); contacts are not
   supported.
 - **Calendar**: events, create/update/delete/respond, and attendee free/busy.
+  Only the mailbox's default calendar is exposed: omit `calendarId` (or pass
+  `primary`); any other calendarId is refused.
 - **Email**: list/search/details, send, delete, mark read/unread, move.
   Attachment metadata is available, but attachment bytes and outbound
   attachments are not implemented.

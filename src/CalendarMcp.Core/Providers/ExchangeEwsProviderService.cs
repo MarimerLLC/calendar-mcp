@@ -20,6 +20,8 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
 {
     private const string ClientName = "ExchangeEws";
     private const string DefaultCalendarId = "calendar";
+    private const int GetItemBatchSize = 100;
+    private const int MergedFreeBusyIntervalMinutes = 15;
     private static readonly XNamespace Soap = "http://schemas.xmlsoap.org/soap/envelope/";
     private static readonly XNamespace T = "http://schemas.microsoft.com/exchange/services/2006/types";
     private static readonly XNamespace M = "http://schemas.microsoft.com/exchange/services/2006/messages";
@@ -43,6 +45,10 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
     }
 
     private sealed record EwsConfig(string Url, string Username, string Password);
+
+    /// <summary>The account types served by this provider (mirrors ProviderServiceFactory).</summary>
+    internal static bool IsExchangeAccountType(string? provider) =>
+        provider?.ToLowerInvariant() is "exchange" or "ews" or "exchange-ews" or "on-prem-exchange";
 
     private async Task<EwsConfig> ResolveConfigAsync(string accountId)
     {
@@ -241,7 +247,9 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
             new XElement(T + "Message", new XElement(T + "IsRead", isRead ? "true" : "false")));
         var change = new XElement(T + "ItemChange", id,
             new XElement(T + "Updates", isReadField));
+        // UpdateItem on a message requires MessageDisposition; SaveOnly persists IsRead without sending.
         var update = new XElement(M + "UpdateItem",
+            new XAttribute("MessageDisposition", "SaveOnly"),
             new XAttribute("ConflictResolution", "AlwaysOverwrite"),
             new XElement(M + "ItemChanges", change));
         await SendAsync(accountId, update, cancellationToken);
@@ -268,7 +276,7 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
         var account = await _accounts.GetAccountAsync(accountId);
         return [new CalendarInfo
         {
-            Id = "calendar", AccountId = accountId,
+            Id = DefaultCalendarId, AccountId = accountId,
             Name = account?.DisplayName ?? "Calendar",
             Owner = account?.ProviderConfig.TryGetValue("username", out var u) == true ? u : "",
             CanEdit = true, IsDefault = true
@@ -279,48 +287,66 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
         string accountId, string? calendarId = null, DateTime? startDate = null, DateTime? endDate = null,
         int count = 50, CancellationToken cancellationToken = default)
     {
+        RequireDefaultCalendar(calendarId);
         var start = TimeZoneHelper.EnsureUtc(startDate ?? DateTime.UtcNow.Date);
         var end = TimeZoneHelper.EnsureUtc(endDate ?? start.AddDays(7));
         if (end <= start) end = start.AddDays(1);
+
+        // FindItem can't return attendees, so the calendar view supplies the occurrence ids and
+        // GetItem (in batches) supplies the properties, the same shape the details call uses.
         var find = new XElement(M + "FindItem", new XAttribute("Traversal", "Shallow"),
-            CalendarItemShape(false),
+            new XElement(M + "ItemShape", new XElement(T + "BaseShape", "IdOnly")),
             new XElement(M + "CalendarView",
                 new XAttribute("StartDate", FormatCalendarViewTime(start)), new XAttribute("EndDate", FormatCalendarViewTime(end)),
                 new XAttribute("MaxEntriesReturned", Math.Clamp(count, 1, 1000).ToString(CultureInfo.InvariantCulture))),
-            new XElement(M + "ParentFolderIds", new XElement(T + "DistinguishedFolderId", new XAttribute("Id", "calendar"))));
+            new XElement(M + "ParentFolderIds", new XElement(T + "DistinguishedFolderId", new XAttribute("Id", DefaultCalendarId))));
         var doc = await SendAsync(accountId, find, cancellationToken);
-        return doc.Descendants().Where(e => e.Name.LocalName == "CalendarItem")
-            .Select(e => MapCalendarItem(e, accountId)).Where(e => e is not null).Cast<CalendarEvent>()
-            .OrderBy(e => e.Start).Take(count).ToList();
+        var ids = doc.Descendants().Where(e => e.Name.LocalName == "CalendarItem")
+            .Select(e => e.Elements().FirstOrDefault(x => x.Name.LocalName == "ItemId")?.Attribute("Id")?.Value)
+            .OfType<string>().Where(id => id.Length > 0).ToList();
+
+        var events = new List<CalendarEvent>();
+        foreach (var batch in ids.Chunk(GetItemBatchSize))
+        {
+            var get = new XElement(M + "GetItem", CalendarItemShape(false),
+                new XElement(M + "ItemIds", batch.Select(id => new XElement(T + "ItemId", new XAttribute("Id", id)))));
+            var items = await SendAsync(accountId, get, cancellationToken);
+            events.AddRange(items.Descendants().Where(e => e.Name.LocalName == "CalendarItem")
+                .Select(e => MapCalendarItem(e, accountId)).OfType<CalendarEvent>());
+        }
+        return events.OrderBy(e => e.Start).Take(count).ToList();
     }
 
     public async Task<CalendarEvent?> GetCalendarEventDetailsAsync(string accountId, string calendarId, string eventId, CancellationToken cancellationToken = default)
     {
+        // The ItemId identifies the event on its own; calendarId is "primary" when the caller omits it.
         var get = new XElement(M + "GetItem", CalendarItemShape(true),
             new XElement(M + "ItemIds", new XElement(T + "ItemId", new XAttribute("Id", eventId))));
-var config = await ResolveConfigAsync(accountId);
         var doc = await SendAsync(accountId, get, cancellationToken);
         var item = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "CalendarItem");
-        return item is null ? null : MapCalendarItem(item, accountId, true, config.Username);
+        return item is null ? null : MapCalendarItem(item, accountId, true);
     }
 
     public async Task<string> CreateEventAsync(string accountId, string? calendarId, string subject, DateTime start, DateTime end,
         string? location = null, List<string>? attendees = null, string? body = null, string? timeZone = null,
         bool isAllDay = false, CancellationToken cancellationToken = default)
     {
+        RequireDefaultCalendar(calendarId);
         var tz = TimeZoneHelper.TryGetTimeZone(timeZone) ?? TimeZoneInfo.Utc;
-        var item = new XElement(T + "CalendarItem",
-            new XElement(T + "Subject", subject),
+        // Children must follow the EWS schema sequence: Subject and Body (from ItemType), then
+        // Start, End, IsAllDayEvent, Location, RequiredAttendees (from CalendarItemType).
+        var item = new XElement(T + "CalendarItem", new XElement(T + "Subject", subject));
+        if (!string.IsNullOrWhiteSpace(body)) item.Add(new XElement(T + "Body", new XAttribute("BodyType", "HTML"), body));
+        item.Add(
             new XElement(T + "Start", FormatEventTime(start, tz, isAllDay)),
             new XElement(T + "End", FormatEventTime(end, tz, isAllDay)),
             new XElement(T + "IsAllDayEvent", isAllDay ? "true" : "false"));
         if (!string.IsNullOrWhiteSpace(location)) item.Add(new XElement(T + "Location", location));
-        if (!string.IsNullOrWhiteSpace(body)) item.Add(new XElement(T + "Body", new XAttribute("BodyType", "HTML"), body));
         var attendeeSet = BuildAttendees(attendees);
         if (attendeeSet is not null) item.Add(attendeeSet);
 
         var create = new XElement(M + "CreateItem", new XAttribute("MessageDisposition", "Send"), new XAttribute("SendMeetingInvitations", "SendToAllAndSaveCopy"),
-            new XElement(M + "SavedItemFolderId", new XElement(T + "DistinguishedFolderId", new XAttribute("Id", "calendar"))),
+            new XElement(M + "SavedItemFolderId", new XElement(T + "DistinguishedFolderId", new XAttribute("Id", DefaultCalendarId))),
             new XElement(M + "Items", item));
         var doc = await SendAsync(accountId, create, cancellationToken);
         return doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "ItemId")?.Attribute("Id")?.Value
@@ -339,7 +365,7 @@ var config = await ResolveConfigAsync(accountId);
         if (end.HasValue) updates.Add(CalendarSetField("calendar:End", new XElement(T + "End", FormatEventTime(end.Value, tz, isAllDay == true))));
         if (location is not null) updates.Add(CalendarSetField("calendar:Location", new XElement(T + "Location", location)));
         if (isAllDay.HasValue) updates.Add(CalendarSetField("calendar:IsAllDayEvent", new XElement(T + "IsAllDayEvent", isAllDay.Value ? "true" : "false")));
-        if (attendees is not null) updates.Add(CalendarSetField("calendar:RequiredAttendees", new XElement(T + "RequiredAttendees", attendees.Where(x => !string.IsNullOrWhiteSpace(x)).Select(Mailbox))));
+        if (attendees is not null) updates.Add(CalendarSetField("calendar:RequiredAttendees", new XElement(T + "RequiredAttendees", attendees.Where(x => !string.IsNullOrWhiteSpace(x)).Select(Attendee))));
         if (updates.Count == 0) return;
         var id = new XElement(T + "ItemId", new XAttribute("Id", eventId));
         if (!string.IsNullOrEmpty(changeKey)) id.SetAttributeValue("ChangeKey", changeKey);
@@ -361,12 +387,15 @@ var config = await ResolveConfigAsync(accountId);
         var verb = response.Trim().ToLowerInvariant() switch
         {
             "accept" or "accepted" => "AcceptItem",
-            "tentative" or "tentativelyaccept" => "TentativelyAcceptItem",
+            "tentative" or "tentativelyaccept" or "tentativelyaccepted" => "TentativelyAcceptItem",
             "decline" or "declined" => "DeclineItem",
             _ => throw new ProviderOperationException("Response must be accept, tentative, or decline.")
         };
-        var reply = new XElement(T + verb, new XElement(T + "ReferenceItemId", new XAttribute("Id", eventId)));
-        if (!string.IsNullOrWhiteSpace(comment)) reply.Add(new XElement(T + "NewBodyContent", new XAttribute("BodyType", "Text"), comment));
+        // Response objects take the comment as the Body they inherit from MessageType, which must
+        // precede ReferenceItemId. NewBodyContent belongs to reply/forward items, not to these.
+        var reply = new XElement(T + verb,
+            string.IsNullOrWhiteSpace(comment) ? null : new XElement(T + "Body", new XAttribute("BodyType", "Text"), comment),
+            new XElement(T + "ReferenceItemId", new XAttribute("Id", eventId)));
         // EWS requires MessageDisposition on CreateItem even for calendar response items.
         await SendAsync(accountId, new XElement(M + "CreateItem", new XAttribute("MessageDisposition", "Send"), new XAttribute("SendMeetingInvitations", "SendOnlyToAll"), new XElement(M + "Items", reply)), cancellationToken);
     }
@@ -380,7 +409,8 @@ var config = await ResolveConfigAsync(accountId);
         var op = new XElement(M + "GetUserAvailabilityRequest", UtcTimeZone(), mailboxes,
             new XElement(T + "FreeBusyViewOptions",
                 new XElement(T + "TimeWindow", new XElement(T + "StartTime", start.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture)), new XElement(T + "EndTime", end.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss", CultureInfo.InvariantCulture))),
-                new XElement(T + "MergedFreeBusyIntervalInMinutes", "15"), new XElement(T + "RequestedView", "Detailed")));
+                new XElement(T + "MergedFreeBusyIntervalInMinutes", MergedFreeBusyIntervalMinutes.ToString(CultureInfo.InvariantCulture)),
+                new XElement(T + "RequestedView", "DetailedMerged")));
         var doc = await SendAsync(accountId, op, cancellationToken);
         var output = new List<FreeBusyInterval>();
         var responses = doc.Descendants().Where(e => e.Name.LocalName == "FreeBusyResponse").ToList();
@@ -396,13 +426,64 @@ var config = await ResolveConfigAsync(accountId);
                 // Never treat a failed attendee lookup as free; that could suggest a conflicting slot.
                 throw new ProviderOperationException($"EWS free/busy lookup failed for '{email}' ({code}): {message}");
             }
-            foreach (var calEvent in responses[i].Descendants().Where(e => e.Name.LocalName == "CalendarEvent"))
-            {
-                if (!TryDate(Child(calEvent, "StartTime"), out var s) || !TryDate(Child(calEvent, "EndTime"), out var e)) continue;
-                output.Add(new FreeBusyInterval { Email = email, Start = s, End = e, Status = BusyStatus(Child(calEvent, "BusyType")) });
-            }
+            var view = responses[i].Descendants().FirstOrDefault(e => e.Name.LocalName == "FreeBusyView");
+            output.AddRange(ParseFreeBusyView(view, email, start.ToUniversalTime()));
         }
         return output;
+    }
+
+    /// <summary>
+    /// Reads one attendee's busy intervals. Detailed and free/busy views list CalendarEvent
+    /// elements; a MergedOnly view (e.g. a distribution list) has only the MergedFreeBusy string,
+    /// one digit per interval from the window start. A view with neither is an error, never "free".
+    /// </summary>
+    internal static List<FreeBusyInterval> ParseFreeBusyView(XElement? view, string email, DateTimeOffset windowStart)
+    {
+        var viewTypes = (Child(view, "FreeBusyViewType") ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var intervals = new List<FreeBusyInterval>();
+
+        if (viewTypes.Any(v => v is "FreeBusy" or "FreeBusyMerged" or "Detailed" or "DetailedMerged"))
+        {
+            foreach (var calEvent in view!.Descendants().Where(e => e.Name.LocalName == "CalendarEvent"))
+            {
+                if (!TryDate(Child(calEvent, "StartTime"), out var s) || !TryDate(Child(calEvent, "EndTime"), out var e)) continue;
+                intervals.Add(new FreeBusyInterval { Email = email, Start = s, End = e, Status = BusyStatus(Child(calEvent, "BusyType")) });
+            }
+            return intervals;
+        }
+
+        var merged = Child(view, "MergedFreeBusy");
+        if (viewTypes.Contains("MergedOnly") && merged is not null)
+        {
+            for (var i = 0; i < merged.Length;)
+            {
+                var j = i;
+                while (j < merged.Length && merged[j] == merged[i]) j++;
+                if (merged[i] != '0')
+                {
+                    intervals.Add(new FreeBusyInterval
+                    {
+                        Email = email,
+                        Start = windowStart.AddMinutes(i * MergedFreeBusyIntervalMinutes),
+                        End = windowStart.AddMinutes(j * MergedFreeBusyIntervalMinutes),
+                        Status = merged[i] switch
+                        {
+                            '1' => "tentative",
+                            '3' => "outOfOffice",
+                            '4' => "workingElsewhere",
+                            '5' => "noData",
+                            _ => "busy"
+                        }
+                    });
+                }
+                i = j;
+            }
+            return intervals;
+        }
+
+        throw new ProviderOperationException(
+            $"Exchange returned no availability for '{email}' (view '{string.Join(' ', viewTypes)}'); " +
+            "it can't be treated as free. Check the address, or leave it out of attendees.");
     }
 
     #endregion
@@ -422,12 +503,13 @@ var config = await ResolveConfigAsync(accountId);
         new XElement(T + "AdditionalProperties", Field("item:Subject"), Field("item:DateTimeReceived"), Field("message:From"), Field("message:ToRecipients"), Field("message:CcRecipients"), Field("message:IsRead"), Field("item:HasAttachments")));
 
     private static XElement CalendarItemShape(bool details) => new(M + "ItemShape", new XElement(T + "BaseShape", details ? "Default" : "IdOnly"),
-        new XElement(T + "AdditionalProperties", Field("item:Subject"), Field("calendar:Start"), Field("calendar:End"), Field("calendar:Location"), Field("calendar:IsAllDayEvent"), Field("calendar:LegacyFreeBusyStatus"), Field("calendar:IsRecurring"), Field("calendar:Organizer"), Field("calendar:RequiredAttendees"), Field("calendar:OptionalAttendees"), Field("calendar:IsCancelled"), Field("item:DateTimeCreated"), Field("item:LastModifiedTime"),
+        new XElement(T + "AdditionalProperties", Field("item:Subject"), Field("calendar:Start"), Field("calendar:End"), Field("calendar:Location"), Field("calendar:IsAllDayEvent"), Field("calendar:LegacyFreeBusyStatus"), Field("calendar:IsRecurring"), Field("calendar:Organizer"), Field("calendar:RequiredAttendees"), Field("calendar:OptionalAttendees"), Field("calendar:IsCancelled"), Field("calendar:MyResponseType"), Field("calendar:StartTimeZoneId"), Field("item:DateTimeCreated"), Field("item:LastModifiedTime"),
             details ? Field("item:Body") : null,
             details ? Field("item:Attachments") : null));
 
     private static XElement Field(string uri) => new(T + "FieldURI", new XAttribute("FieldURI", uri));
     private static XElement Mailbox(string address) => new(T + "Mailbox", new XElement(T + "EmailAddress", address.Trim()));
+    private static XElement Attendee(string address) => new(T + "Attendee", Mailbox(address));
 
     private static EmailMessage? MapEmailSummary(XElement item, string accountId, string folder, bool includeBody = false)
     {
@@ -474,7 +556,7 @@ var config = await ResolveConfigAsync(accountId);
     private static List<string> Recipients(XElement parent, string name) => parent.Elements().FirstOrDefault(e => e.Name.LocalName == name)?
         .Descendants().Where(e => e.Name.LocalName == "EmailAddress").Select(e => e.Value).Where(v => !string.IsNullOrWhiteSpace(v)).ToList() ?? [];
 
-    private static CalendarEvent? MapCalendarItem(XElement item, string accountId, bool details = false, string? ownerEmail = null)
+    internal static CalendarEvent? MapCalendarItem(XElement item, string accountId, bool details = false)
     {
         var idElement = item.Descendants().FirstOrDefault(e => e.Name.LocalName == "ItemId");
         var id = idElement?.Attribute("Id")?.Value;
@@ -482,13 +564,21 @@ var config = await ResolveConfigAsync(accountId);
         if (!TryDate(Child(item, "Start"), out var start)) return null;
         if (!TryDate(Child(item, "End"), out var end)) end = start.AddHours(1);
         var allDay = string.Equals(Child(item, "IsAllDayEvent"), "true", StringComparison.OrdinalIgnoreCase);
-        DateOnly? sd = allDay ? DateOnly.FromDateTime(start.UtcDateTime) : null;
-        DateOnly? ed = allDay ? DateOnly.FromDateTime(end.UtcDateTime) : null;
-        if (allDay) { start = new DateTimeOffset(sd!.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero); end = new DateTimeOffset(ed!.Value.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero); }
+        DateOnly? sd = null, ed = null;
+        if (allDay)
+        {
+            var zone = TimeZoneHelper.TryGetTimeZone(Child(item, "StartTimeZoneId"));
+            sd = FloatingDate(start, zone);
+            ed = FloatingDate(end, zone);
+            if (ed <= sd) ed = sd.Value.AddDays(1);
+            start = TimeZoneHelper.UtcMidnight(sd.Value);
+            end = TimeZoneHelper.UtcMidnight(ed.Value);
+        }
         var organizer = item.Elements().FirstOrDefault(e => e.Name.LocalName == "Organizer");
+        var organizerEmail = organizer?.Descendants().FirstOrDefault(e => e.Name.LocalName == "EmailAddress")?.Value ?? "";
         var attendees = new List<string>(); var detailList = new List<EventAttendee>();
-        AddCalendarAttendees(item, "RequiredAttendees", "required", attendees, detailList);
-        AddCalendarAttendees(item, "OptionalAttendees", "optional", attendees, detailList);
+        AddCalendarAttendees(item, "RequiredAttendees", "required", organizerEmail, attendees, detailList);
+        AddCalendarAttendees(item, "OptionalAttendees", "optional", organizerEmail, attendees, detailList);
         var bodyElement = item.Elements().FirstOrDefault(e => e.Name.LocalName == "Body");
         var body = details ? bodyElement?.Value ?? "" : "";
         var zoomText = (Child(item, "Location") ?? "") + " " + body;
@@ -497,7 +587,7 @@ var config = await ResolveConfigAsync(accountId);
         {
             Id = id,
             AccountId = accountId,
-            CalendarId = "calendar",
+            CalendarId = DefaultCalendarId,
             Subject = Child(item, "Subject") ?? "",
             Start = start,
             End = end,
@@ -507,14 +597,13 @@ var config = await ResolveConfigAsync(accountId);
             Location = Child(item, "Location") ?? "",
             Body = body,
             BodyFormat = string.Equals((string?)bodyElement?.Attribute("BodyType"), "HTML", StringComparison.OrdinalIgnoreCase) ? "html" : "text",
-            Organizer = organizer?.Descendants().FirstOrDefault(e => e.Name.LocalName == "EmailAddress")?.Value ?? "",
+            Organizer = organizerEmail,
             OrganizerName = organizer?.Descendants().FirstOrDefault(e => e.Name.LocalName == "Name")?.Value ?? "",
             Attendees = attendees,
             AttendeeDetails = detailList,
-            // EWS has no top-level status; use the mailbox owner's own attendee entry.
-            ResponseStatus = string.IsNullOrWhiteSpace(ownerEmail)
-                ? "notResponded"
-                : detailList.FirstOrDefault(a => string.Equals(a.Email, ownerEmail, StringComparison.OrdinalIgnoreCase))?.ResponseStatus ?? "notResponded",
+            // MyResponseType is the mailbox owner's own response; "Organizer" covers their own
+            // meetings and appointments.
+            ResponseStatus = MapResponseType(Child(item, "MyResponseType")),
             ShowAs = CalendarBusyStatus(Child(item, "LegacyFreeBusyStatus")),
             IsCancelled = string.Equals(Child(item, "IsCancelled"), "true", StringComparison.OrdinalIgnoreCase),
             IsRecurring = string.Equals(Child(item, "IsRecurring"), "true", StringComparison.OrdinalIgnoreCase),
@@ -526,7 +615,7 @@ var config = await ResolveConfigAsync(accountId);
         };
     }
 
-    private static void AddCalendarAttendees(XElement item, string container, string type, List<string> emails, List<EventAttendee> details)
+    private static void AddCalendarAttendees(XElement item, string container, string type, string organizerEmail, List<string> emails, List<EventAttendee> details)
     {
         foreach (var att in item.Elements().FirstOrDefault(e => e.Name.LocalName == container)?.Elements().Where(e => e.Name.LocalName == "Attendee") ?? [])
         {
@@ -534,7 +623,47 @@ var config = await ResolveConfigAsync(accountId);
             var email = mailbox?.Elements().FirstOrDefault(e => e.Name.LocalName == "EmailAddress")?.Value;
             if (string.IsNullOrWhiteSpace(email)) continue;
             emails.Add(email);
-            details.Add(new EventAttendee { Email = email, Name = mailbox?.Elements().FirstOrDefault(e => e.Name.LocalName == "Name")?.Value ?? "", Type = type, ResponseStatus = Child(att, "ResponseType") ?? "notResponded" });
+            details.Add(new EventAttendee
+            {
+                Email = email,
+                Name = mailbox?.Elements().FirstOrDefault(e => e.Name.LocalName == "Name")?.Value ?? "",
+                Type = type,
+                ResponseStatus = MapResponseType(Child(att, "ResponseType")),
+                IsOrganizer = organizerEmail.Length > 0 && email.Equals(organizerEmail, StringComparison.OrdinalIgnoreCase)
+            });
+        }
+    }
+
+    /// <summary>Maps an EWS ResponseType to the shared accepted/tentative/declined/notResponded values.</summary>
+    internal static string MapResponseType(string? value) => value switch
+    {
+        "Organizer" or "Accept" => "accepted",
+        "Tentative" => "tentative",
+        "Decline" => "declined",
+        _ => "notResponded"
+    };
+
+    /// <summary>
+    /// The floating date of an all-day boundary. Exchange stores it as local midnight in the zone
+    /// the event was created in, and the UTC TimeZoneContext returns that as an instant (Oct 16 in
+    /// Moscow comes back as Oct 15 21:00). Without the zone, take the nearest midnight, which is
+    /// exact for UTC offsets between -12h and +12h.
+    /// </summary>
+    private static DateOnly FloatingDate(DateTimeOffset instant, TimeZoneInfo? zone) =>
+        zone is not null
+            ? DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(instant.UtcDateTime, zone))
+            : DateOnly.FromDateTime(instant.UtcDateTime.AddHours(12));
+
+    /// <summary>
+    /// Only the mailbox's default calendar is exposed (see ListCalendarsAsync). Refuse any other
+    /// calendarId rather than silently reading or writing the default calendar instead.
+    /// </summary>
+    private static void RequireDefaultCalendar(string? calendarId)
+    {
+        if (!CalendarIdAliases.IsDefaultCalendar(calendarId)
+            && !calendarId.Trim().Equals(DefaultCalendarId, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ProviderOperationException(CalendarIdAliases.UnknownCalendarMessage(calendarId));
         }
     }
 
@@ -597,7 +726,7 @@ var config = await ResolveConfigAsync(accountId);
     {
         if (addresses is null || addresses.Count == 0) return null;
         var valid = addresses.Where(a => !string.IsNullOrWhiteSpace(a)).ToList();
-        return valid.Count == 0 ? null : new XElement(T + "RequiredAttendees", valid.Select(Mailbox));
+        return valid.Count == 0 ? null : new XElement(T + "RequiredAttendees", valid.Select(Attendee));
     }
 
     private static XElement CalendarSetField(string uri, XElement property) => new(T + "SetItemField", Field(uri), new XElement(T + "CalendarItem", property));

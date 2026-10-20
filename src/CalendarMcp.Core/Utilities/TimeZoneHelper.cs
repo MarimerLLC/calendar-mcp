@@ -51,9 +51,17 @@ public static class TimeZoneHelper
     /// If midnight does not exist (a DST gap at 00:00), advances to the first valid local time.
     /// If midnight is ambiguous, uses the standard-time offset.
     /// </summary>
-    public static DateTimeOffset LocalMidnight(DateOnly date, TimeZoneInfo timeZone)
+    public static DateTimeOffset LocalMidnight(DateOnly date, TimeZoneInfo timeZone) =>
+        LocalTime(date, TimeOnly.MinValue, timeZone);
+
+    /// <summary>
+    /// Returns <paramref name="time"/> on <paramref name="date"/> in <paramref name="timeZone"/> as an
+    /// instant, with the same DST handling as <see cref="LocalMidnight"/>: a time in a DST gap advances
+    /// to the first valid local time, and an ambiguous time uses the standard-time offset.
+    /// </summary>
+    public static DateTimeOffset LocalTime(DateOnly date, TimeOnly time, TimeZoneInfo timeZone)
     {
-        var local = date.ToDateTime(TimeOnly.MinValue, DateTimeKind.Unspecified);
+        var local = date.ToDateTime(time, DateTimeKind.Unspecified);
         while (timeZone.IsInvalidTime(local))
             local = local.AddMinutes(1);
 

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using CalendarMcp.Core.Models;
+using CalendarMcp.Core.Providers;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Utilities;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,12 @@ public sealed class FindAvailableTimesTool(
     IProviderServiceFactory providerFactory,
     ILogger<FindAvailableTimesTool> logger)
 {
+    /// <summary>
+    /// Most of the owner's events read for one search. A listing that reaches the cap may be
+    /// truncated, and a missing meeting would be offered as a free slot, so the tool refuses.
+    /// </summary>
+    internal const int MaxOwnEvents = 1000;
+
     [McpServerTool, Description("Find available meeting times on an on-prem Exchange calendar. Checks the account's own events and, when supplied, the free/busy of attendee email addresses. Returns candidate slots during working hours.")]
     public async Task<string> FindAvailableTimes(
         [Description("IANA timezone, e.g. Europe/Moscow.")] string timeZone,
@@ -42,10 +49,11 @@ public sealed class FindAvailableTimesTool(
         }
         else
         {
+            // The default must honor the same CalendarRead permission as an explicit accountId.
             account = accountRegistry.GetEnabledAccounts().FirstOrDefault(a =>
-                a.Provider.Equals("exchange", StringComparison.OrdinalIgnoreCase) ||
-                a.Provider.Equals("ews", StringComparison.OrdinalIgnoreCase))
-                ?? throw new McpException("No enabled Exchange account is configured. Add an account with provider 'exchange'.");
+                ExchangeEwsProviderService.IsExchangeAccountType(a.Provider) &&
+                AccountCapabilities.IsAllowed(a, AccountPermission.CalendarRead))
+                ?? throw new McpException("No enabled Exchange account with calendar read permission is configured. Add an account with provider 'exchange'.");
         }
 
         if (providerFactory.GetProvider(account.Provider) is not IExchangeProviderService ews)
@@ -62,7 +70,9 @@ public sealed class FindAvailableTimesTool(
         var rangeEnd = TimeZoneHelper.LocalMidnight(last.AddDays(1), zone);
         var busy = new List<(DateTimeOffset Start, DateTimeOffset End)>();
 
-        var ownEvents = await ews.GetCalendarEventsAsync(account.Id, null, rangeStart.UtcDateTime, rangeEnd.UtcDateTime, 1000, CancellationToken.None);
+        var ownEvents = (await ews.GetCalendarEventsAsync(account.Id, null, rangeStart.UtcDateTime, rangeEnd.UtcDateTime, MaxOwnEvents, CancellationToken.None)).ToList();
+        if (ownEvents.Count >= MaxOwnEvents)
+            throw new McpException($"The calendar has {MaxOwnEvents} or more events in this range, so availability can't be computed reliably. Narrow startDate and endDate.");
         foreach (var evt in ownEvents.Where(e => !e.IsCancelled && !e.ShowAs.Equals("free", StringComparison.OrdinalIgnoreCase)))
         {
             var interval = TimeZoneHelper.GetEffectiveRange(evt, zone);
@@ -84,9 +94,12 @@ public sealed class FindAvailableTimesTool(
         var step = TimeSpan.FromMinutes(15);
         for (var day = first; day <= last && slots.Count < Math.Clamp(maxSlots, 1, 100); day = day.AddDays(1))
         {
-            var dayStart = TimeZoneHelper.LocalMidnight(day, zone).AddHours(workDayStartHour);
-            var nextDay = TimeZoneHelper.LocalMidnight(day.AddDays(1), zone);
-            var dayEnd = workDayEndHour == 24 ? nextDay : TimeZoneHelper.LocalMidnight(day, zone).AddHours(workDayEndHour);
+            // Resolve each boundary as a local time: adding hours to midnight drifts by an hour on
+            // DST transition days.
+            var dayStart = TimeZoneHelper.LocalTime(day, new TimeOnly(workDayStartHour, 0), zone);
+            var dayEnd = workDayEndHour == 24
+                ? TimeZoneHelper.LocalMidnight(day.AddDays(1), zone)
+                : TimeZoneHelper.LocalTime(day, new TimeOnly(workDayEndHour, 0), zone);
             for (var slotStart = dayStart; slotStart + duration <= dayEnd; slotStart += step)
             {
                 var slotEnd = slotStart + duration;
