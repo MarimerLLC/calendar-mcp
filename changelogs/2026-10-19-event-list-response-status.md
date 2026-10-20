@@ -1,6 +1,7 @@
 # Response Status in Event Lists
 
 **Date**: October 19, 2026
+**Version**: 1.8.4
 
 ---
 

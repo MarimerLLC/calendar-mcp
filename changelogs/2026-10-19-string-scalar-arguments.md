@@ -1,6 +1,7 @@
 # Tool Arguments Accept Quoted Booleans and Numbers
 
 **Date**: October 19, 2026
+**Version**: 1.8.4
 
 ---
 

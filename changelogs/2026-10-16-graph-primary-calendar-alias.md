@@ -2,6 +2,7 @@
 
 **Date**: October 16, 2026
 **Issue**: [#107](https://github.com/MarimerLLC/calendar-mcp/issues/107)
+**Version**: 1.8.4
 
 ---
 
