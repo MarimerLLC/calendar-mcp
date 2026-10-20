@@ -197,6 +197,7 @@ public class Program
             .WithTools<CalendarMcp.Core.Tools.CreateContactTool>()
             .WithTools<CalendarMcp.Core.Tools.UpdateContactTool>()
             .WithTools<CalendarMcp.Core.Tools.DeleteContactTool>()
+            .WithBooleanStringArguments()
             .WithPrompts<CalendarMcp.Core.Prompts.CalendarPrompts>()
             .WithPrompts<CalendarMcp.Core.Prompts.EmailPrompts>()
             .WithPrompts<CalendarMcp.Core.Prompts.ContactPrompts>()
