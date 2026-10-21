@@ -66,6 +66,30 @@ given account.
 - **Unsubscribe**: `List-Unsubscribe` headers are parsed the same way
   as Graph/Gmail, so unsubscribe flows work.
 
+## CalDAV / CardDAV (`dav`)
+
+- **Auth**: username + password (or app-specific password). Stored
+  encrypted at rest via the server's data-protection key. No OAuth.
+- **Capabilities**: calendar and/or contacts — both read/write when
+  enabled. No email (pair with `imap` for iCloud Mail).
+- **Use case**: Apple iCloud, Nextcloud, Fastmail, Baikal, and other
+  standards-based CalDAV/CardDAV servers.
+- **Presets**: `icloud`, `icloud-cn`, `fastmail`, `nextcloud`, `generic`.
+  iCloud seeds `https://caldav.icloud.com/` and
+  `https://contacts.icloud.com/`, then discovers shard homes automatically.
+- **Setup**: see `docs/ICLOUD-DAV-SETUP.md` for Apple app-specific
+  passwords and pairing with IMAP.
+- **IDs**: calendar, event, and contact IDs are opaque encodings of DAV
+  hrefs — pass them back to tools unchanged.
+- **Recurring events**: `get_calendar_events` lists each occurrence with
+  its own eventId. `delete_event` with an occurrence id removes only that
+  occurrence. `update_event` and `respond_to_event` act on the whole
+  series, so they reject an occurrence id; the error names the series id.
+- **Quirks**: Reminders/VTODO are not supported; iCloud upgraded
+  Reminders are not exposed over CalDAV. `respond_to_event` updates the
+  local ATTENDEE `PARTSTAT` when the event object is editable (no full
+  iTIP outbox).
+
 ## iCalendar URL (`ics`)
 
 - **Auth**: none (public URL) or basic-auth (configurable).

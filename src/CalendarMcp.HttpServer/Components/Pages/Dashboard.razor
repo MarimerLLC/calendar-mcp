@@ -169,6 +169,8 @@ else
             // password is populated; no Authenticate button is needed.
             "imap" or "imap-smtp"
                 => account.ProviderConfig.TryGetValue("password", out var pw) && !string.IsNullOrWhiteSpace(pw),
+            "dav" or "caldav" or "carddav"
+                => account.ProviderConfig.TryGetValue("password", out var davPw) && !string.IsNullOrWhiteSpace(davPw),
             _ => false
         };
     }

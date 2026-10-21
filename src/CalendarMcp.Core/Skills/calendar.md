@@ -1,8 +1,8 @@
 # Calendar
 
 Calendar tools read, create, update, and respond to events across
-Microsoft 365, Google, Outlook.com, and read-only iCalendar/JSON
-sources.
+Microsoft 365, Google, Outlook.com, CalDAV/CardDAV (`dav`, including
+iCloud), and read-only iCalendar/JSON sources.
 
 ## Timezones are mandatory
 

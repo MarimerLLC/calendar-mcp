@@ -234,6 +234,12 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
             {
                 return await CheckMicrosoftCredentialAsync(accountId, providerConfig);
             }
+            else if (IsPasswordProvider(provider))
+            {
+                return HasPasswordConfigured(providerConfig)
+                    ? "[green]Configured[/]"
+                    : "[red]Missing password[/]";
+            }
             else
             {
                 return "[yellow]Unknown[/]";
@@ -292,6 +298,17 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
 
         return hasCredential ? "[green]Logged in[/]" : "[red]Not logged in[/]";
     }
+
+    private static bool IsPasswordProvider(string provider) =>
+        provider.Equals("dav", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("caldav", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("carddav", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("imap", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("imap-smtp", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasPasswordConfigured(Dictionary<string, string> providerConfig) =>
+        providerConfig.Any(kv =>
+            kv.Key.Equals("password", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value));
 
     /// <summary>
     /// Try to get a JsonElement by checking multiple property names (for case-insensitive lookup)

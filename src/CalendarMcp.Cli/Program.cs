@@ -1,5 +1,7 @@
 ﻿using CalendarMcp.Cli.Commands;
+using CalendarMcp.Core.Configuration;
 using CalendarMcp.Core.Providers;
+using CalendarMcp.Core.Security;
 using CalendarMcp.Core.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -19,6 +21,9 @@ services.AddLogging(builder =>
 // Add authentication services
 services.AddSingleton<IM365AuthenticationService, M365AuthenticationService>();
 services.AddSingleton<IGoogleAuthenticationService, GoogleAuthenticationService>();
+
+// Shared DataProtection keyring so CLI-written ENC: passwords decrypt in Http/Stdio hosts
+services.AddCalendarMcpDataProtection();
 
 // Create service provider
 var registrar = new TypeRegistrar(services);
@@ -53,13 +58,18 @@ app.Configure(config =>
         .WithExample(new[] { "add-json-account" })
         .WithExample(new[] { "add-json-account", "--config", "/path/to/appsettings.json" });
 
+    config.AddCommand<AddDavAccountCommand>("add-dav-account")
+        .WithDescription("Add a CalDAV/CardDAV account (iCloud, Fastmail, Nextcloud, or custom)")
+        .WithExample(new[] { "add-dav-account" })
+        .WithExample(new[] { "add-dav-account", "--config", "/path/to/appsettings.json" });
+
     config.AddCommand<ListAccountsCommand>("list-accounts")
         .WithDescription("List all configured accounts")
         .WithExample(new[] { "list-accounts" })
         .WithExample(new[] { "list-accounts", "--config", "/path/to/appsettings.json" });
 
     config.AddCommand<TestAccountCommand>("test-account")
-        .WithDescription("Test account authentication")
+        .WithDescription("Test account authentication / connectivity")
         .WithExample(new[] { "test-account", "work-account" })
         .WithExample(new[] { "test-account", "work-account", "--config", "/path/to/appsettings.json" });
 

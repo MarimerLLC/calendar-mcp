@@ -209,6 +209,18 @@ CalendarMcp.Cli add-google-account
 .\CalendarMcp.Cli.exe add-google-account  # Windows
 ```
 
+### Setting up CalDAV / CardDAV (iCloud, Fastmail, Nextcloud)
+
+See the detailed [iCloud CalDAV/CardDAV Setup Guide](ICLOUD-DAV-SETUP.md) for Apple app-specific passwords, discovery, and pairing with IMAP for Mail.
+
+**Quick Start:**
+```bash
+CalendarMcp.Cli add-dav-account
+CalendarMcp.Cli test-account <account-id>
+```
+
+Presets: `icloud`, `icloud-cn`, `fastmail`, `nextcloud`, `generic`.
+
 ## MCP Client Configuration
 
 Once you've installed the binaries and configured your accounts, you need to set up your MCP client to use the server.

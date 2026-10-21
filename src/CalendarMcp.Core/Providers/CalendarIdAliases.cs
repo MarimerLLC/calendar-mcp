@@ -6,7 +6,7 @@ using Microsoft.Graph.Models.ODataErrors;
 namespace CalendarMcp.Core.Providers;
 
 /// <summary>
-/// Default-calendar aliases for providers whose calendar IDs are opaque (Microsoft Graph).
+/// Default-calendar aliases for providers whose calendar IDs are opaque (Microsoft Graph, DAV).
 /// Models routinely send <c>calendarId: "primary"</c> — the Google convention — to every
 /// account, so <c>primary</c> and <c>default</c> (any case) are treated the same as an
 /// omitted calendarId. Google is not routed through here: <c>primary</c> is a real ID there.
@@ -33,11 +33,12 @@ internal static class CalendarIdAliases
 
     /// <summary>
     /// True for the account types whose provider resolves every alias in
-    /// <see cref="IsDefaultCalendar"/> (the Microsoft Graph providers). Mirrors the names
+    /// <see cref="IsDefaultCalendar"/> (the Microsoft Graph and DAV providers). Mirrors the names
     /// accepted by <see cref="ProviderServiceFactory.GetProvider"/>.
     /// </summary>
     public static bool ProviderResolvesAliases(string? accountType) =>
-        accountType?.ToLowerInvariant() is "microsoft365" or "m365" or "outlook.com" or "outlook" or "hotmail";
+        accountType?.ToLowerInvariant() is "microsoft365" or "m365" or "outlook.com" or "outlook" or "hotmail"
+            or "dav" or "caldav" or "carddav";
 
     /// <summary>
     /// Longest calendarId echoed back in <see cref="UnknownCalendarMessage"/>. Graph IDs run to

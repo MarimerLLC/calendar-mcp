@@ -71,7 +71,7 @@ public static partial class AccountValidation
     /// <summary>Known provider types.</summary>
     public static readonly IReadOnlySet<string> KnownProviders = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "microsoft365", "outlook.com", "google", "ics", "json", "imap"
+        "microsoft365", "outlook.com", "google", "ics", "json", "imap", "dav", "caldav", "carddav"
     };
 
     /// <summary>
@@ -118,8 +118,49 @@ public static partial class AccountValidation
             "ics" => ValidateIcsConfig(config),
             "json" => ValidateJsonConfig(config),
             "imap" => ValidateRequiredKeys(config, "imapHost", "smtpHost", "username", "password"),
+            "dav" or "caldav" or "carddav" => ValidateDavConfig(config),
             _ => (false, $"Unknown provider '{provider}'.")
         };
+    }
+
+    private static (bool, string?) ValidateDavConfig(Dictionary<string, string> config)
+    {
+        var usernameOk = config.Any(kv =>
+            kv.Key.Equals("username", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value));
+        var passwordOk = config.Any(kv =>
+            kv.Key.Equals("password", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value));
+        if (!usernameOk)
+            return (false, "ProviderConfig is missing required key 'username'.");
+        if (!passwordOk)
+            return (false, "ProviderConfig is missing required key 'password'.");
+
+        var working = new Dictionary<string, string>(config, StringComparer.OrdinalIgnoreCase);
+        CalendarMcp.Core.Providers.Dav.DavHostPolicy.ApplyPreset(
+            working.GetValueOrDefault("preset"), working);
+
+        var hasCal = working.Any(kv =>
+            kv.Key.Equals("caldavUrl", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value));
+        var hasCard = working.Any(kv =>
+            kv.Key.Equals("carddavUrl", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value));
+
+        if (!hasCal && !hasCard)
+            return (false, "ProviderConfig needs caldavUrl and/or carddavUrl (or an iCloud/Fastmail preset).");
+
+        if (hasCal)
+        {
+            var url = working.First(kv => kv.Key.Equals("caldavUrl", StringComparison.OrdinalIgnoreCase)).Value;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https")
+                return (false, "caldavUrl must be a valid HTTPS URL.");
+        }
+
+        if (hasCard)
+        {
+            var url = working.First(kv => kv.Key.Equals("carddavUrl", StringComparison.OrdinalIgnoreCase)).Value;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https")
+                return (false, "carddavUrl must be a valid HTTPS URL.");
+        }
+
+        return (true, null);
     }
 
     private static (bool, string?) ValidateRequiredKeys(Dictionary<string, string> config, params string[] keys)

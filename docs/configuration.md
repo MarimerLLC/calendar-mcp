@@ -370,6 +370,32 @@ account's effective permissions.
 
 For setup walkthrough including Gmail app passwords, see `docs/IMAP-SETUP.md`.
 
+### CalDAV / CardDAV Accounts
+
+```json
+{
+  "Id": "personal-icloud",
+  "DisplayName": "iCloud",
+  "Provider": "dav",
+  "Domains": ["icloud.com", "me.com", "mac.com"],
+  "ProviderConfig": {
+    "preset": "icloud",
+    "username": "you@icloud.com",
+    "password": "ENC:CfDJ8...",
+    "enableCalendar": "true",
+    "enableContacts": "true"
+  }
+}
+```
+
+**Required ProviderConfig keys**: `username`, `password`, and at least one of `caldavUrl` / `carddavUrl` (or a preset that supplies them, e.g. `icloud`).
+
+**Presets**: `icloud`, `icloud-cn`, `fastmail`, `nextcloud`, `generic`.
+
+**Capabilities**: Calendar and/or contacts (read/write). Email is unsupported — pair with an IMAP account for iCloud Mail.
+
+For Apple app-specific passwords and host allowlisting, see `docs/ICLOUD-DAV-SETUP.md`.
+
 ## Router Configuration
 
 ### Ollama (Local)

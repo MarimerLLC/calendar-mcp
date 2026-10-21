@@ -236,6 +236,45 @@ IMAP messages are identified by `(folder, UIDVALIDITY, UID)`. The provider encod
 ### Validation Status
 🆕 New in this release. Validated end-to-end against Gmail using an app password.
 
+## IDavProviderService
+
+CalDAV + CardDAV integration for standards-based calendar and contact servers (iCloud, Nextcloud, Fastmail, Baikal, etc.). **No email** — pair with IMAP for mail. Uses a thin HttpClient DAV stack with RFC 6764 discovery and existing `Ical.Net` for VEVENT payloads.
+
+### SDK & Dependencies
+- `System.Net.Http` + custom DAV XML helpers
+- **Ical.Net** — VEVENT parse/serialize (shared with ICS provider)
+- Built-in vCard 3.0 subset mapper for contacts
+
+### Account Management
+- One provider service manages multiple DAV accounts with per-account Basic Auth credentials.
+- Passwords encrypted at rest via ASP.NET DataProtection (`PasswordProtector`).
+
+### Configuration
+
+Provider id: `dav` (aliases `caldav`, `carddav`).
+
+| Key | Required | Default | Notes |
+|-----|----------|---------|-------|
+| `username` | yes | — | Apple ID email for iCloud |
+| `password` | yes | — | App-specific password; stored as `ENC:…` |
+| `preset` | no | `generic` | `icloud`, `icloud-cn`, `fastmail`, `nextcloud`, `generic` |
+| `caldavUrl` | if calendar enabled | from preset | HTTPS entry URL |
+| `carddavUrl` | if contacts enabled | from preset | HTTPS entry URL |
+| `enableCalendar` | no | true when `caldavUrl` set | |
+| `enableContacts` | no | true when `carddavUrl` set | |
+| `calendarHomeSet` | no | discovered | Optional cache of discovered home |
+| `addressbookHomeSet` | no | discovered | Optional cache of discovered home |
+
+See [ICLOUD-DAV-SETUP.md](ICLOUD-DAV-SETUP.md) for Apple app-specific passwords and host allowlisting.
+
+### Capabilities
+- Calendar: list, query, create, update, delete, best-effort RSVP (`PARTSTAT`)
+- Contacts: list, search, get, create, update, delete
+- Email: unsupported
+
+### Validation Status
+🆕 New. Unit-tested with fixture XML; manual iCloud validation recommended.
+
 ## Provider Service Factory
 
 Resolves the correct provider service based on account type.
