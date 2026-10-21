@@ -1,5 +1,7 @@
 # CalDAV / CardDAV (`dav`) provider
 
+**Version**: 1.9.0
+
 ## Summary
 
 Added a full CalDAV + CardDAV provider (`dav`, aliases `caldav` / `carddav`) with read/write calendar and contacts support. Primary target: Apple iCloud via app-specific passwords. Also supports Fastmail, Nextcloud, and generic HTTPS DAV endpoints.

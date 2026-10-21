@@ -103,7 +103,7 @@ When the underlying folder gets recreated (rare — it changes UIDVALIDITY), pre
 
 Passwords are encrypted at rest using ASP.NET DataProtection. Stored values look like `ENC:CfDJ8...`. The keystore lives at `<data-dir>/keys/` — `/app/data/keys/` in the k8s deployment, `%LOCALAPPDATA%\CalendarMcp\keys\` on Windows. Back up the data directory and you keep both the encrypted secrets and the keys to read them.
 
-See [`security.md`](security.md#password-encryption-at-rest-imap-accounts) for the threat model.
+See [`security.md`](security.md#password-encryption-at-rest-imap-and-dav-accounts) for the threat model.
 
 ## Troubleshooting
 
