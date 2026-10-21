@@ -241,7 +241,13 @@ This is the right choice when:
 - You need an unattended bot mailbox on a consumer Gmail account, where OAuth refresh tokens expire weekly while the app sits in Testing publishing status.
 - You want to attach a non-Microsoft, non-Google mailbox (Fastmail, Apple iCloud, custom IMAP server, etc.) without writing a new provider.
 
-Setup walkthrough including the Gmail-specific app-password steps lives in [`IMAP-SETUP.md`](IMAP-SETUP.md). For the encryption-at-rest details and threat model, see [`security.md`](security.md#password-encryption-at-rest-imap-accounts).
+Setup walkthrough including the Gmail-specific app-password steps lives in [`IMAP-SETUP.md`](IMAP-SETUP.md). For the encryption-at-rest details and threat model, see [`security.md`](security.md#password-encryption-at-rest-imap-and-dav-accounts).
+
+## CalDAV/CardDAV Authentication
+
+The `dav` provider (aliases `caldav` / `carddav`) also skips OAuth. Each account stores a username and password in its `ProviderConfig`, encrypted at rest with the same DataProtection `ENC:` scheme as IMAP. iCloud requires an app-specific password; Fastmail and Nextcloud accept app passwords as well. Because the credential lives in config, `reauth` and `logout` do not apply — rotate the password at the provider and update the account instead.
+
+Setup walkthrough: [`ICLOUD-DAV-SETUP.md`](ICLOUD-DAV-SETUP.md).
 
 ## Security Best Practices
 

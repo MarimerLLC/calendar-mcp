@@ -210,7 +210,7 @@ Properties worth knowing for a threat model:
   `AccountCapabilities.IsAllowed` before any provider call is made. A denied operation never
   reaches the provider.
 - **Grants are intersected with provider capability.** `IsAllowed` returns false when the provider
-  has no such capability (calendar on IMAP) or is read-only for it (writes on an ICS feed), no
+  has no such capability (calendar on IMAP, email on DAV) or is read-only for it (writes on an ICS feed), no
   matter what the config says. `list_accounts` advertises this effective result, so an assistant
   is never told about access it doesn't have.
 - **Defaults are permissive.** An omitted block grants everything, preserving behaviour for configs
@@ -267,9 +267,9 @@ export CALENDAR_MCP_Accounts__0__Configuration__ClientSecret="GOCSPX-..."
 # - HashiCorp Vault
 ```
 
-### Password Encryption At Rest (IMAP Accounts)
+### Password Encryption At Rest (IMAP and DAV Accounts)
 
-The IMAP/SMTP provider stores its `password` field encrypted via ASP.NET DataProtection. Values written by the admin UI or any future CLI command land in `appsettings.json` as a string starting with the `ENC:` prefix followed by the protected blob.
+The IMAP/SMTP and CalDAV/CardDAV (`dav`) providers store their `password` field encrypted via ASP.NET DataProtection. Values written by the admin UI or any future CLI command land in `appsettings.json` as a string starting with the `ENC:` prefix followed by the protected blob.
 
 **Key persistence**:
 - Keys are persisted to `<data-dir>/keys/` (e.g. `/app/data/keys/` in k8s, `%LOCALAPPDATA%\CalendarMcp\keys\` locally).
@@ -289,7 +289,7 @@ The IMAP/SMTP provider stores its `password` field encrypted via ASP.NET DataPro
 
 **appsettings.json**:
 - Contains account metadata (IDs, domains, priorities)
-- IMAP passwords stored encrypted (with `ENC:` prefix) — see above
+- IMAP and DAV passwords stored encrypted (with `ENC:` prefix) — see above
 - Other secrets and tokens are not stored here
 - Can be committed to source control (with secrets externalized)
 
