@@ -130,7 +130,7 @@
             // expiration configured on the cookie options.
             new AuthenticationProperties { IsPersistent = true });
 
-        Navigation.NavigateTo("/admin/ui", forceLoad: true);
+        Navigation.NavigateTo(LocalReturnUrl.Sanitize(pending.ReturnUrl), forceLoad: true);
     }
 
     private sealed class ClaimInput

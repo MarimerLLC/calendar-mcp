@@ -5,7 +5,8 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace CalendarMcp.HttpServer.Security;
 
 /// <summary>
-/// Rate limits the endpoints worth guessing at: console sign-in and the MCP endpoint.
+/// Rate limits the endpoints worth guessing at: console sign-in, the MCP endpoint, and the MCP
+/// OAuth endpoints (where client registration is open to anyone).
 ///
 /// Implemented as a partitioned global limiter rather than per-endpoint policies because the
 /// sign-in and claim pages are Razor components served by a single <c>MapRazorComponents</c>
@@ -19,6 +20,18 @@ public static class AdminRateLimiting
 
     /// <summary>MCP calls allowed per credential per window. An assistant session is bursty but nowhere near this.</summary>
     private const int McpPermitLimit = 240;
+
+    /// <summary>
+    /// Dynamic client registrations allowed per client per hour. Anyone can register an MCP client,
+    /// and a real one registers once per install.
+    /// </summary>
+    private const int ClientRegistrationPermitLimit = 10;
+
+    /// <summary>
+    /// Other OAuth requests (authorize, consent, token, discovery) per client per window. Connecting
+    /// an app takes a handful; refreshing a token takes one an hour.
+    /// </summary>
+    private const int OAuthPermitLimit = 60;
 
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(1);
 
@@ -63,6 +76,30 @@ public static class AdminRateLimiting
                         });
                 }
 
+                if (context.Request.Path.StartsWithSegments("/connect/register"))
+                {
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        $"register:{ClientKey(context)}",
+                        _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = ClientRegistrationPermitLimit,
+                            Window = TimeSpan.FromHours(1),
+                            QueueLimit = 0
+                        });
+                }
+
+                if (IsOAuthPath(context.Request.Path))
+                {
+                    return RateLimitPartition.GetFixedWindowLimiter(
+                        $"oauth:{ClientKey(context)}",
+                        _ => new FixedWindowRateLimiterOptions
+                        {
+                            PermitLimit = OAuthPermitLimit,
+                            Window = Window,
+                            QueueLimit = 0
+                        });
+                }
+
                 if (IsMcpPath(context.Request.Path))
                 {
                     return RateLimitPartition.GetFixedWindowLimiter(
@@ -90,6 +127,10 @@ public static class AdminRateLimiting
         path.StartsWithSegments("/admin/ui/login") ||
         path.StartsWithSegments("/admin/ui/claim") ||
         path.StartsWithSegments("/admin/auth");
+
+    /// <summary>The MCP OAuth authorization server's endpoints and discovery documents.</summary>
+    private static bool IsOAuthPath(PathString path) =>
+        path.StartsWithSegments("/connect") || path.StartsWithSegments("/.well-known");
 
     /// <summary>
     /// The MCP surface: the protocol endpoints at the root plus the attachment endpoints.

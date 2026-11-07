@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using CalendarMcp.Core.Security;
+using CalendarMcp.HttpServer.Identity;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 
@@ -76,21 +77,28 @@ public sealed class McpApiKeyHandler : AuthenticationHandler<AuthenticationSchem
     {
         Response.StatusCode = StatusCodes.Status401Unauthorized;
 
-        // Advertising Bearer keeps the door open for the MCP OAuth 2.1 flow, which discovers
-        // the authorization server from a WWW-Authenticate challenge on this same endpoint.
-        Response.Headers.WWWAuthenticate = $"Bearer realm=\"calendar-mcp\"";
+        // When MCP OAuth is offered, the challenge points OAuth-capable clients at the protected
+        // resource metadata (RFC 9728), which is how they discover the authorization server. Clients
+        // configured with a key never see this: they send the key and are not challenged.
+        var oauth = Context.RequestServices.GetService<OAuthAvailability>()?.IsAvailable == true;
+        Response.Headers.WWWAuthenticate = oauth
+            ? $"Bearer realm=\"calendar-mcp\", resource_metadata=\"{McpResource.ResourceMetadataUrl(Request)}\""
+            : "Bearer realm=\"calendar-mcp\"";
 
         await Response.WriteAsJsonAsync(new
         {
-            error = "Unauthorized. Provide an MCP API key via 'Authorization: Bearer <key>' " +
-                    $"or the '{ApiKeyHeader}' header."
+            error = oauth
+                ? "Unauthorized. Sign in with OAuth, or provide an MCP API key via 'Authorization: Bearer <key>' " +
+                  $"or the '{ApiKeyHeader}' header."
+                : "Unauthorized. Provide an MCP API key via 'Authorization: Bearer <key>' " +
+                  $"or the '{ApiKeyHeader}' header."
         });
     }
 
     protected override async Task HandleForbiddenAsync(AuthenticationProperties properties)
     {
         Response.StatusCode = StatusCodes.Status403Forbidden;
-        await Response.WriteAsJsonAsync(new { error = "The supplied MCP API key is not permitted to use this endpoint." });
+        await Response.WriteAsJsonAsync(new { error = "The supplied MCP credential is not permitted to use this endpoint." });
     }
 
     private static string? ExtractKey(HttpRequest request)

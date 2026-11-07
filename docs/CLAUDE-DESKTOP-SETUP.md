@@ -162,6 +162,16 @@ You can pass environment variables to the server:
 
 3. Wait a few seconds for the MCP server to initialize
 
+## Alternative: Connect to a Remote Adjutant Server
+
+If Adjutant runs as an HTTP server (Docker, Kubernetes) with an admin sign-in provider configured,
+you can add it to Claude Desktop or claude.ai as a **custom connector** instead of running a local
+process: enter the server's URL (e.g. `https://adjutant.example.com/`), and when prompted, sign in
+to the Adjutant admin console with Google or Microsoft and click **Allow**. No API key is needed.
+
+Custom connectors call the server from Anthropic's cloud, so it must be reachable from the
+internet. See [MCP OAuth](configuration.md#mcp-oauth-http-server) for the server side.
+
 ## Verification
 
 ### Check Server Status
