@@ -17,8 +17,11 @@ public static class AdminAuthEndpoints
         // Starts an OIDC sign-in. Reached by a plain link from the login page, so it is a GET
         // with no antiforgery token — it mutates nothing and the OIDC state parameter carries
         // the CSRF protection for the round trip.
+        // returnUrl carries an MCP client's authorization request through the provider round trip;
+        // only a local path is honoured, so this cannot be turned into an open redirect.
         app.MapGet("/admin/auth/login/{scheme}", (
             string scheme,
+            string? returnUrl,
             IOptionsMonitor<AdminAuthConfiguration> adminAuth) =>
         {
             if (!AdminOidc.KnownSchemes.Contains(scheme, StringComparer.Ordinal))
@@ -29,14 +32,16 @@ public static class AdminAuthEndpoints
                 return Results.Redirect(AdminSignInProcessor.LoginPathWithError("unconfigured"));
 
             return Results.Challenge(
-                new AuthenticationProperties { RedirectUri = "/admin/ui" },
+                new AuthenticationProperties { RedirectUri = LocalReturnUrl.Sanitize(returnUrl) },
                 [scheme]);
         });
 
-        app.MapGet("/admin/auth/logout", async (HttpContext context) =>
+        // A returnUrl here means "sign in as someone else, then carry on", which the MCP consent
+        // page offers when the wrong account is signed in.
+        app.MapGet("/admin/auth/logout", async (HttpContext context, string? returnUrl) =>
         {
             await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            return Results.Redirect(AdminSignInProcessor.LoginPath);
+            return Results.Redirect(AdminSignInProcessor.LoginPath + LocalReturnUrl.Query("ReturnUrl", returnUrl));
         });
 
         return app;

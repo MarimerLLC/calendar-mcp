@@ -5,6 +5,7 @@ using CalendarMcp.Core.Security;
 using CalendarMcp.HttpServer.Admin;
 using CalendarMcp.HttpServer.BlazorAdmin;
 using CalendarMcp.HttpServer.Endpoints;
+using CalendarMcp.HttpServer.Identity;
 using CalendarMcp.HttpServer.Security;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -144,22 +145,26 @@ public class Program
         var serverConfig = builder.Configuration.GetSection("CalendarMcp").Get<CalendarMcpConfiguration>()
             ?? new CalendarMcpConfiguration();
 
-        builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+        var authentication = builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options => AdminCookieOptions.Configure(options, serverConfig))
             .AddScheme<AuthenticationSchemeOptions, McpApiKeyHandler>(
                 McpApiKeyHandler.SchemeName, _ => { })
             .AddAdminOidcProviders();
+
+        // MCP OAuth: this server as its own authorization server, plus the scheme that sends each
+        // MCP request's credential to the key handler or to OAuth token validation.
+        builder.AddMcpOAuth(authentication, serverConfig);
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddScoped<AuthenticationStateProvider, AdminAuthenticationStateProvider>();
 
         builder.Services.AddAdminRateLimiting();
 
         // Policy guarding the MCP protocol and attachment endpoints. Naming the scheme
-        // explicitly keeps it independent of the cookie default used by the admin UI, and
-        // leaves room to add an MCP OAuth scheme alongside it later.
+        // explicitly keeps it independent of the cookie default used by the admin UI. The scheme
+        // accepts an API key or an OAuth access token issued by this server.
         builder.Services.AddAuthorizationBuilder()
             .AddPolicy(McpApiKeyHandler.PolicyName, policy => policy
-                .AddAuthenticationSchemes(McpApiKeyHandler.SchemeName)
+                .AddAuthenticationSchemes(McpOAuthSetup.BearerScheme)
                 .RequireAuthenticatedUser());
 
         // Configure MCP server with HTTP/SSE transport and register tools
@@ -235,6 +240,10 @@ public class Program
         // validation work.
         app.UseRateLimiter();
 
+        // OAuth endpoints answer 404 while OAuth isn't offered (no admin sign-in provider, or
+        // switched off). Ahead of authentication, because OpenIddict serves its endpoints from there.
+        OAuthAvailability.UseOAuthAvailabilityGate(app);
+
         app.UseAuthentication();
         app.UseAuthorization();
 
@@ -265,6 +274,10 @@ public class Program
         var mcpEndpoints = app.MapMcp();
         var attachmentEndpoints = app.MapAttachmentEndpoints();
 
+        // MCP OAuth: authorization (consent), client registration, protected resource metadata.
+        // OpenIddict serves token, revocation and discovery itself.
+        app.MapMcpOAuth();
+
         if (builder.Configuration.GetValue("CalendarMcp:Mcp:RequireApiKey", true))
         {
             mcpEndpoints.RequireAuthorization(McpApiKeyHandler.PolicyName);
@@ -287,6 +300,7 @@ public class Program
         // Validate MCP protection and mint a first key if needed. Runs before Start() so a
         // misconfiguration stops the server instead of quietly leaving the endpoint open.
         app.ConfigureMcpProtection();
+        app.ConfigureMcpOAuth();
         app.ConfigureAdminAuth();
 
         app.Start();
@@ -303,6 +317,7 @@ public class Program
             Log.Information("  API Docs:      /scalar/v1");
         }
         Log.Information("  Health:        /health");
+        Log.Information("  MCP OAuth:     /.well-known/oauth-protected-resource (offered while an admin sign-in provider is configured)");
 
         app.WaitForShutdown();
     }

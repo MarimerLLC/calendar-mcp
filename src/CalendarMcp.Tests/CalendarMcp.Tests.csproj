@@ -15,6 +15,8 @@
          claim flow writes is verified against the real configuration pipeline. -->
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.11" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.11" />
+    <!-- Hosts the real HTTP server in-process for the MCP OAuth integration tests. -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../CalendarMcp.Core/CalendarMcp.Core.csproj" />

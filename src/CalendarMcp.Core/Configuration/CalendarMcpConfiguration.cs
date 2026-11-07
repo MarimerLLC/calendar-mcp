@@ -46,6 +46,28 @@ public class McpEndpointConfiguration
     /// never safe for a publicly reachable deployment such as a Tailscale Funnel endpoint.
     /// </summary>
     public bool RequireApiKey { get; set; } = true;
+
+    /// <summary>
+    /// Whether MCP clients may also connect with OAuth (the MCP authorization spec): the server
+    /// acts as its own authorization server, and the owner approves each client after signing in
+    /// to the admin console with Google or Microsoft.
+    ///
+    /// Defaults to true, but OAuth is only offered while an admin sign-in provider is configured,
+    /// since without one nobody could complete the sign-in. API keys keep working either way.
+    /// </summary>
+    public bool EnableOAuth { get; set; } = true;
+
+    /// <summary>
+    /// Optional base64 PKCS#12 certificate (with private key) that signs OAuth tokens. When unset,
+    /// a key is generated on first start and kept in the data directory.
+    /// </summary>
+    public string? SigningCertificate { get; set; }
+
+    /// <summary>
+    /// Optional base64 PKCS#12 certificate (with private key) that encrypts OAuth tokens. When
+    /// unset, a key is generated on first start and kept in the data directory.
+    /// </summary>
+    public string? EncryptionCertificate { get; set; }
 }
 
 /// <summary>

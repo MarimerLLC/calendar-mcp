@@ -10,7 +10,8 @@ The HTTP server exposes three surfaces with independent protection:
 
 | Surface | Protection |
 |---|---|
-| `/` (MCP protocol), `/attachments/*` | MCP API key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` |
+| `/` (MCP protocol), `/attachments/*` | MCP API key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` — or an MCP OAuth access token issued by this server |
+| `/connect/*`, `/.well-known/oauth-*` | MCP OAuth authorization server; only offered while an admin sign-in provider is configured |
 | `/admin/*` (REST API) | Admin token — `CALENDAR_MCP_ADMIN_TOKEN` |
 | `/admin/ui/*` (Blazor console) | Session cookie, issued after OIDC sign-in or admin-token login |
 | `/health`, `/health/ready` | Anonymous (Kubernetes probes) |
@@ -35,6 +36,38 @@ An API key authorizes access to *every* account the server is configured with. P
 limits are a separate layer — see [Per-Account Permissions](#per-account-permissions) below.
 
 See [Configuration](configuration.md#mcp-endpoint-api-keys-http-server) for setup.
+
+### MCP OAuth
+
+The server is its own OAuth authorization server for MCP clients (OpenIddict), following the MCP
+authorization spec. Google and Entra don't let MCP clients register themselves, so the server does
+the registration and federates only the *sign-in* to the admin console's providers.
+
+- **Discovery.** A `401` from the MCP endpoint carries
+  `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource"` (RFC 9728),
+  which names this server as both the resource and the authorization server.
+- **Approval is the owner's.** `/connect/authorize` requires an admin console session that still
+  passes the console's own checks (allow-list, bound provider subject). A break-glass admin-token
+  session can't approve a client outside Development, since there is no verified identity behind it.
+- **Consent on every authorization.** The consent page names the client, says whether its name is
+  verified (client ID metadata document) or self-asserted (dynamic registration), shows the host it
+  redirects to, and warns about loopback redirects, which any program on the machine can claim. It
+  refuses to be framed. Without it, anyone could register a client with their own redirect URI and
+  send the owner a link that hands them a code.
+- **Public clients, PKCE (S256) required.** Redirect URIs must be HTTPS, or HTTP on a loopback host.
+  Client ID metadata documents are fetched without following redirects and only from public IP
+  addresses (checked on the resolved address at connect time), so a crafted `client_id` can't probe
+  the server's own network.
+- **Audience-bound tokens** (RFC 8707). Tokens are issued only for this server's MCP endpoint and
+  only accepted there. Access tokens last 1 hour; refresh tokens 14 days and rotate on use.
+- **Revalidated on every request.** An OAuth token's owner must still be on the allow-list, with the
+  same bound provider subject, and OAuth must still be offered; otherwise the request gets `401`.
+- **Keys at rest.** Token signing and encryption keys are generated on first start and stored in
+  `oauth-keys/`, encrypted with the DataProtection keyring, unless supplied through configuration.
+  Clients, approvals and refresh tokens are in `identity.db`; token values are stored hashed by
+  OpenIddict.
+
+Like an API key, an OAuth token reaches every account the server is configured with.
 
 ### Admin Console Sign-In
 
@@ -88,12 +121,14 @@ once. That is expected.
 
 ### Rate Limiting
 
-Sign-in and the MCP endpoint are rate limited; everything else is unlimited.
+Sign-in, the MCP endpoint and the MCP OAuth endpoints are rate limited; everything else is unlimited.
 
 | Surface | Limit | Partitioned by |
 |---|---|---|
 | `/admin/ui/login`, `/admin/ui/claim`, `/admin/auth/*` | 10/minute | client address |
-| `/`, `/sse`, `/message`, `/attachments/*` | 240/minute | API key (hashed), or address when absent |
+| `/`, `/sse`, `/message`, `/attachments/*` | 240/minute | API key or OAuth token (hashed), or address when absent |
+| `/connect/register` | 10/hour | client address |
+| other `/connect/*`, `/.well-known/*` | 60/minute | client address |
 
 Rejections return `429` with `Retry-After`. The limiter runs before authentication, so
 credential guessing is throttled before it reaches any validation work.

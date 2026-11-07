@@ -140,7 +140,8 @@ Account setup guides:
 See the [Claude Desktop Setup Guide](docs/CLAUDE-DESKTOP-SETUP.md) for all platforms and troubleshooting.
 
 Connecting to the **HTTP server** instead of a local subprocess requires an API key header — see
-[Connecting a client](docs/configuration.md#connecting-a-client).
+[Connecting a client](docs/configuration.md#connecting-a-client) — or, as a custom connector, an
+OAuth sign-in (see [MCP OAuth](docs/configuration.md#mcp-oauth-http-server)).
 
 ## Deployment Options
 
@@ -170,8 +171,12 @@ the log — copy it from there, as it is hashed at rest and never shown again. C
 `Authorization: Bearer <key>` or `X-Api-Key: <key>`; to supply your own key instead, set
 `CALENDAR_MCP_MCP_KEY`.
 
+MCP clients that support OAuth (Claude Code, claude.ai / Claude Desktop connectors, VS Code) can
+connect without a key once an admin sign-in provider is configured: add the server URL and sign in.
+
 - [MCP endpoint API keys](docs/configuration.md#mcp-endpoint-api-keys-http-server) — settings, key rotation, and disabling enforcement
 - [Connecting a client](docs/configuration.md#connecting-a-client) — Claude Code, VS Code, and `mcp-remote` examples
+- [MCP OAuth](docs/configuration.md#mcp-oauth-http-server) — connecting with a browser sign-in instead of a key
 - [Transport security](docs/security.md#transport-security-http-server) — what protects each endpoint
 
 Manifests for Kubernetes are in [`k8s/`](k8s/), and a Compose file is at

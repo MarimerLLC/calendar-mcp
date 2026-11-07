@@ -12,6 +12,10 @@ public sealed record PendingAdminSignIn
     public required string Email { get; init; }
     public required string Provider { get; init; }
     public string? Subject { get; init; }
+
+    /// <summary>Local path to continue to once the claim succeeds, e.g. an MCP client's authorization request.</summary>
+    public string? ReturnUrl { get; init; }
+
     public DateTimeOffset CreatedUtc { get; init; }
 }
 
@@ -30,7 +34,7 @@ public sealed class PendingAdminSignInStore
     private readonly ConcurrentDictionary<string, PendingAdminSignIn> _pending = new(StringComparer.Ordinal);
 
     /// <summary>Stores a pending identity and returns the opaque token that retrieves it.</summary>
-    public string Add(string email, string provider, string? subject)
+    public string Add(string email, string provider, string? subject, string? returnUrl = null)
     {
         Sweep();
 
@@ -40,6 +44,7 @@ public sealed class PendingAdminSignInStore
             Email = email,
             Provider = provider,
             Subject = subject,
+            ReturnUrl = returnUrl,
             CreatedUtc = DateTimeOffset.UtcNow
         };
 

@@ -1,0 +1,151 @@
+@page "/connect/consent"
+@attribute [AllowAnonymous]
+@layout LoginLayout
+@using System.Security.Claims
+@using CalendarMcp.HttpServer.BlazorAdmin
+@using CalendarMcp.HttpServer.Identity
+@using OpenIddict.Abstractions
+@inject IOpenIddictApplicationManager Applications
+@inject IHostEnvironment Environment
+
+@* Static, and never in a frame. The authorization endpoint sends the browser here with the client's
+   request (already validated by OpenIddict); the form posts the same parameters back, and OpenIddict
+   and the endpoint validate them again. MCP authorization requires showing the redirect host, and
+   warning about localhost redirects, which any program on the machine can claim. *@
+
+<PageTitle>Connect an app - Adjutant</PageTitle>
+
+<div class="d-flex justify-content-center align-items-center min-vh-100 bg-light py-4">
+    <div class="card shadow-sm" style="width: 520px; max-width: 100%;">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <i class="bi bi-plug display-4 text-primary"></i>
+                @if (_client is not null && _canApprove)
+                {
+                    <h3 class="mt-2">Allow @_client to use Adjutant?</h3>
+                }
+                else
+                {
+                    <h3 class="mt-2">Connect an app</h3>
+                }
+            </div>
+
+            @if (_client is null || HttpContext.User.Identity?.IsAuthenticated != true)
+            {
+                <p>This request to connect an app isn't valid any more. Start connecting it again from the app.</p>
+            }
+            else if (!_canApprove)
+            {
+                <div class="alert alert-warning py-2">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    You signed in with the admin token. Connecting an app needs a Google or Microsoft
+                    sign-in, so the app acts as a verified person.
+                </div>
+                <a href="@_switchAccountUrl" class="btn btn-primary w-100" data-enhance-nav="false">
+                    Sign out and sign in with Google or Microsoft
+                </a>
+            }
+            else
+            {
+                <p class="text-muted mb-3">
+                    Signed in as <strong>@_signedInAs</strong>.
+                    <a href="@_switchAccountUrl" data-enhance-nav="false">Not you?</a>
+                </p>
+
+                <p>
+                    <strong>@_client</strong> will have full access to every account on this server: it can
+                    read, send, move and delete email, and create, change and delete calendar events and
+                    contacts, until you disconnect it.
+                </p>
+
+                <dl class="row mb-3">
+                    <dt class="col-sm-4">App</dt>
+                    <dd class="col-sm-8">
+                        @_client
+                        @if (_publisher is not null)
+                        {
+                            <div class="form-text">Described at <code>@_publisher</code></div>
+                        }
+                        else
+                        {
+                            <div class="form-text">Registered itself; the name isn't verified</div>
+                        }
+                    </dd>
+                    <dt class="col-sm-4">Sends you back to</dt>
+                    <dd class="col-sm-8"><code>@_redirectHost</code></dd>
+                </dl>
+
+                @if (_loopback)
+                {
+                    <div class="alert alert-warning py-2">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        The app is waiting on <code>@_redirectHost</code>, a program on this computer. Only
+                        allow this if you just started connecting @_client yourself: any program on this
+                        computer can claim to be it.
+                    </div>
+                }
+
+                <form method="post" action="@AuthorizationEndpoint.Path" class="d-flex gap-2">
+                    <AntiforgeryToken />
+                    @foreach (var (name, value) in _parameters)
+                    {
+                        <input type="hidden" name="@name" value="@value" />
+                    }
+                    <button type="submit" class="btn btn-primary flex-fill"
+                            name="@AuthorizationEndpoint.DecisionField" value="@AuthorizationEndpoint.Allow">
+                        Allow
+                    </button>
+                    <button type="submit" class="btn btn-outline-secondary flex-fill"
+                            name="@AuthorizationEndpoint.DecisionField" value="deny">
+                        Deny
+                    </button>
+                </form>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] public HttpContext HttpContext { get; set; } = default!;
+
+    private string? _client;
+    private string? _publisher;
+    private string? _signedInAs;
+    private string? _redirectHost;
+    private string? _switchAccountUrl;
+    private bool _loopback;
+    private bool _canApprove;
+    private List<(string Name, string Value)> _parameters = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Clickjacking: an "Allow" button must never be shown inside someone else's page.
+        HttpContext.Response.Headers.XFrameOptions = "DENY";
+        HttpContext.Response.Headers.ContentSecurityPolicy = "frame-ancestors 'none'";
+
+        var user = HttpContext.User;
+        _canApprove = AuthorizationEndpoint.CanApprove(user, Environment.IsDevelopment());
+        _signedInAs = user.FindFirstValue(ClaimTypes.Email) ?? user.FindFirstValue(ClaimTypes.Name);
+
+        var query = HttpContext.Request.Query;
+        _parameters = query.SelectMany(p => p.Value.Select(v => (p.Key, v ?? ""))).ToList();
+        // Signing out and back in returns to the same authorization request.
+        _switchAccountUrl = "/admin/auth/logout" +
+            QueryString.Create("returnUrl", AuthorizationEndpoint.Path + HttpContext.Request.QueryString);
+
+        if (!Uri.TryCreate(query["redirect_uri"], UriKind.Absolute, out var redirect)
+            || await Applications.FindByClientIdAsync(query["client_id"].ToString()) is not { } application)
+            return;
+
+        _client = await Applications.GetLocalizedDisplayNameAsync(application) ?? "An unnamed app";
+        var properties = await Applications.GetPropertiesAsync(application);
+        if (properties.TryGetValue(ClientRegistration.RegistrationProperty, out var registration)
+            && registration.GetString() == ClientRegistration.MetadataDocument
+            && Uri.TryCreate(await Applications.GetClientIdAsync(application), UriKind.Absolute, out var clientId))
+        {
+            _publisher = clientId.Host;
+        }
+        _redirectHost = redirect.IsDefaultPort ? redirect.Host : $"{redirect.Host}:{redirect.Port}";
+        _loopback = redirect.IsLoopback;
+    }
+}
