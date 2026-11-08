@@ -25,7 +25,11 @@ The HTTP server exposes three surfaces with independent protection:
   was nor which key matched.
 - **Individually revocable.** Each key carries a label and id. Revoking one leaves the others
   working, and revoked keys are retained for audit rather than deleted. Create and revoke keys
-  from **MCP Keys** in the admin console; revocation takes effect immediately.
+  from **MCP Access** in the admin console; revocation takes effect immediately.
+- **Optional expiry.** A new key can be given a lifetime (30, 90, 180 or 365 days; the console
+  defaults to 90) or none. From its `expiresUtc` on, an expired key is refused like a revoked
+  one, and a warning naming it is logged at most every five minutes. Keys created before
+  expiry existed, the first-start key and the `CALENDAR_MCP_MCP_KEY` environment key never expire.
 - **Enforced by default.** `CalendarMcp:Mcp:RequireApiKey` defaults to `true`. If no key exists
   at startup, one is generated and logged rather than leaving the endpoint open.
 - **Refuses plaintext transport.** With enforcement on, a non-loopback `http://`
@@ -62,6 +66,10 @@ the registration and federates only the *sign-in* to the admin console's provide
   only accepted there. Access tokens last 1 hour; refresh tokens 14 days and rotate on use.
 - **Revalidated on every request.** An OAuth token's owner must still be on the allow-list, with the
   same bound provider subject, and OAuth must still be offered; otherwise the request gets `401`.
+  The token's own entry and the approval it came from must also still be valid in `identity.db`.
+- **Disconnect.** **MCP Access** in the admin console lists the connected apps. **Disconnect**
+  revokes an app's approvals and tokens: its access token fails on the next request and its refresh
+  token is refused, so it has to be approved on the consent page again.
 - **Keys at rest.** Token signing and encryption keys are generated on first start and stored in
   `oauth-keys/`, encrypted with the DataProtection keyring, unless supplied through configuration.
   Clients, approvals and refresh tokens are in `identity.db`; token values are stored hashed by

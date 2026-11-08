@@ -242,6 +242,138 @@ public sealed class McpOAuthIntegrationTests
     }
 
     [TestMethod]
+    public async Task An_expired_key_is_refused_and_a_key_without_expiry_still_works()
+    {
+        // Keys written straight to the store file before the server starts, as an older or
+        // hand-edited mcp-keys.json would be: one expired yesterday, one has no expiry at all.
+        await _app.DisposeAsync();
+        _app = new AdjutantApp();
+        const string expired = "cmcp_expired-key-for-tests";
+        const string forever = "cmcp_key-without-expiry-for-tests";
+        File.WriteAllText(Path.Combine(_app.DataDirectory, "mcp-keys.json"), JsonSerializer.Serialize(new
+        {
+            keys = new object[]
+            {
+                new { id = "k_expired", label = "expired", hash = Hash(expired), createdUtc = DateTimeOffset.UtcNow.AddDays(-91), expiresUtc = DateTimeOffset.UtcNow.AddDays(-1) },
+                new { id = "k_forever", label = "forever", hash = Hash(forever), createdUtc = DateTimeOffset.UtcNow.AddYears(-2) },
+            }
+        }));
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized, (await PostToolsListAsync("Bearer " + expired)).StatusCode);
+        Assert.AreEqual(HttpStatusCode.Unauthorized, (await PostToolsListAsync(authorization: null, apiKey: expired)).StatusCode);
+        Assert.AreNotEqual(HttpStatusCode.Unauthorized, (await PostToolsListAsync("Bearer " + forever)).StatusCode);
+
+        static string Hash(string secret) =>
+            Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(secret)));
+    }
+
+    [TestMethod]
+    public async Task A_signed_in_client_is_listed_as_a_connected_app()
+    {
+        Assert.AreEqual(0, (await _app.Services.GetRequiredService<ConnectedApps>().ListAsync()).Count);
+
+        await ConnectAndGetTokensAsync();
+        await ConnectAndGetTokensAsync();
+
+        var app = (await _app.Services.GetRequiredService<ConnectedApps>().ListAsync()).Single();
+        Assert.AreEqual("Test Agent", app.Name);
+        Assert.AreEqual(MetadataDocumentUrl.AbsoluteUri, app.ClientId);
+        Assert.AreEqual("agent.example", app.Publisher, "a metadata document's host vouches for the name");
+        CollectionAssert.AreEqual(new[] { AdjutantApp.Owner }, app.ApprovedBy.ToArray());
+        CollectionAssert.AreEqual(new[] { "127.0.0.1" }, app.RedirectHosts.ToArray());
+        Assert.IsNotNull(app.ConnectedUtc);
+        Assert.IsNotNull(app.LastActiveUtc);
+    }
+
+    [TestMethod]
+    public async Task A_sign_in_that_stopped_at_the_code_is_not_a_connected_app()
+    {
+        // Approved on the consent page, but the client never redeemed the code for tokens.
+        ServeMetadataDocument();
+        var redirect = await _app.CreateBrowser().AuthorizeAsync(AuthorizationUrl(), AdjutantApp.Owner);
+        Assert.IsNotNull(HttpUtility.ParseQueryString(redirect.Query)["code"]);
+
+        Assert.AreEqual(0, (await _app.Services.GetRequiredService<ConnectedApps>().ListAsync()).Count);
+    }
+
+    [TestMethod]
+    public async Task A_dynamically_registered_client_is_listed_without_a_publisher()
+    {
+        var oauth = OAuth(_app.CreateBrowser(), new CapturingTokenCache(), metadataDocument: null, new Uri("http://localhost:43124/callback"));
+        oauth.DynamicClientRegistration = new DynamicClientRegistrationOptions { ClientName = "Legacy Agent" };
+        await using (await _app.ConnectAsync(oauth))
+        {
+        }
+
+        var app = (await _app.Services.GetRequiredService<ConnectedApps>().ListAsync()).Single();
+        Assert.AreEqual("Legacy Agent", app.Name);
+        Assert.IsNull(app.Publisher, "a dynamically registered name is self-asserted");
+    }
+
+    [TestMethod]
+    public async Task Disconnecting_an_app_cuts_off_its_access_and_refresh_tokens()
+    {
+        var tokens = await ConnectAndGetTokensAsync();
+        var connected = _app.Services.GetRequiredService<ConnectedApps>();
+        Assert.AreNotEqual(HttpStatusCode.Unauthorized, (await PostToolsListAsync("Bearer " + tokens.AccessToken)).StatusCode);
+
+        Assert.IsTrue(await connected.DisconnectAsync((await connected.ListAsync()).Single().ApplicationId));
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized, (await PostToolsListAsync("Bearer " + tokens.AccessToken)).StatusCode,
+            "the access token stops working at once, not when it expires");
+        var refresh = await RefreshAsync(tokens.RefreshToken!);
+        Assert.AreEqual(HttpStatusCode.BadRequest, refresh.StatusCode);
+        Assert.AreEqual("invalid_grant", (await refresh.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+        Assert.AreEqual(0, (await connected.ListAsync()).Count);
+    }
+
+    [TestMethod]
+    public async Task Disconnecting_one_app_leaves_api_keys_and_reconnecting_works()
+    {
+        await ConnectAndGetTokensAsync();
+        var (_, key) = _app.Services.GetRequiredService<IMcpKeyStore>().Create("agent");
+        var connected = _app.Services.GetRequiredService<ConnectedApps>();
+        await connected.DisconnectAsync((await connected.ListAsync()).Single().ApplicationId);
+
+        Assert.AreNotEqual(HttpStatusCode.Unauthorized, (await PostToolsListAsync("Bearer " + key)).StatusCode);
+
+        var tokens = await ConnectAndGetTokensAsync();
+        Assert.AreNotEqual(HttpStatusCode.Unauthorized, (await PostToolsListAsync("Bearer " + tokens.AccessToken)).StatusCode,
+            "a disconnected client can connect again through the consent page");
+        Assert.AreEqual(1, (await connected.ListAsync()).Count);
+    }
+
+    [TestMethod]
+    public async Task The_mcp_access_page_shows_keys_with_expiry_and_connected_apps()
+    {
+        var keys = _app.Services.GetRequiredService<IMcpKeyStore>();
+        keys.Create("Expiring agent", TimeSpan.FromDays(10));
+        keys.Create("Forever agent");
+        await ConnectAndGetTokensAsync();
+
+        var browser = _app.CreateBrowser();
+        await browser.Http.GetAsync($"{AdjutantApp.TestSignInPath}?email={Uri.EscapeDataString(AdjutantApp.Owner)}&returnUrl=/admin/ui/access");
+
+        foreach (var path in new[] { "/admin/ui/access", "/admin/ui/keys" })
+        {
+            var response = await browser.Http.GetAsync(path);
+            var html = System.Net.WebUtility.HtmlDecode(await response.Content.ReadAsStringAsync());
+            Assert.AreEqual(HttpStatusCode.OK, response.StatusCode, path);
+            StringAssert.Contains(html, "MCP Access");
+            StringAssert.Contains(html, "Expiring agent");
+            StringAssert.Contains(html, "expires in 10 days");
+            StringAssert.Contains(html, "Forever agent");
+            StringAssert.Contains(html, "Test Agent");
+            StringAssert.Contains(html, "verified: agent.example");
+            StringAssert.Contains(html, "Disconnect");
+        }
+    }
+
+    [TestMethod]
+    public async Task Disconnecting_an_unknown_app_does_nothing() =>
+        Assert.IsFalse(await _app.Services.GetRequiredService<ConnectedApps>().DisconnectAsync("no-such-app"));
+
+    [TestMethod]
     public async Task Oauth_endpoints_are_hidden_when_oauth_is_switched_off()
     {
         await _app.DisposeAsync();
@@ -268,15 +400,25 @@ public sealed class McpOAuthIntegrationTests
             token_endpoint_auth_method = "none",
         }));
 
-    private async Task<string> ConnectAndGetAccessTokenAsync()
+    private async Task<string> ConnectAndGetAccessTokenAsync() => (await ConnectAndGetTokensAsync()).AccessToken;
+
+    private async Task<TokenContainer> ConnectAndGetTokensAsync()
     {
         ServeMetadataDocument();
         var tokens = new CapturingTokenCache();
         await using (await _app.ConnectAsync(OAuth(_app.CreateBrowser(), tokens, MetadataDocumentUrl, new Uri("http://127.0.0.1:43125/callback"))))
         {
         }
-        return tokens.Tokens!.AccessToken;
+        return tokens.Tokens!;
     }
+
+    private async Task<HttpResponseMessage> RefreshAsync(string refreshToken) =>
+        await _app.CreateClient().PostAsync("/connect/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "refresh_token",
+            ["refresh_token"] = refreshToken,
+            ["client_id"] = MetadataDocumentUrl.AbsoluteUri,
+        }));
 
     private async Task<HttpResponseMessage> PostToolsListAsync(string? authorization, string? host = null, string? apiKey = null)
     {
