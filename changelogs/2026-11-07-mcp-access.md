@@ -1,6 +1,7 @@
 # MCP Access: Key Expiry and Connected Apps
 
 **Date**: November 7, 2026
+**Version**: 1.10.0
 **Issue**: [#116](https://github.com/MarimerLLC/calendar-mcp/issues/116) — part 2 (part 1 was [MCP OAuth sign-in](2026-11-07-mcp-oauth.md))
 
 ---
