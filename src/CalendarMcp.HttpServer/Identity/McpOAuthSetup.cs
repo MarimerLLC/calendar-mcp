@@ -90,11 +90,19 @@ internal static class McpOAuthSetup
             {
                 validation.UseLocalServer();
                 validation.UseAspNetCore();
+                // Each access token is checked against its own stored entry and the approval it came
+                // from, so Disconnect on MCP Access cuts an app off on its next request rather than
+                // when its token expires. The authorization check needs the token entry check: the
+                // approval's id is read from the token's entry. Two SQLite lookups per OAuth request;
+                // API-key requests never get here.
+                validation.EnableTokenEntryValidation()
+                    .EnableAuthorizationEntryValidation();
                 validation.AddEventHandler(RequireMcpAudience.Descriptor)
                     .AddEventHandler(RequireOwnerStillAllowed.Descriptor);
             });
 
         builder.Services.AddSingleton<OAuthAvailability>();
+        builder.Services.AddSingleton<ConnectedApps>();
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddHostedService<IdentityCleanup>();
         builder.Services.AddScoped<ClientMetadataDocuments>();

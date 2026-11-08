@@ -24,8 +24,18 @@ public class FileMcpKeyStoreTests
             Directory.Delete(_directory, recursive: true);
     }
 
+    private readonly ManualClock _clock = new(new DateTimeOffset(2026, 11, 1, 12, 0, 0, TimeSpan.Zero));
+
     private FileMcpKeyStore CreateStore(string? bootstrapSecret = null) =>
-        new(NullLogger<FileMcpKeyStore>.Instance, _keyFile, bootstrapSecret);
+        new(NullLogger<FileMcpKeyStore>.Instance, _keyFile, bootstrapSecret, _clock);
+
+    /// <summary>A clock the test moves by hand.</summary>
+    private sealed class ManualClock(DateTimeOffset now) : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = now;
+
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
 
     [TestMethod]
     public void Create_ReturnsPrefixedSecret()
@@ -261,5 +271,135 @@ public class FileMcpKeyStoreTests
         store.Revoke(key.Id);
 
         Assert.IsFalse(store.HasUsableKey);
+    }
+
+    [TestMethod]
+    public void Create_WithALifetime_SetsTheExpiry()
+    {
+        var (key, _) = CreateStore().Create("agent", TimeSpan.FromDays(90));
+
+        Assert.AreEqual(_clock.Now, key.CreatedUtc);
+        Assert.AreEqual(_clock.Now.AddDays(90), key.ExpiresUtc);
+    }
+
+    [TestMethod]
+    public void Create_WithoutALifetime_NeverExpires()
+    {
+        var (key, _) = CreateStore().Create("agent");
+
+        Assert.IsNull(key.ExpiresUtc);
+    }
+
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(-1)]
+    public void Create_RejectsALifetimeThatIsNotPositive(int days)
+    {
+        var store = CreateStore();
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => store.Create("agent", TimeSpan.FromDays(days)));
+        Assert.AreEqual(0, store.List().Count);
+    }
+
+    [TestMethod]
+    public void Validate_AcceptsAKeyUntilItExpires_AndRejectsItFromThen()
+    {
+        var store = CreateStore();
+        var (key, secret) = store.Create("agent", TimeSpan.FromDays(30));
+
+        _clock.Now = key.ExpiresUtc!.Value.AddTicks(-1);
+        Assert.AreEqual(key.Id, store.Validate(secret)?.Id);
+
+        _clock.Now = key.ExpiresUtc.Value;
+        Assert.IsNull(store.Validate(secret));
+
+        _clock.Now = key.ExpiresUtc.Value.AddDays(1);
+        Assert.IsNull(store.Validate(secret));
+    }
+
+    [TestMethod]
+    public void Validate_AcceptsAKeyWithoutExpiryYearsLater()
+    {
+        var store = CreateStore();
+        var (_, secret) = store.Create("agent");
+
+        _clock.Now = _clock.Now.AddYears(10);
+
+        Assert.IsNotNull(store.Validate(secret));
+    }
+
+    [TestMethod]
+    public void Validate_LeavesOtherKeysWorkingAfterOneExpires()
+    {
+        var store = CreateStore();
+        var (_, shortLived) = store.Create("short", TimeSpan.FromDays(30));
+        var (_, longLived) = store.Create("long", TimeSpan.FromDays(365));
+
+        _clock.Now = _clock.Now.AddDays(31);
+
+        Assert.IsNull(store.Validate(shortLived));
+        Assert.IsNotNull(store.Validate(longLived));
+    }
+
+    [TestMethod]
+    public void Load_AcceptsAFileWrittenBeforeKeysCouldExpire()
+    {
+        // mcp-keys.json from 1.9.0 and earlier: no expiresUtc anywhere.
+        const string secret = "cmcp_written-by-an-older-version";
+        var hash = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(secret)));
+        File.WriteAllText(_keyFile, $$"""
+            { "keys": [ { "id": "k_old", "label": "older version", "hash": "{{hash}}",
+                          "createdUtc": "2025-01-01T00:00:00+00:00" } ] }
+            """);
+
+        var store = CreateStore();
+
+        Assert.IsNull(store.List().Single().ExpiresUtc);
+        Assert.AreEqual("k_old", store.Validate(secret)?.Id);
+        Assert.IsTrue(store.HasUsableKey);
+    }
+
+    [TestMethod]
+    public void Expiry_SurvivesAReload()
+    {
+        var (key, secret) = CreateStore().Create("agent", TimeSpan.FromDays(30));
+
+        var reloaded = CreateStore();
+        Assert.AreEqual(key.ExpiresUtc, reloaded.List().Single().ExpiresUtc);
+
+        _clock.Now = key.ExpiresUtc!.Value;
+        Assert.IsNull(CreateStore().Validate(secret));
+    }
+
+    [TestMethod]
+    public void Expiry_IsNotWrittenForAKeyThatNeverExpires()
+    {
+        CreateStore().Create("agent");
+
+        Assert.IsFalse(File.ReadAllText(_keyFile).Contains("expiresUtc", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void HasUsableKey_IsFalseWhenEveryKeyHasExpired()
+    {
+        var store = CreateStore();
+        store.Create("agent", TimeSpan.FromDays(30));
+        Assert.IsTrue(store.HasUsableKey);
+
+        _clock.Now = _clock.Now.AddDays(30);
+
+        Assert.IsFalse(store.HasUsableKey);
+    }
+
+    [TestMethod]
+    public void HasUsableKey_IsTrueWithABootstrapSecretEvenWhenEveryKeyHasExpired()
+    {
+        var store = CreateStore(bootstrapSecret: "from-the-environment");
+        store.Create("agent", TimeSpan.FromDays(30));
+
+        _clock.Now = _clock.Now.AddDays(30);
+
+        Assert.IsTrue(store.HasUsableKey);
+        Assert.IsNotNull(store.Validate("from-the-environment"));
     }
 }

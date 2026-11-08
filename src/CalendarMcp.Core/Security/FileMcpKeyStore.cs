@@ -42,9 +42,17 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
     private readonly ILogger<FileMcpKeyStore> _logger;
     private readonly string _filePath;
     private readonly byte[]? _bootstrapHash;
+    private readonly TimeProvider _time;
     private readonly Lock _gate = new();
 
     private List<McpApiKey> _keys = [];
+
+    /// <summary>
+    /// When each expired key last had its use logged, so an agent retrying with an expired key
+    /// leaves one warning per <see cref="TouchPersistInterval"/> rather than one per request.
+    /// Guarded by <see cref="_gate"/>.
+    /// </summary>
+    private readonly Dictionary<string, DateTimeOffset> _expiredUseLogged = [];
 
     /// <summary>
     /// The synthetic key returned when the environment bootstrap secret authenticates. It is
@@ -61,12 +69,15 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
 
     /// <param name="filePath">Overridable for tests; defaults to the shared data directory.</param>
     /// <param name="bootstrapSecret">Overridable for tests; defaults to the environment variable.</param>
+    /// <param name="time">Overridable for tests; defaults to the system clock.</param>
     public FileMcpKeyStore(
         ILogger<FileMcpKeyStore> logger,
         string? filePath = null,
-        string? bootstrapSecret = null)
+        string? bootstrapSecret = null,
+        TimeProvider? time = null)
     {
         _logger = logger;
+        _time = time ?? TimeProvider.System;
         _filePath = filePath ?? Path.Combine(ConfigurationPaths.GetDataDirectory(), "mcp-keys.json");
 
         var bootstrap = bootstrapSecret ?? Environment.GetEnvironmentVariable(BootstrapEnvVariable);
@@ -82,9 +93,10 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
             if (_bootstrapHash is not null)
                 return true;
 
+            var now = _time.GetUtcNow();
             lock (_gate)
             {
-                return _keys.Any(k => k.IsActive);
+                return _keys.Any(k => k.IsUsable(now));
             }
         }
     }
@@ -97,19 +109,23 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
         }
     }
 
-    public (McpApiKey Key, string Secret) Create(string label)
+    public (McpApiKey Key, string Secret) Create(string label, TimeSpan? lifetime = null)
     {
         if (string.IsNullOrWhiteSpace(label))
             throw new ArgumentException("A label is required so keys can be told apart when revoking.", nameof(label));
+        if (lifetime is { } span && span <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, "A key's lifetime must be positive; pass null for a key that never expires.");
 
         var secret = SecretPrefix + Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
+        var now = _time.GetUtcNow();
 
         var key = new McpApiKey
         {
             Id = "k_" + Base64UrlEncode(RandomNumberGenerator.GetBytes(8)),
             Label = label.Trim(),
             Hash = Convert.ToBase64String(ComputeHash(secret)),
-            CreatedUtc = DateTimeOffset.UtcNow
+            CreatedUtc = now,
+            ExpiresUtc = now + lifetime
         };
 
         lock (_gate)
@@ -118,7 +134,10 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
             Save();
         }
 
-        _logger.LogInformation("Created MCP API key {KeyId} ({Label})", key.Id, key.Label);
+        if (key.ExpiresUtc is { } expires)
+            _logger.LogInformation("Created MCP API key {KeyId} ({Label}), expiring {ExpiresUtc:u}", key.Id, key.Label, expires);
+        else
+            _logger.LogInformation("Created MCP API key {KeyId} ({Label}), with no expiry", key.Id, key.Label);
         return (key, secret);
     }
 
@@ -130,7 +149,7 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
             if (index < 0)
                 return false;
 
-            _keys[index] = _keys[index] with { RevokedUtc = DateTimeOffset.UtcNow };
+            _keys[index] = _keys[index] with { RevokedUtc = _time.GetUtcNow() };
             Save();
             _logger.LogInformation("Revoked MCP API key {KeyId} ({Label})", id, _keys[index].Label);
             return true;
@@ -150,10 +169,12 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
             return BootstrapKey;
         }
 
+        var now = _time.GetUtcNow();
         lock (_gate)
         {
-            // Every active key is compared, with no early exit, so the work done is a
-            // function of key count rather than of how close the guess was.
+            // Every active key is compared, expired ones included, with no early exit, so the
+            // work done is a function of key count rather than of how close the guess was or
+            // which keys have expired.
             McpApiKey? match = null;
             for (var i = 0; i < _keys.Count; i++)
             {
@@ -164,11 +185,17 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
                 if (!TryDecodeHash(candidate, out var storedHash))
                     continue;
 
-                if (CryptographicOperations.FixedTimeEquals(presentedHash, storedHash))
+                if (!CryptographicOperations.FixedTimeEquals(presentedHash, storedHash))
+                    continue;
+
+                if (candidate.IsExpired(now))
                 {
-                    match = candidate;
-                    Touch(i);
+                    LogExpiredUse(candidate, now);
+                    continue;
                 }
+
+                match = candidate;
+                Touch(i, now);
             }
 
             return match;
@@ -176,12 +203,26 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
     }
 
     /// <summary>
+    /// Warns that an expired key was presented, at most once per <see cref="TouchPersistInterval"/>
+    /// per key, so the operator can see why a client stopped working. Caller must hold <see cref="_gate"/>.
+    /// </summary>
+    private void LogExpiredUse(McpApiKey key, DateTimeOffset now)
+    {
+        if (_expiredUseLogged.TryGetValue(key.Id, out var last) && now - last < TouchPersistInterval)
+            return;
+
+        _expiredUseLogged[key.Id] = now;
+        _logger.LogWarning(
+            "Refused expired MCP API key {KeyId} ({Label}); it expired {ExpiresUtc:u}. Create a new key on MCP Access.",
+            key.Id, key.Label, key.ExpiresUtc);
+    }
+
+    /// <summary>
     /// Records use of the key at <paramref name="index"/>, persisting only when the stored
     /// timestamp has gone stale. Caller must hold <see cref="_gate"/>.
     /// </summary>
-    private void Touch(int index)
+    private void Touch(int index, DateTimeOffset now)
     {
-        var now = DateTimeOffset.UtcNow;
         var previous = _keys[index].LastUsedUtc;
         _keys[index] = _keys[index] with { LastUsedUtc = now };
 
@@ -224,9 +265,11 @@ public sealed class FileMcpKeyStore : IMcpKeyStore
             var json = File.ReadAllText(_filePath);
             var document = JsonSerializer.Deserialize<KeyFile>(json, JsonOptions);
             _keys = document?.Keys ?? [];
+            var now = _time.GetUtcNow();
             _logger.LogInformation(
-                "Loaded {Active} active and {Revoked} revoked MCP API key(s) from {Path}",
-                _keys.Count(k => k.IsActive), _keys.Count(k => !k.IsActive), _filePath);
+                "Loaded {Usable} usable, {Expired} expired and {Revoked} revoked MCP API key(s) from {Path}",
+                _keys.Count(k => k.IsUsable(now)), _keys.Count(k => k.IsActive && k.IsExpired(now)),
+                _keys.Count(k => !k.IsActive), _filePath);
         }
         catch (Exception ex)
         {

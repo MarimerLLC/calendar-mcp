@@ -34,9 +34,22 @@ public sealed record McpApiKey
     public DateTimeOffset? RevokedUtc { get; init; }
 
     /// <summary>
-    /// Derived from <see cref="RevokedUtc"/>. Kept out of the JSON so the stored file has one
-    /// source of truth and cannot be edited into a contradictory state.
+    /// When the key stops working, or null for a key that never expires. Optional in
+    /// <c>mcp-keys.json</c>: keys written before expiry existed have none and keep working.
+    /// </summary>
+    public DateTimeOffset? ExpiresUtc { get; init; }
+
+    /// <summary>
+    /// Derived from <see cref="RevokedUtc"/>: the key hasn't been revoked. Expiry is separate
+    /// (<see cref="IsExpired"/>). Kept out of the JSON so the stored file has one source of
+    /// truth and cannot be edited into a contradictory state.
     /// </summary>
     [JsonIgnore]
     public bool IsActive => RevokedUtc is null;
+
+    /// <summary>True once <paramref name="now"/> has reached <see cref="ExpiresUtc"/>.</summary>
+    public bool IsExpired(DateTimeOffset now) => ExpiresUtc is { } expires && now >= expires;
+
+    /// <summary>Neither revoked nor expired: the key authenticates.</summary>
+    public bool IsUsable(DateTimeOffset now) => IsActive && !IsExpired(now);
 }

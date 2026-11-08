@@ -599,15 +599,26 @@ export CALENDAR_MCP_MCP_KEY="your-key-here"
 An environment key is always accepted and is never written to `mcp-keys.json`. Rotate it by
 changing the environment variable. Setting it also suppresses first-start key generation.
 
-**Managing keys**: use **MCP Keys** in the admin console. Create one key per client so any of
+**Managing keys**: use **MCP Access** in the admin console (earlier versions called it
+**MCP Keys**; the old `/admin/ui/keys` address still opens it). Create one key per client so any of
 them can be revoked without disturbing the others; the console shows the key once at creation,
 along with a ready-to-paste snippet for Claude Code, VS Code, `mcp-remote`, or curl. Revoking
 takes effect immediately, and revoked keys are kept in the list for the record.
 
+**Key lifetime**: each new key gets a lifetime of 30, 90, 180 or 365 days, or **No expiry**; the
+console defaults to 90 days. An expired key is refused from the moment in its `expiresUtc`, and
+the server logs a warning naming it (at most every five minutes per key), so an agent that
+suddenly gets `401` can be traced. The **Expires** column shows the date, a warning badge in the
+last 14 days, and "expired" afterwards. Choose **No expiry** for a headless agent where losing
+access unnoticed would be worse than a long-lived key. Keys created before expiry existed, the
+first-start key and the `CALENDAR_MCP_MCP_KEY` environment key never expire. If every key in the
+file has expired and no environment key is set, the next start generates and logs a fresh key, as
+on first start.
+
 Keys can also be edited directly in `mcp-keys.json`, though that file is read once at startup so
 a hand edit needs a restart. Adding a `"revokedUtc"` timestamp disables a key while keeping it
-for audit; deleting the entry removes it outright. Removing every entry makes the server
-generate a fresh key on the next start and log it.
+for audit; deleting the entry removes it outright. Removing `"expiresUtc"` makes a key never
+expire. Removing every entry makes the server generate a fresh key on the next start and log it.
 
 ```json
 {
@@ -618,6 +629,13 @@ generate a fresh key on the next start and log it.
       "hash": "PL1PNhJdllsgh4Rb0CnMFJCMQhNYpo/IoaO0nuExcAk=",
       "createdUtc": "2026-08-28T04:43:13.1580083+00:00",
       "revokedUtc": "2026-09-01T12:00:00.0000000+00:00"
+    },
+    {
+      "id": "k_Xq3mN8vLpT0",
+      "label": "Claude Desktop - laptop",
+      "hash": "3n0dVJ0Hn8PqQ1m0JxV1oE8mHq9Wk7Z2cX4yT6bR5aE=",
+      "createdUtc": "2026-11-07T18:00:00.0000000+00:00",
+      "expiresUtc": "2027-02-05T18:00:00.0000000+00:00"
     }
   ]
 }
@@ -727,6 +745,13 @@ Then follow the sign-in prompt. For a claude.ai or Claude Desktop custom connect
 same URL as a connector. **Those connectors call from Anthropic's cloud, so the server must be
 reachable from the internet** (for example through a Tailscale Funnel endpoint); clients running on
 your own machine only need to reach it from there.
+
+**Connected apps**: **MCP Access** in the admin console lists every app that can still reach the
+server through OAuth: its name (marked verified when it comes from a client ID metadata document,
+with the publishing host), where it redirects, who approved it, when, and when it last renewed its
+access (about hourly while in use). **Disconnect** revokes the app's approvals and tokens; its
+next request fails, and using it again means connecting and approving it again. An app that stops
+refreshing drops off the list once its 14-day refresh token runs out.
 
 **Settings**:
 
