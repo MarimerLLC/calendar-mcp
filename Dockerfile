@@ -1,9 +1,13 @@
 # Adjutant HTTP Server - Multi-stage Docker build
-# Build: docker build -t adjutant-http .
-# Run:   docker run -p 8080:8080 -v adjutant-data:/app/data adjutant-http
+# Build: docker build -t adjutant .
+# Run:   docker run -p 8080:8080 -v adjutant-data:/app/data adjutant
+# Release (the k8s nodes are amd64; works from an arm64 machine too):
+#        docker buildx build --platform linux/amd64 -t rockylhotka/adjutant:<version> --push .
 
-# Stage 1: Build
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# Stage 1: Build. Runs on the build machine's own platform and cross-compiles for the
+# target, because the .NET SDK crashes under QEMU emulation.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG TARGETARCH
 WORKDIR /src
 
 # Copy project files for layer caching
@@ -15,21 +19,18 @@ COPY src/Adjutant.Auth/Adjutant.Auth.csproj Adjutant.Auth/
 COPY src/Adjutant.HttpServer/Adjutant.HttpServer.csproj Adjutant.HttpServer/
 
 # Restore dependencies
-RUN dotnet restore Adjutant.HttpServer/Adjutant.HttpServer.csproj
+RUN dotnet restore Adjutant.HttpServer/Adjutant.HttpServer.csproj -a $TARGETARCH
 
 # Copy all source files
 COPY src/Adjutant.Core/ Adjutant.Core/
 COPY src/Adjutant.Auth/ Adjutant.Auth/
 COPY src/Adjutant.HttpServer/ Adjutant.HttpServer/
 
-# Build
-RUN dotnet build Adjutant.HttpServer/Adjutant.HttpServer.csproj \
-    -c Release \
-    -o /app/build
-
-# Publish
+# Build and publish for the target architecture
 RUN dotnet publish Adjutant.HttpServer/Adjutant.HttpServer.csproj \
     -c Release \
+    -a $TARGETARCH \
+    --no-restore \
     -o /app/publish \
     /p:UseAppHost=false
 

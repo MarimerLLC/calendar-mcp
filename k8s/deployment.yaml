@@ -105,6 +105,8 @@ metadata:
   namespace: adjutant
   annotations:
     tailscale.com/hostname: adjutant
+    # The operator's default tag (tag:k8s) is not permitted by the tailnet ACL.
+    tailscale.com/tags: tag:k8s-operator
 spec:
   ingressClassName: tailscale
   tls:
