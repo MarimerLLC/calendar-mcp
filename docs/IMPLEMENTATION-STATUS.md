@@ -2,15 +2,15 @@
 
 ## What Was Created
 
-A comprehensive prototype MCP service implementation in a class library (`CalendarMcp.Core`) that exposes calendar and email management tools according to the specifications in `/docs`.
+A comprehensive prototype MCP service implementation in a class library (`Adjutant.Core`) that exposes calendar and email management tools according to the specifications in `/docs`.
 
 ## Project Structure
 
 ```
 src/
-├── CalendarMcp.Core/               # 🆕 Core class library
+├── Adjutant.Core/               # 🆕 Core class library
 │   ├── Configuration/
-│   │   ├── CalendarMcpConfiguration.cs
+│   │   ├── AdjutantConfiguration.cs
 │   │   └── ServiceCollectionExtensions.cs
 │   ├── Models/
 │   │   ├── AccountInfo.cs
@@ -37,14 +37,14 @@ src/
 │   │   ├── ListCalendarsTool.cs
 │   │   ├── SearchEmailsTool.cs
 │   │   └── SendEmailTool.cs
-│   ├── CalendarMcp.Core.csproj
+│   ├── Adjutant.Core.csproj
 │   └── README.md
 │
-└── CalendarMcp.StdioServer/        # ✅ Updated to use Core
+└── Adjutant.StdioServer/        # ✅ Updated to use Core
     ├── Program.cs                   # Updated with Core integration
     ├── appsettings.json            # 🆕 Configuration template
     ├── appsettings.Development.json # 🆕 Dev settings
-    └── CalendarMcp.StdioServer.csproj # Updated with Core reference
+    └── Adjutant.StdioServer.csproj # Updated with Core reference
 ```
 
 ## Implemented Features
@@ -99,15 +99,15 @@ Each tool includes:
 - Structured logging
 
 ### ✅ Configuration System
-- `CalendarMcpConfiguration`: Root configuration model
-- `ServiceCollectionExtensions`: Easy DI registration with `AddCalendarMcpCore()`
+- `AdjutantConfiguration`: Root configuration model
+- `ServiceCollectionExtensions`: Easy DI registration with `AddAdjutantCore()`
 - JSON configuration support via `appsettings.json`
 - Account-specific provider configuration
 - Telemetry settings
 
 ### ✅ StdioServer Integration
-Updated `CalendarMcp.StdioServer` to:
-- Reference `CalendarMcp.Core` project
+Updated `Adjutant.StdioServer` to:
+- Reference `Adjutant.Core` project
 - Register all core services
 - Load configuration from `appsettings.json`
 - Configure telemetry (OpenTelemetry or Serilog)

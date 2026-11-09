@@ -57,7 +57,7 @@ For personal Microsoft accounts (Outlook.com, Hotmail, Live).
 4. Click **New registration**
 
 **Basic Settings:**
-- **Name**: `Calendar-MCP-Personal` (or your preferred name)
+- **Name**: `Adjutant-Personal` (or your preferred name)
 - **Supported account types**: **"Personal Microsoft accounts only"**
 - **Redirect URI**: Select "Public client/native (mobile & desktop)" and enter `http://localhost`
 
@@ -97,16 +97,16 @@ After creation, note these values (you'll need them for the CLI):
 ### Build the CLI Tool
 
 ```bash
-cd /home/runner/work/calendar-mcp/calendar-mcp
-dotnet build src/CalendarMcp.Cli/CalendarMcp.Cli.csproj
+cd /home/runner/work/adjutant/adjutant
+dotnet build src/Adjutant.Cli/Adjutant.Cli.csproj
 ```
 
 ### Run Authentication
 
 ```bash
-dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
+dotnet run --project src/Adjutant.Cli/Adjutant.Cli.csproj -- \
   add-m365-account \
-  --config src/CalendarMcp.StdioServer/appsettings.json
+  --config src/Adjutant.StdioServer/appsettings.json
 ```
 
 ### Interactive Prompts
@@ -160,9 +160,9 @@ The CLI will show:
 ### Test the Account
 
 ```bash
-dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
+dotnet run --project src/Adjutant.Cli/Adjutant.Cli.csproj -- \
   test-account work-account \
-  --config src/CalendarMcp.StdioServer/appsettings.json
+  --config src/Adjutant.StdioServer/appsettings.json
 ```
 
 This verifies the cached token can be retrieved silently.
@@ -170,9 +170,9 @@ This verifies the cached token can be retrieved silently.
 ### List All Accounts
 
 ```bash
-dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
+dotnet run --project src/Adjutant.Cli/Adjutant.Cli.csproj -- \
   list-accounts \
-  --config src/CalendarMcp.StdioServer/appsettings.json
+  --config src/Adjutant.StdioServer/appsettings.json
 ```
 
 ## Step 4: Use with MCP Server
@@ -182,7 +182,7 @@ The MCP server will automatically use the cached tokens when it starts.
 ### Start MCP Server
 
 ```bash
-dotnet run --project src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj
+dotnet run --project src/Adjutant.StdioServer/Adjutant.StdioServer.csproj
 ```
 
 The server will:
@@ -199,12 +199,12 @@ Tokens are stored in platform-specific secure storage:
 
 **Windows:**
 ```
-%LOCALAPPDATA%\CalendarMcp\msal_cache_{accountId}.bin
+%LOCALAPPDATA%\Adjutant\msal_cache_{accountId}.bin
 ```
 
 **macOS/Linux:**
 ```
-~/.local/share/CalendarMcp/msal_cache_{accountId}.bin
+~/.local/share/Adjutant/msal_cache_{accountId}.bin
 ```
 
 ### Token Encryption
@@ -225,9 +225,9 @@ If you need to re-authenticate (e.g., password changed, permissions updated):
 
 ```bash
 # Re-run add-m365-account with same account ID
-dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
+dotnet run --project src/Adjutant.Cli/Adjutant.Cli.csproj -- \
   add-m365-account \
-  --config src/CalendarMcp.StdioServer/appsettings.json
+  --config src/Adjutant.StdioServer/appsettings.json
 ```
 
 This will overwrite the existing account configuration and refresh the token.
@@ -280,7 +280,7 @@ Adjutant is a Model Context Protocol (MCP) server that enables AI assistants lik
 - Uses OAuth 2.0 with delegated permissions (user context)
 - Tokens stored locally on user's machine (encrypted)
 - No server-side storage or transmission of credentials
-- Open-source project: [github.com/MarimerLLC/calendar-mcp](https://github.com/MarimerLLC/calendar-mcp)
+- Open-source project: [github.com/MarimerLLC/adjutant](https://github.com/MarimerLLC/adjutant)
 
 ### Deployment Scenarios
 
@@ -339,7 +339,7 @@ For organization-wide deployment, follow these detailed steps:
 
 **Name:**
 ```
-Calendar-MCP (Company Name)
+Adjutant (Company Name)
 ```
 
 **Supported account types:**
@@ -430,7 +430,7 @@ For enhanced security, configure Conditional Access policies:
 1. Go to **Azure AD** → **Security** → **Conditional Access**
 2. Create a new policy:
    - **Users**: Target specific users or groups using Adjutant
-   - **Cloud apps**: Select your Calendar-MCP app
+   - **Cloud apps**: Select your Adjutant app
    - **Conditions**: Configure based on your security requirements (location, device, etc.)
    - **Grant**: Require MFA, compliant device, etc.
 
@@ -447,7 +447,7 @@ Tenant ID: [Your Tenant ID] (for single-tenant only)
 
 Installation:
 1. Download Adjutant from [internal location]
-2. Run: CalendarMcp.Cli add-m365-account
+2. Run: Adjutant.Cli add-m365-account
 3. Enter the above Client ID and Tenant ID when prompted
 4. Sign in with your company Microsoft 365 account
 5. Configure Claude Desktop or other MCP client
@@ -491,7 +491,7 @@ Set up periodic reviews:
 
 Enable audit logging:
 1. Go to **Azure AD** → **Audit logs**
-2. Filter by **Application**: Your Calendar-MCP app
+2. Filter by **Application**: Your Adjutant app
 3. Review sign-ins and permission grants
 4. Set up alerts for suspicious activity
 
@@ -534,7 +534,7 @@ If you need to revoke Adjutant access for security reasons:
 #### Revoke for All Users
 
 1. Go to **Azure AD** → **Enterprise applications**
-2. Find **Calendar-MCP**
+2. Find **Adjutant**
 3. Go to **Properties**
 4. Set **Enabled for users to sign in?** to **No**
 5. Click **Save**
@@ -546,7 +546,7 @@ All users will be immediately locked out.
 1. Go to **Azure AD** → **Users**
 2. Select the user
 3. Go to **Applications**
-4. Find **Calendar-MCP**
+4. Find **Adjutant**
 5. Click **Remove assignment**
 
 #### Revoke via PowerShell
@@ -583,7 +583,7 @@ Remove-AzureADServiceAppRoleAssignment -ObjectId $userId -AppRoleAssignmentId $s
 4. Redirect URI mismatch
 
 **Debug steps:**
-1. Check **Enterprise applications** → **Calendar-MCP** → **Properties** → "Enabled for users to sign in?" = Yes
+1. Check **Enterprise applications** → **Adjutant** → **Properties** → "Enabled for users to sign in?" = Yes
 2. Review Conditional Access policies
 3. Check **Authentication** → **Allow public client flows** = Yes
 4. Verify redirect URI is `http://localhost`
@@ -592,7 +592,7 @@ Remove-AzureADServiceAppRoleAssignment -ObjectId $userId -AppRoleAssignmentId $s
 
 **For B2B guests:**
 1. Add guest users to Azure AD
-2. Grant them access to the Calendar-MCP app
+2. Grant them access to the Adjutant app
 3. They authenticate with their home tenant credentials
 
 **For multi-tenant app:**
@@ -618,9 +618,9 @@ Remove-AzureADServiceAppRoleAssignment -ObjectId $userId -AppRoleAssignmentId $s
 - [Conditional Access Policies](https://learn.microsoft.com/en-us/azure/active-directory/conditional-access/)
 
 **For Adjutant:**
-- [GitHub Repository](https://github.com/MarimerLLC/calendar-mcp)
-- [Issue Tracker](https://github.com/MarimerLLC/calendar-mcp/issues)
-- [Security Policy](https://github.com/MarimerLLC/calendar-mcp/security)
+- [GitHub Repository](https://github.com/MarimerLLC/adjutant)
+- [Issue Tracker](https://github.com/MarimerLLC/adjutant/issues)
+- [Security Policy](https://github.com/MarimerLLC/adjutant/security)
 
 ---
 
@@ -642,7 +642,7 @@ Remove-AzureADServiceAppRoleAssignment -ObjectId $userId -AppRoleAssignmentId $s
 
 **Solution:**
 - Run `add-m365-account` to authenticate
-- Check token cache file exists in `%LOCALAPPDATA%\CalendarMcp\`
+- Check token cache file exists in `%LOCALAPPDATA%\Adjutant\`
 
 ### Error: "Account not found in registry"
 
@@ -691,14 +691,14 @@ Use different `appsettings.json` files for different environments:
 
 ```bash
 # Development
---config src/CalendarMcp.StdioServer/appsettings.Development.json
+--config src/Adjutant.StdioServer/appsettings.Development.json
 
 # Production
---config src/CalendarMcp.StdioServer/appsettings.Production.json
+--config src/Adjutant.StdioServer/appsettings.Production.json
 ```
 
 ## Related Documentation
 
-- [CLI README](../CalendarMcp.Cli/README.md) - Detailed CLI command reference
+- [CLI README](../Adjutant.Cli/README.md) - Detailed CLI command reference
 - [Authentication Documentation](../../docs/authentication.md) - Architecture and design
 - [Configuration Documentation](../../docs/configuration.md) - Configuration format details

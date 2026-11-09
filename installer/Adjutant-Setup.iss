@@ -1,0 +1,129 @@
+; Adjutant Windows Installer Script
+; This script creates a Windows installer using Inno Setup
+;
+; To build the installer:
+; 1. Install Inno Setup (https://jrsoftware.org/isinfo.php)
+; 2. Run: iscc Adjutant-Setup.iss
+
+#define MyAppName "Adjutant"
+
+; The version is read from the built payload rather than hardcoded here, so it always
+; tracks VersionPrefix in Directory.Build.props. PayloadDir is the same directory the
+; [Files] section installs from, so if the version resolves the payload is present.
+#define PayloadDir "..\release\adjutant-win-x64"
+#define PayloadExe PayloadDir + "\Adjutant.Cli.exe"
+#if !FileExists(PayloadExe)
+  #error Payload not found. Publish the win-x64 build into ..\release\adjutant-win-x64 before compiling this installer.
+#endif
+#define MyAppVersion GetFileVersion(PayloadExe)
+#define MyAppPublisher "Adjutant Project"
+#define MyAppURL "https://github.com/MarimerLLC/adjutant"
+#define MyAppExeName "Adjutant.Cli.exe"
+#define MyAppServerExeName "Adjutant.StdioServer.exe"
+
+[Setup]
+; Basic application information
+AppId={{12345678-1234-1234-1234-123456789ABC}
+AppName={#MyAppName}
+AppVersion={#MyAppVersion}
+AppPublisher={#MyAppPublisher}
+AppPublisherURL={#MyAppURL}
+AppSupportURL={#MyAppURL}/issues
+AppUpdatesURL={#MyAppURL}/releases
+VersionInfoVersion={#MyAppVersion}
+DefaultDirName={autopf}\{#MyAppName}
+DefaultGroupName={#MyAppName}
+DisableProgramGroupPage=yes
+LicenseFile=..\LICENSE
+InfoBeforeFile=installer-readme.txt
+OutputDir=..\release
+OutputBaseFilename=adjutant-setup-win-x64
+SetupIconFile=adjutant-icon.ico
+Compression=lzma
+SolidCompression=yes
+WizardStyle=modern
+PrivilegesRequired=admin
+ArchitecturesAllowed=x64
+ArchitecturesInstallIn64BitMode=x64
+
+[Languages]
+Name: "english"; MessagesFile: "compiler:Default.isl"
+
+[Tasks]
+Name: "addtopath"; Description: "Add Adjutant to system PATH"; GroupDescription: "Additional options:"; Flags: checkedonce
+
+[Files]
+; All files from the build output directory
+Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; NOTE: Don't use "Flags: ignoreversion" on any shared system files
+
+[Icons]
+Name: "{group}\{#MyAppName} CLI"; Filename: "{app}\{#MyAppExeName}"
+Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
+
+[Code]
+const
+    EnvironmentKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment';
+
+procedure EnvAddPath(Path: string);
+var
+    Paths: string;
+begin
+    { Retrieve current path (use empty string if entry not exists) }
+    if not RegQueryStringValue(HKEY_LOCAL_MACHINE, EnvironmentKey, 'Path', Paths)
+    then Paths := '';
+
+    { Skip if string already found in path }
+    if Pos(';' + Uppercase(Path) + ';', ';' + Uppercase(Paths) + ';') > 0 then exit;
+
+    { App string to the end of the path variable }
+    Paths := Paths + ';'+ Path +';'
+
+    { Overwrite (or create if missing) path environment variable }
+    if RegWriteStringValue(HKEY_LOCAL_MACHINE, EnvironmentKey, 'Path', Paths)
+    then Log(Format('The [%s] added to PATH: [%s]', [Path, Paths]))
+    else Log(Format('Error while adding the [%s] to PATH: [%s]', [Path, Paths]));
+end;
+
+procedure EnvRemovePath(Path: string);
+var
+    Paths: string;
+    P: Integer;
+begin
+    { Skip if registry entry not exists }
+    if not RegQueryStringValue(HKEY_LOCAL_MACHINE, EnvironmentKey, 'Path', Paths) then
+        exit;
+
+    { Skip if string not found in path }
+    P := Pos(';' + Uppercase(Path) + ';', ';' + Uppercase(Paths) + ';');
+    if P = 0 then exit;
+
+    { Update path variable }
+    Delete(Paths, P - 1, Length(Path) + 1);
+
+    { Overwrite path environment variable }
+    if RegWriteStringValue(HKEY_LOCAL_MACHINE, EnvironmentKey, 'Path', Paths)
+    then Log(Format('The [%s] removed from PATH: [%s]', [Path, Paths]))
+    else Log(Format('Error while removing the [%s] from PATH: [%s]', [Path, Paths]));
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+    if CurStep = ssPostInstall then
+    begin
+        if IsTaskSelected('addtopath') then
+            EnvAddPath(ExpandConstant('{app}'));
+    end;
+end;
+
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+    if CurUninstallStep = usPostUninstall then
+        EnvRemovePath(ExpandConstant('{app}'));
+end;
+
+[Run]
+Filename: "{app}\{#MyAppExeName}"; Description: "Open Adjutant CLI"; Flags: nowait postinstall skipifsilent unchecked
+
+[UninstallDelete]
+Type: filesandordirs; Name: "{app}"

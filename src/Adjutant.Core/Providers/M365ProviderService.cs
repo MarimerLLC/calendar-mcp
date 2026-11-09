@@ -1,0 +1,1524 @@
+using Adjutant.Core.Models;
+using Adjutant.Core.Services;
+using Adjutant.Core.Utilities;
+using Microsoft.Extensions.Logging;
+using Microsoft.Graph;
+using Microsoft.Graph.Models;
+using Microsoft.Graph.Models.ODataErrors;
+using Microsoft.Graph.Me.SendMail;
+using GraphContact = Microsoft.Graph.Models.Contact;
+
+namespace Adjutant.Core.Providers;
+
+/// <summary>
+/// Microsoft 365 provider service with MSAL authentication integration
+/// </summary>
+public class M365ProviderService : IM365ProviderService
+{
+    private readonly ILogger<M365ProviderService> _logger;
+    private readonly IM365AuthenticationService _authService;
+    private readonly IAccountRegistry _accountRegistry;
+
+    private static readonly string[] DefaultScopes = Constants.M365Scopes.Default;
+
+    public M365ProviderService(
+        ILogger<M365ProviderService> logger,
+        IM365AuthenticationService authService,
+        IAccountRegistry accountRegistry)
+    {
+        _logger = logger;
+        _authService = authService;
+        _accountRegistry = accountRegistry;
+    }
+
+    /// <summary>
+    /// Get access token for an account
+    /// </summary>
+    private async Task<string> GetAccessTokenAsync(string accountId, CancellationToken cancellationToken)
+    {
+        var account = await _accountRegistry.GetAccountAsync(accountId);
+        if (account == null)
+        {
+            _logger.LogError("Account {AccountId} not found in registry", accountId);
+            throw new ProviderOperationException($"Account '{accountId}' not found in registry");
+        }
+
+        if (!account.ProviderConfig.TryGetValue("tenantId", out var tenantId) ||
+            !account.ProviderConfig.TryGetValue("clientId", out var clientId))
+        {
+            _logger.LogError("Account {AccountId} missing tenantId or clientId in configuration", accountId);
+            throw new ProviderOperationException($"Account '{accountId}' is missing tenantId or clientId in its configuration");
+        }
+
+        // Use the scopes this account was actually consented for, if recorded; otherwise
+        // fall back to the historical default so existing configs keep working unchanged.
+        var scopes = DefaultScopes;
+        if (account.ProviderConfig.TryGetValue("scopes", out var scopesValue) &&
+            !string.IsNullOrWhiteSpace(scopesValue))
+        {
+            var parsedScopes = scopesValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parsedScopes.Length > 0)
+            {
+                scopes = parsedScopes;
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Account {AccountId} has a 'scopes' value with no valid entries; falling back to default scopes.",
+                    accountId);
+            }
+        }
+
+        var token = await _authService.GetTokenSilentlyAsync(
+            tenantId,
+            clientId,
+            scopes,
+            accountId,
+            cancellationToken);
+
+        if (token == null)
+        {
+            _logger.LogWarning("No cached token available for account {AccountId}. Run CLI to authenticate.", accountId);
+            throw new AccountAuthenticationRequiredException(accountId);
+        }
+
+        return token;
+    }
+
+    public async Task<IEnumerable<EmailMessage>> GetEmailsAsync(
+        string accountId, 
+        int count = 20, 
+        bool unreadOnly = false, 
+        string? folder = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var messages = await graphClient.Me.MailFolders[MailFolderAliases.ToGraphDestinationId(folder ?? "inbox")].Messages.GetAsync(config =>
+            {
+                config.QueryParameters.Top = count;
+                config.QueryParameters.Orderby = ["receivedDateTime desc"];
+                config.QueryParameters.Select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "bodyPreview"];
+                
+                if (unreadOnly)
+                {
+                    config.QueryParameters.Filter = "isRead eq false";
+                }
+            }, cancellationToken);
+
+            var result = new List<EmailMessage>();
+            if (messages?.Value != null)
+            {
+                foreach (var message in messages.Value)
+                {
+                    result.Add(new EmailMessage
+                    {
+                        Id = message.Id ?? string.Empty,
+                        AccountId = accountId,
+                        Subject = message.Subject ?? string.Empty,
+                        From = message.From?.EmailAddress?.Address ?? string.Empty,
+                        FromName = message.From?.EmailAddress?.Name ?? string.Empty,
+                        To = message.ToRecipients?.Select(r => r.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                        Cc = message.CcRecipients?.Select(r => r.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                        Body = message.BodyPreview ?? string.Empty,
+                        BodyFormat = "text",
+                        ReceivedDateTime = message.ReceivedDateTime?.UtcDateTime ?? DateTime.MinValue,
+                        IsRead = message.IsRead ?? false,
+                        HasAttachments = message.HasAttachments ?? false
+                    });
+                }
+            }
+
+            _logger.LogInformation("Retrieved {Count} emails from M365 account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching emails from M365 account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
+        string accountId, 
+        string query, 
+        int count = 20, 
+        DateTime? fromDate = null, 
+        DateTime? toDate = null, 
+        string? folder = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            // Microsoft Graph $search and $filter cannot be combined on messages.
+            // Use $search for text search (searches subject, body, sender, etc.)
+            // If date filters are specified, we'll filter client-side after retrieval.
+            
+            // Build KQL search query - search in subject and body
+            // KQL syntax: "subject:query OR body:query" or just the query for all fields
+            var searchQuery = query;
+            
+            _logger.LogDebug("Searching M365 emails with query: {Query}, fromDate: {FromDate}, toDate: {ToDate}", 
+                searchQuery, fromDate, toDate);
+
+            // $orderby is not supported with $search — sort client-side instead. Request more
+            // results when dates are filtered client-side.
+            var top = (fromDate.HasValue || toDate.HasValue) ? count * 3 : count;
+            string[] select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "bodyPreview"];
+            var search = GraphSearchQueryBuilder.Build(searchQuery);
+
+            // Without a folder, search the whole mailbox. Mailbox-wide $search doesn't return
+            // messages in Deleted Items, so pass a folder (e.g. "trash") to search there.
+            var messages = folder is null
+                ? await graphClient.Me.Messages.GetAsync(config =>
+                {
+                    config.QueryParameters.Top = top;
+                    config.QueryParameters.Select = select;
+                    config.QueryParameters.Search = search;
+                }, cancellationToken)
+                : await graphClient.Me.MailFolders[MailFolderAliases.ToGraphDestinationId(folder)].Messages.GetAsync(config =>
+                {
+                    config.QueryParameters.Top = top;
+                    config.QueryParameters.Select = select;
+                    config.QueryParameters.Search = search;
+                }, cancellationToken);
+
+            var result = new List<EmailMessage>();
+            if (messages?.Value != null)
+            {
+                foreach (var message in messages.Value)
+                {
+                    var receivedDate = message.ReceivedDateTime?.UtcDateTime ?? DateTime.MinValue;
+                    
+                    // Apply client-side date filtering if specified
+                    if (fromDate.HasValue && receivedDate < fromDate.Value)
+                        continue;
+                    if (toDate.HasValue && receivedDate > toDate.Value)
+                        continue;
+                    
+                    result.Add(new EmailMessage
+                    {
+                        Id = message.Id ?? string.Empty,
+                        AccountId = accountId,
+                        Subject = message.Subject ?? string.Empty,
+                        From = message.From?.EmailAddress?.Address ?? string.Empty,
+                        FromName = message.From?.EmailAddress?.Name ?? string.Empty,
+                        To = message.ToRecipients?.Select(r => r.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                        Cc = message.CcRecipients?.Select(r => r.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                        Body = message.BodyPreview ?? string.Empty,
+                        BodyFormat = "text",
+                        ReceivedDateTime = receivedDate,
+                        IsRead = message.IsRead ?? false,
+                        HasAttachments = message.HasAttachments ?? false
+                    });
+                    
+                    // Stop once we have enough results
+                    if (result.Count >= count)
+                        break;
+                }
+            }
+
+            _logger.LogInformation("Search returned {Count} emails from M365 account {AccountId} for query '{Query}'",
+                result.Count, accountId, query);
+            return result.OrderByDescending(e => e.ReceivedDateTime);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching emails from M365 account {AccountId} with query '{Query}'", accountId, query);
+            throw;
+        }
+    }
+
+    public async Task<EmailMessage?> GetEmailDetailsAsync(
+        string accountId, 
+        string emailId, 
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var message = await graphClient.Me.Messages[emailId].GetAsync(config =>
+            {
+                config.QueryParameters.Select = ["id", "subject", "from", "toRecipients", "ccRecipients", "receivedDateTime", "isRead", "hasAttachments", "body", "internetMessageHeaders"];
+            }, cancellationToken);
+
+            if (message == null)
+            {
+                return null;
+            }
+
+            // Extract unsubscribe headers
+            string? listUnsubscribe = null;
+            string? listUnsubscribePost = null;
+            if (message.InternetMessageHeaders != null)
+            {
+                foreach (var header in message.InternetMessageHeaders)
+                {
+                    if (string.Equals(header.Name, "List-Unsubscribe", StringComparison.OrdinalIgnoreCase))
+                        listUnsubscribe = header.Value;
+                    else if (string.Equals(header.Name, "List-Unsubscribe-Post", StringComparison.OrdinalIgnoreCase))
+                        listUnsubscribePost = header.Value;
+                }
+            }
+
+            var attachments = new List<EmailAttachment>();
+            if (message.HasAttachments == true)
+            {
+                attachments = await FetchAttachmentMetadataAsync(graphClient, emailId, cancellationToken);
+            }
+
+            var result = new EmailMessage
+            {
+                Id = message.Id ?? string.Empty,
+                AccountId = accountId,
+                Subject = message.Subject ?? string.Empty,
+                From = message.From?.EmailAddress?.Address ?? string.Empty,
+                FromName = message.From?.EmailAddress?.Name ?? string.Empty,
+                To = message.ToRecipients?.Select(r => r.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                Cc = message.CcRecipients?.Select(r => r.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                Body = message.Body?.Content ?? string.Empty,
+                BodyFormat = message.Body?.ContentType == BodyType.Html ? "html" : "text",
+                ReceivedDateTime = message.ReceivedDateTime?.UtcDateTime ?? DateTime.MinValue,
+                IsRead = message.IsRead ?? false,
+                HasAttachments = message.HasAttachments ?? false,
+                Attachments = attachments,
+                UnsubscribeInfo = Utilities.UnsubscribeHeaderParser.Parse(listUnsubscribe, listUnsubscribePost)
+            };
+
+            _logger.LogInformation("Retrieved email details for {EmailId} from M365 account {AccountId}", emailId, accountId);
+            return result;
+        }
+        catch (ODataError ex) when (ex.ResponseStatusCode == 404)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting email details for {EmailId} from M365 account {AccountId}", emailId, accountId);
+            throw;
+        }
+    }
+
+    private static async Task<List<EmailAttachment>> FetchAttachmentMetadataAsync(
+        GraphServiceClient graphClient,
+        string emailId,
+        CancellationToken cancellationToken)
+    {
+        // Metadata only — exclude contentBytes to keep this cheap.
+        var page = await graphClient.Me.Messages[emailId].Attachments.GetAsync(
+            config => config.QueryParameters.Select = ["id", "name", "contentType", "size"],
+            cancellationToken);
+
+        var result = new List<EmailAttachment>();
+        if (page?.Value == null) return result;
+        foreach (var att in page.Value)
+        {
+            // ItemAttachments (forwarded messages) and ReferenceAttachments
+            // (links) are reported here too; we only surface FileAttachments.
+            if (att is not FileAttachment)
+                continue;
+            result.Add(new EmailAttachment
+            {
+                Name = att.Name ?? "attachment",
+                Size = att.Size ?? 0,
+                ContentType = att.ContentType ?? "application/octet-stream",
+                AttachmentId = att.Id,
+            });
+        }
+        return result;
+    }
+
+    public async Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
+        string accountId,
+        string emailId,
+        string attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var attachment = await graphClient.Me.Messages[emailId].Attachments[attachmentId]
+                .GetAsync(cancellationToken: cancellationToken);
+
+            if (attachment is not FileAttachment file || file.ContentBytes == null)
+            {
+                _logger.LogWarning("Attachment {AttachmentId} on {EmailId} is not a file attachment", attachmentId, emailId);
+                return null;
+            }
+
+            return new EmailAttachmentContent
+            {
+                Name = file.Name ?? "attachment",
+                ContentType = file.ContentType,
+                Bytes = file.ContentBytes,
+            };
+        }
+        catch (ODataError ex) when (ex.ResponseStatusCode == 404)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching attachment {AttachmentId} on {EmailId} from M365 account {AccountId}",
+                attachmentId, emailId, accountId);
+            throw;
+        }
+    }
+
+    public async Task<string> SendEmailAsync(
+        string accountId,
+        string to,
+        string subject,
+        string body,
+        string bodyFormat = "html",
+        List<string>? cc = null,
+        IReadOnlyList<OutboundEmailAttachment>? attachments = null,
+        string? textBody = null,
+        string? htmlBody = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        if (bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning(
+                "Graph API does not support native multipart/alternative; the plain-text body (textBody) will not be included. Only htmlBody will be sent for account {AccountId}.",
+                accountId);
+        }
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var message = new Message
+            {
+                Subject = subject,
+                Body = new ItemBody
+                {
+                    Content = bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase)
+                        ? htmlBody ?? string.Empty
+                        : body,
+                    ContentType = bodyFormat.Equals("text", StringComparison.OrdinalIgnoreCase) ? BodyType.Text : BodyType.Html,
+                },
+                ToRecipients = to.Split(',', ';')
+                    .Select(email => email.Trim())
+                    .Where(email => !string.IsNullOrEmpty(email))
+                    .Select(email => new Recipient
+                    {
+                        EmailAddress = new Microsoft.Graph.Models.EmailAddress
+                        {
+                            Address = email
+                        }
+                    })
+                    .ToList(),
+            };
+
+            if (cc != null && cc.Count > 0)
+            {
+                message.CcRecipients = cc
+                    .Select(email => new Recipient
+                    {
+                        EmailAddress = new Microsoft.Graph.Models.EmailAddress
+                        {
+                            Address = email.Trim()
+                        }
+                    })
+                    .ToList();
+            }
+
+            if (attachments is { Count: > 0 })
+            {
+                message.Attachments = GraphAttachmentBuilder.Build(attachments);
+            }
+
+            await graphClient.Me.SendMail.PostAsync(new SendMailPostRequestBody
+            {
+                Message = message,
+                SaveToSentItems = true
+            }, cancellationToken: cancellationToken);
+
+            _logger.LogInformation("Email sent successfully from M365 account {AccountId} to {To}", accountId, to);
+
+            // SendMail doesn't return a message ID, so we return a confirmation
+            return $"sent-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending email from M365 account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task DeleteEmailAsync(
+        string accountId,
+        string emailId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            await graphClient.Me.Messages[emailId].DeleteAsync(cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Deleted email {EmailId} from M365 account {AccountId}", emailId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting email {EmailId} from M365 account {AccountId}", emailId, accountId);
+            throw;
+        }
+    }
+
+    public async Task MarkEmailAsReadAsync(
+        string accountId,
+        string emailId,
+        bool isRead,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var message = new Message
+            {
+                IsRead = isRead
+            };
+
+            await graphClient.Me.Messages[emailId].PatchAsync(message, cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Marked email {EmailId} as {ReadStatus} for M365 account {AccountId}", 
+                emailId, isRead ? "read" : "unread", accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking email {EmailId} as {ReadStatus} for M365 account {AccountId}", 
+                emailId, isRead ? "read" : "unread", accountId);
+            throw;
+        }
+    }
+
+    public async Task<string?> MoveEmailAsync(
+        string accountId,
+        string emailId,
+        string destinationFolder,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            // Microsoft Graph supports moving messages by updating the parentFolderId
+            // or using the Move endpoint. We'll use the Move endpoint which is more explicit.
+            // Aliases such as "trash"/"spam" are mapped to Graph's well-known folder names
+            // ("deleteditems"/"junkemail"); anything else is treated as a folder ID.
+            var destinationId = MailFolderAliases.ToGraphDestinationId(destinationFolder);
+            var moved = await graphClient.Me.Messages[emailId].Move.PostAsync(new Microsoft.Graph.Me.Messages.Item.Move.MovePostRequestBody
+            {
+                DestinationId = destinationId
+            }, cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Moved email {EmailId} to folder '{Folder}' for M365 account {AccountId}", 
+                emailId, destinationId, accountId);
+
+            // Graph gives the message a new ID in its new folder.
+            return moved?.Id;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error moving email {EmailId} to folder '{Folder}' for M365 account {AccountId}", 
+                emailId, destinationFolder, accountId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
+        string accountId, 
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var calendars = await graphClient.Me.Calendars.GetAsync(config =>
+            {
+                config.QueryParameters.Select = ["id", "name", "owner", "canEdit", "isDefaultCalendar", "hexColor"];
+            }, cancellationToken);
+
+            var result = new List<CalendarInfo>();
+            if (calendars?.Value != null)
+            {
+                foreach (var calendar in calendars.Value)
+                {
+                    result.Add(new CalendarInfo
+                    {
+                        Id = calendar.Id ?? string.Empty,
+                        AccountId = accountId,
+                        Name = calendar.Name ?? string.Empty,
+                        Owner = calendar.Owner?.Address ?? string.Empty,
+                        CanEdit = calendar.CanEdit ?? false,
+                        IsDefault = calendar.IsDefaultCalendar ?? false,
+                        Color = calendar.HexColor
+                    });
+                }
+            }
+
+            _logger.LogInformation("Retrieved {Count} calendars from M365 account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing calendars from M365 account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<CalendarEvent>> GetCalendarEventsAsync(
+        string accountId, 
+        string? calendarId = null, 
+        DateTime? startDate = null, 
+        DateTime? endDate = null, 
+        int count = 50, 
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            // Default to today and next 30 days if not specified
+            var start = startDate ?? DateTime.UtcNow.Date;
+            var end = endDate ?? DateTime.UtcNow.Date.AddDays(30);
+
+            // Use CalendarView for date range queries (it expands recurring events)
+            Microsoft.Graph.Models.EventCollectionResponse? events;
+
+            // Graph has no "primary" id; treat the default-calendar aliases like an omitted
+            // calendarId — mirrors GetCalendarEventDetailsAsync and CreateEventAsync below.
+            if (CalendarIdAliases.IsDefaultCalendar(calendarId))
+            {
+                // Query the default calendar
+                events = await graphClient.Me.Calendar.CalendarView.GetAsync(config =>
+                {
+                    config.QueryParameters.StartDateTime = start.ToString("yyyy-MM-ddTHH:mm:ssZ");
+                    config.QueryParameters.EndDateTime = end.ToString("yyyy-MM-ddTHH:mm:ssZ");
+                    config.QueryParameters.Top = count;
+                    config.QueryParameters.Orderby = ["start/dateTime"];
+                    config.QueryParameters.Select = ["id", "subject", "start", "end", "location", "body", "organizer", "attendees", "isAllDay", "responseStatus"];
+                }, cancellationToken);
+            }
+            else
+            {
+                // Query a specific calendar
+                events = await graphClient.Me.Calendars[calendarId].CalendarView.GetAsync(config =>
+                {
+                    config.QueryParameters.StartDateTime = start.ToString("yyyy-MM-ddTHH:mm:ssZ");
+                    config.QueryParameters.EndDateTime = end.ToString("yyyy-MM-ddTHH:mm:ssZ");
+                    config.QueryParameters.Top = count;
+                    config.QueryParameters.Orderby = ["start/dateTime"];
+                    config.QueryParameters.Select = ["id", "subject", "start", "end", "location", "body", "organizer", "attendees", "isAllDay", "responseStatus"];
+                }, cancellationToken);
+            }
+
+            var result = new List<CalendarEvent>();
+            if (events?.Value != null)
+            {
+                foreach (var evt in events.Value)
+                {
+                    result.Add(new CalendarEvent
+                    {
+                        Id = evt.Id ?? string.Empty,
+                        AccountId = accountId,
+                        CalendarId = CalendarIdAliases.IsDefaultCalendar(calendarId) ? CalendarIdAliases.Primary : calendarId,
+                        Subject = evt.Subject ?? string.Empty,
+                        Start = ParseM365DateTime(evt.Start, evt.IsAllDay == true),
+                        End = ParseM365DateTime(evt.End, evt.IsAllDay == true),
+                        StartDate = evt.IsAllDay == true ? TimeZoneHelper.ParseFloatingDate(evt.Start?.DateTime) : null,
+                        EndDate = evt.IsAllDay == true ? TimeZoneHelper.ParseFloatingDate(evt.End?.DateTime) : null,
+                        Location = evt.Location?.DisplayName ?? string.Empty,
+                        Body = evt.Body?.Content ?? string.Empty,
+                        Organizer = evt.Organizer?.EmailAddress?.Address ?? string.Empty,
+                        Attendees = evt.Attendees?.Select(a => a.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                        AttendeeDetails = MapAttendees(evt),
+                        IsAllDay = evt.IsAllDay ?? false,
+                        ResponseStatus = MapResponseStatus(evt.ResponseStatus?.Response)
+                    });
+                }
+            }
+
+            _logger.LogInformation("Retrieved {Count} events from M365 account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting calendar events from M365 account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task<CalendarEvent?> GetCalendarEventDetailsAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            Event? evt;
+            if (CalendarIdAliases.IsDefaultCalendar(calendarId))
+            {
+                evt = await graphClient.Me.Calendar.Events[eventId].GetAsync(config =>
+                {
+                    config.QueryParameters.Select = [
+                        "id", "subject", "start", "end", "location", "body", "organizer", 
+                        "attendees", "isAllDay", "responseStatus", "showAs", "sensitivity",
+                        "isCancelled", "isOnlineMeeting", "onlineMeetingUrl", "onlineMeeting",
+                        "recurrence", "categories", "importance", "createdDateTime", "lastModifiedDateTime"
+                    ];
+                }, cancellationToken);
+            }
+            else
+            {
+                evt = await graphClient.Me.Calendars[calendarId].Events[eventId].GetAsync(config =>
+                {
+                    config.QueryParameters.Select = [
+                        "id", "subject", "start", "end", "location", "body", "organizer", 
+                        "attendees", "isAllDay", "responseStatus", "showAs", "sensitivity",
+                        "isCancelled", "isOnlineMeeting", "onlineMeetingUrl", "onlineMeeting",
+                        "recurrence", "categories", "importance", "createdDateTime", "lastModifiedDateTime"
+                    ];
+                }, cancellationToken);
+            }
+
+            if (evt == null)
+            {
+                return null;
+            }
+
+            var result = new CalendarEvent
+            {
+                Id = evt.Id ?? string.Empty,
+                AccountId = accountId,
+                CalendarId = CalendarIdAliases.IsDefaultCalendar(calendarId) ? CalendarIdAliases.Primary : calendarId,
+                Subject = evt.Subject ?? string.Empty,
+                Start = ParseM365DateTime(evt.Start, evt.IsAllDay == true),
+                End = ParseM365DateTime(evt.End, evt.IsAllDay == true),
+                StartDate = evt.IsAllDay == true ? TimeZoneHelper.ParseFloatingDate(evt.Start?.DateTime) : null,
+                EndDate = evt.IsAllDay == true ? TimeZoneHelper.ParseFloatingDate(evt.End?.DateTime) : null,
+                Location = evt.Location?.DisplayName ?? string.Empty,
+                Body = evt.Body?.Content ?? string.Empty,
+                BodyFormat = evt.Body?.ContentType == BodyType.Html ? "html" : "text",
+                Organizer = evt.Organizer?.EmailAddress?.Address ?? string.Empty,
+                OrganizerName = evt.Organizer?.EmailAddress?.Name ?? string.Empty,
+                Attendees = evt.Attendees?.Select(a => a.EmailAddress?.Address ?? string.Empty).ToList() ?? [],
+                AttendeeDetails = MapAttendees(evt),
+                IsAllDay = evt.IsAllDay ?? false,
+                ResponseStatus = MapResponseStatus(evt.ResponseStatus?.Response),
+                ShowAs = MapShowAs(evt.ShowAs),
+                Sensitivity = MapSensitivity(evt.Sensitivity),
+                IsCancelled = evt.IsCancelled ?? false,
+                IsOnlineMeeting = evt.IsOnlineMeeting ?? false,
+                OnlineMeetingUrl = evt.OnlineMeetingUrl ?? evt.OnlineMeeting?.JoinUrl,
+                OnlineMeetingProvider = evt.IsOnlineMeeting == true ? "teamsForBusiness" : null,
+                IsRecurring = evt.Recurrence != null,
+                RecurrencePattern = FormatRecurrencePattern(evt.Recurrence),
+                Categories = evt.Categories?.ToList() ?? [],
+                Importance = MapImportance(evt.Importance),
+                CreatedDateTime = evt.CreatedDateTime?.DateTime,
+                LastModifiedDateTime = evt.LastModifiedDateTime?.DateTime
+            };
+
+            _logger.LogInformation("Retrieved event details for {EventId} from M365 account {AccountId}", eventId, accountId);
+            return result;
+        }
+        catch (ODataError ex) when (ex.ResponseStatusCode == 404)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting calendar event details for {EventId} from M365 account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
+    internal static DateTimeOffset ParseM365DateTime(DateTimeTimeZone? dtz, bool isAllDay = false)
+    {
+        // All-day events are floating dates reported as midnight in some zone (UTC unless a
+        // Prefer: outlook.timezone header is sent). Keep the date as written, anchored to UTC midnight.
+        if (isAllDay && TimeZoneHelper.ParseFloatingDate(dtz?.DateTime) is { } date)
+            return TimeZoneHelper.UtcMidnight(date);
+
+        if (dtz?.DateTime == null || !DateTime.TryParse(dtz.DateTime, out var dt))
+            return DateTimeOffset.MinValue;
+        try
+        {
+            var tz = TimeZoneInfo.FindSystemTimeZoneById(dtz.TimeZone ?? "UTC");
+            return new DateTimeOffset(dt, tz.GetUtcOffset(dt));
+        }
+        catch
+        {
+            return new DateTimeOffset(dt, TimeSpan.Zero);
+        }
+    }
+
+    private static string MapResponseStatus(ResponseType? response)
+    {
+        return response switch
+        {
+            ResponseType.Accepted => "accepted",
+            ResponseType.TentativelyAccepted => "tentative",
+            ResponseType.Declined => "declined",
+            ResponseType.NotResponded => "notResponded",
+            ResponseType.Organizer => "accepted",
+            _ => "notResponded"
+        };
+    }
+
+    internal static List<Models.EventAttendee> MapAttendees(Event evt) =>
+        evt.Attendees?.Select(a => new Models.EventAttendee
+        {
+            Email = a.EmailAddress?.Address ?? string.Empty,
+            Name = a.EmailAddress?.Name ?? string.Empty,
+            ResponseStatus = MapAttendeeResponseStatus(a.Status?.Response),
+            Type = MapAttendeeType(a.Type),
+            IsOrganizer = (a.EmailAddress?.Address ?? string.Empty).Equals(
+                evt.Organizer?.EmailAddress?.Address ?? string.Empty,
+                StringComparison.OrdinalIgnoreCase)
+        }).ToList() ?? [];
+
+    private static string MapAttendeeResponseStatus(ResponseType? response)
+    {
+        return response switch
+        {
+            ResponseType.Accepted => "accepted",
+            ResponseType.TentativelyAccepted => "tentative",
+            ResponseType.Declined => "declined",
+            ResponseType.NotResponded => "notResponded",
+            ResponseType.Organizer => "accepted",
+            _ => "notResponded"
+        };
+    }
+
+    private static string MapAttendeeType(AttendeeType? type)
+    {
+        return type switch
+        {
+            AttendeeType.Required => "required",
+            AttendeeType.Optional => "optional",
+            AttendeeType.Resource => "resource",
+            _ => "required"
+        };
+    }
+
+    private static string MapShowAs(FreeBusyStatus? showAs)
+    {
+        return showAs switch
+        {
+            FreeBusyStatus.Free => "free",
+            FreeBusyStatus.Tentative => "tentative",
+            FreeBusyStatus.Busy => "busy",
+            FreeBusyStatus.Oof => "outOfOffice",
+            FreeBusyStatus.WorkingElsewhere => "workingElsewhere",
+            _ => "busy"
+        };
+    }
+
+    private static string MapSensitivity(Sensitivity? sensitivity)
+    {
+        return sensitivity switch
+        {
+            Microsoft.Graph.Models.Sensitivity.Normal => "normal",
+            Microsoft.Graph.Models.Sensitivity.Private => "private",
+            Microsoft.Graph.Models.Sensitivity.Personal => "personal",
+            Microsoft.Graph.Models.Sensitivity.Confidential => "confidential",
+            _ => "normal"
+        };
+    }
+
+    private static string MapImportance(Importance? importance)
+    {
+        return importance switch
+        {
+            Microsoft.Graph.Models.Importance.Low => "low",
+            Microsoft.Graph.Models.Importance.Normal => "normal",
+            Microsoft.Graph.Models.Importance.High => "high",
+            _ => "normal"
+        };
+    }
+
+    private static string? MapOnlineMeetingProvider(OnlineMeetingProviderType? provider)
+    {
+        return provider switch
+        {
+            OnlineMeetingProviderType.TeamsForBusiness => "teamsForBusiness",
+            OnlineMeetingProviderType.SkypeForBusiness => "skypeForBusiness",
+            OnlineMeetingProviderType.SkypeForConsumer => "skypeForConsumer",
+            _ => null
+        };
+    }
+
+    private static string? FormatRecurrencePattern(PatternedRecurrence? recurrence)
+    {
+        if (recurrence?.Pattern == null)
+            return null;
+
+        var pattern = recurrence.Pattern;
+        return pattern.Type switch
+        {
+            RecurrencePatternType.Daily => pattern.Interval == 1 ? "Daily" : $"Every {pattern.Interval} days",
+            RecurrencePatternType.Weekly => FormatWeeklyPattern(pattern),
+            RecurrencePatternType.AbsoluteMonthly => pattern.Interval == 1 
+                ? $"Monthly on day {pattern.DayOfMonth}" 
+                : $"Every {pattern.Interval} months on day {pattern.DayOfMonth}",
+            RecurrencePatternType.RelativeMonthly => $"Monthly on {pattern.Index} {pattern.DaysOfWeek?.FirstOrDefault()}",
+            RecurrencePatternType.AbsoluteYearly => $"Yearly on {pattern.Month}/{pattern.DayOfMonth}",
+            RecurrencePatternType.RelativeYearly => $"Yearly on {pattern.Index} {pattern.DaysOfWeek?.FirstOrDefault()} of month {pattern.Month}",
+            _ => "Recurring"
+        };
+    }
+
+    private static string FormatWeeklyPattern(RecurrencePattern pattern)
+    {
+        if (pattern.DaysOfWeek == null || !pattern.DaysOfWeek.Any())
+            return pattern.Interval == 1 ? "Weekly" : $"Every {pattern.Interval} weeks";
+
+        var days = pattern.DaysOfWeek.Select(d => d.ToString()).ToList();
+        
+        // Check for weekdays pattern
+        if (days.Count == 5 && 
+            days.Contains("Monday") && days.Contains("Tuesday") && 
+            days.Contains("Wednesday") && days.Contains("Thursday") && days.Contains("Friday"))
+        {
+            return "Every weekday";
+        }
+
+        var daysStr = string.Join(", ", days);
+        return pattern.Interval == 1 
+            ? $"Weekly on {daysStr}" 
+            : $"Every {pattern.Interval} weeks on {daysStr}";
+    }
+
+    public async Task<string> CreateEventAsync(
+        string accountId,
+        string? calendarId,
+        string subject,
+        DateTime start,
+        DateTime end,
+        string? location = null,
+        List<string>? attendees = null,
+        string? body = null,
+        string? timeZone = null,
+        bool isAllDay = false,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var newEvent = new Event
+            {
+                Subject = subject,
+                IsAllDay = isAllDay,
+                Start = EventTimeBuilder.ToGraph(start, timeZone, isAllDay),
+                End = EventTimeBuilder.ToGraph(end, timeZone, isAllDay)
+            };
+
+            if (!string.IsNullOrEmpty(location))
+            {
+                newEvent.Location = new Location
+                {
+                    DisplayName = location
+                };
+            }
+
+            if (!string.IsNullOrEmpty(body))
+            {
+                newEvent.Body = new ItemBody
+                {
+                    ContentType = BodyType.Html,
+                    Content = body
+                };
+            }
+
+            if (attendees != null && attendees.Count > 0)
+            {
+                newEvent.Attendees = attendees
+                    .Select(email => new Attendee
+                    {
+                        EmailAddress = new Microsoft.Graph.Models.EmailAddress
+                        {
+                            Address = email.Trim()
+                        },
+                        Type = AttendeeType.Required
+                    })
+                    .ToList();
+            }
+
+            Event? createdEvent;
+            if (CalendarIdAliases.IsDefaultCalendar(calendarId))
+            {
+                createdEvent = await graphClient.Me.Calendar.Events.PostAsync(newEvent, cancellationToken: cancellationToken);
+            }
+            else
+            {
+                try
+                {
+                    createdEvent = await graphClient.Me.Calendars[calendarId].Events.PostAsync(newEvent, cancellationToken: cancellationToken);
+                }
+                catch (ODataError ex) when (CalendarIdAliases.TranslateCreateFailure(calendarId, ex) is { } unknownCalendar)
+                {
+                    throw unknownCalendar;
+                }
+            }
+
+            var eventId = createdEvent?.Id ?? string.Empty;
+            _logger.LogInformation("Created event {EventId} in M365 account {AccountId}", eventId, accountId);
+            return eventId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating event in M365 account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task UpdateEventAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        string? subject = null,
+        DateTime? start = null,
+        DateTime? end = null,
+        string? location = null,
+        List<string>? attendees = null,
+        string? timeZone = null,
+        bool? isAllDay = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var eventUpdate = new Event();
+
+            if (!string.IsNullOrEmpty(subject))
+            {
+                eventUpdate.Subject = subject;
+            }
+
+            if (isAllDay.HasValue)
+            {
+                eventUpdate.IsAllDay = isAllDay.Value;
+            }
+
+            if (start.HasValue)
+            {
+                eventUpdate.Start = EventTimeBuilder.ToGraph(start.Value, timeZone, isAllDay == true);
+            }
+
+            if (end.HasValue)
+            {
+                eventUpdate.End = EventTimeBuilder.ToGraph(end.Value, timeZone, isAllDay == true);
+            }
+
+            if (!string.IsNullOrEmpty(location))
+            {
+                eventUpdate.Location = new Location
+                {
+                    DisplayName = location
+                };
+            }
+
+            if (attendees != null)
+            {
+                eventUpdate.Attendees = attendees
+                    .Select(email => new Attendee
+                    {
+                        EmailAddress = new Microsoft.Graph.Models.EmailAddress
+                        {
+                            Address = email.Trim()
+                        },
+                        Type = AttendeeType.Required
+                    })
+                    .ToList();
+            }
+
+            await graphClient.Me.Events[eventId].PatchAsync(eventUpdate, cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Updated event {EventId} in M365 account {AccountId}", eventId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating event {EventId} in M365 account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
+    public async Task DeleteEventAsync(
+        string accountId, 
+        string calendarId, 
+        string eventId, 
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            await graphClient.Me.Events[eventId].DeleteAsync(cancellationToken: cancellationToken);
+            
+            _logger.LogInformation("Deleted event {EventId} from M365 account {AccountId}", eventId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting event {EventId} from M365 account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
+    public async Task RespondToEventAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        string response,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            // Microsoft Graph uses specific actions for accepting/declining events
+            var normalizedResponse = response.ToLowerInvariant();
+            
+            switch (normalizedResponse)
+            {
+                case "accept":
+                case "accepted":
+                    await graphClient.Me.Events[eventId].Accept.PostAsync(
+                        new Microsoft.Graph.Me.Events.Item.Accept.AcceptPostRequestBody
+                        {
+                            Comment = comment,
+                            SendResponse = true
+                        },
+                        cancellationToken: cancellationToken);
+                    _logger.LogInformation("Accepted event {EventId} for M365 account {AccountId}", eventId, accountId);
+                    break;
+
+                case "tentative":
+                case "tentativelyaccepted":
+                    await graphClient.Me.Events[eventId].TentativelyAccept.PostAsync(
+                        new Microsoft.Graph.Me.Events.Item.TentativelyAccept.TentativelyAcceptPostRequestBody
+                        {
+                            Comment = comment,
+                            SendResponse = true
+                        },
+                        cancellationToken: cancellationToken);
+                    _logger.LogInformation("Tentatively accepted event {EventId} for M365 account {AccountId}", eventId, accountId);
+                    break;
+
+                case "decline":
+                case "declined":
+                    await graphClient.Me.Events[eventId].Decline.PostAsync(
+                        new Microsoft.Graph.Me.Events.Item.Decline.DeclinePostRequestBody
+                        {
+                            Comment = comment,
+                            SendResponse = true
+                        },
+                        cancellationToken: cancellationToken);
+                    _logger.LogInformation("Declined event {EventId} for M365 account {AccountId}", eventId, accountId);
+                    break;
+
+                default:
+                    throw new ArgumentException($"Invalid response type: {response}. Valid values are: accept, tentative, decline");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error responding to event {EventId} for M365 account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
+    #region Contact Operations
+
+    public async Task<IEnumerable<Models.Contact>> GetContactsAsync(
+        string accountId,
+        int count = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var contacts = await graphClient.Me.Contacts.GetAsync(config =>
+            {
+                config.QueryParameters.Top = count;
+                config.QueryParameters.Orderby = ["displayName"];
+                config.QueryParameters.Select = ["id", "displayName", "givenName", "surname", "emailAddresses", "mobilePhone", "businessPhones", "homePhones", "jobTitle", "companyName", "department", "homeAddress", "businessAddress", "otherAddress", "birthday", "personalNotes", "createdDateTime", "lastModifiedDateTime"];
+            }, cancellationToken);
+
+            var result = new List<Models.Contact>();
+            if (contacts?.Value != null)
+            {
+                foreach (var contact in contacts.Value)
+                {
+                    result.Add(MapGraphContact(contact, accountId));
+                }
+            }
+
+            _logger.LogInformation("Retrieved {Count} contacts from M365 account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching contacts from M365 account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<Models.Contact>> SearchContactsAsync(
+        string accountId,
+        string query,
+        int count = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var contacts = await graphClient.Me.Contacts.GetAsync(config =>
+            {
+                config.QueryParameters.Top = count;
+                config.QueryParameters.Filter = $"startswith(displayName,'{query}') or startswith(givenName,'{query}') or startswith(surname,'{query}')";
+                config.QueryParameters.Orderby = ["displayName"];
+                config.QueryParameters.Select = ["id", "displayName", "givenName", "surname", "emailAddresses", "mobilePhone", "businessPhones", "homePhones", "jobTitle", "companyName", "department", "homeAddress", "businessAddress", "otherAddress", "birthday", "personalNotes", "createdDateTime", "lastModifiedDateTime"];
+            }, cancellationToken);
+
+            var result = new List<Models.Contact>();
+            if (contacts?.Value != null)
+            {
+                foreach (var contact in contacts.Value)
+                {
+                    result.Add(MapGraphContact(contact, accountId));
+                }
+            }
+
+            _logger.LogInformation("Search returned {Count} contacts from M365 account {AccountId} for query '{Query}'",
+                result.Count, accountId, query);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching contacts from M365 account {AccountId} with query '{Query}'", accountId, query);
+            throw;
+        }
+    }
+
+    public async Task<Models.Contact?> GetContactDetailsAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var contact = await graphClient.Me.Contacts[contactId].GetAsync(cancellationToken: cancellationToken);
+
+            if (contact == null)
+            {
+                return null;
+            }
+
+            var result = MapGraphContact(contact, accountId);
+            _logger.LogInformation("Retrieved contact details for {ContactId} from M365 account {AccountId}", contactId, accountId);
+            return result;
+        }
+        catch (ODataError ex) when (ex.ResponseStatusCode == 404)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting contact details for {ContactId} from M365 account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    public async Task<string> CreateContactAsync(
+        string accountId,
+        string displayName,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var newContact = new GraphContact
+            {
+                DisplayName = displayName,
+                GivenName = givenName,
+                Surname = surname,
+                JobTitle = jobTitle,
+                CompanyName = companyName,
+                PersonalNotes = notes
+            };
+
+            if (emailAddresses != null && emailAddresses.Count > 0)
+            {
+                newContact.EmailAddresses = emailAddresses.Select(e => new Microsoft.Graph.Models.EmailAddress
+                {
+                    Address = e.Trim()
+                }).ToList();
+            }
+
+            if (phoneNumbers != null && phoneNumbers.Count > 0)
+            {
+                newContact.MobilePhone = phoneNumbers.First();
+                if (phoneNumbers.Count > 1)
+                {
+                    newContact.BusinessPhones = phoneNumbers.Skip(1).ToList();
+                }
+            }
+
+            var created = await graphClient.Me.Contacts.PostAsync(newContact, cancellationToken: cancellationToken);
+            var contactId = created?.Id ?? string.Empty;
+
+            _logger.LogInformation("Created contact {ContactId} in M365 account {AccountId}", contactId, accountId);
+            return contactId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating contact in M365 account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task UpdateContactAsync(
+        string accountId,
+        string contactId,
+        string? displayName = null,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        string? etag = null,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            var contactUpdate = new GraphContact();
+
+            if (!string.IsNullOrEmpty(displayName))
+                contactUpdate.DisplayName = displayName;
+            if (!string.IsNullOrEmpty(givenName))
+                contactUpdate.GivenName = givenName;
+            if (!string.IsNullOrEmpty(surname))
+                contactUpdate.Surname = surname;
+            if (!string.IsNullOrEmpty(jobTitle))
+                contactUpdate.JobTitle = jobTitle;
+            if (!string.IsNullOrEmpty(companyName))
+                contactUpdate.CompanyName = companyName;
+            if (!string.IsNullOrEmpty(notes))
+                contactUpdate.PersonalNotes = notes;
+
+            if (emailAddresses != null)
+            {
+                contactUpdate.EmailAddresses = emailAddresses.Select(e => new Microsoft.Graph.Models.EmailAddress
+                {
+                    Address = e.Trim()
+                }).ToList();
+            }
+
+            if (phoneNumbers != null)
+            {
+                contactUpdate.MobilePhone = phoneNumbers.FirstOrDefault();
+                contactUpdate.BusinessPhones = phoneNumbers.Skip(1).ToList();
+            }
+
+            await graphClient.Me.Contacts[contactId].PatchAsync(contactUpdate, cancellationToken: cancellationToken);
+
+            _logger.LogInformation("Updated contact {ContactId} in M365 account {AccountId}", contactId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating contact {ContactId} in M365 account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    public async Task DeleteContactAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var token = await GetAccessTokenAsync(accountId, cancellationToken);
+
+        try
+        {
+            var authProvider = new BearerTokenAuthenticationProvider(token);
+            var graphClient = new GraphServiceClient(authProvider);
+
+            await graphClient.Me.Contacts[contactId].DeleteAsync(cancellationToken: cancellationToken);
+
+            _logger.LogInformation("Deleted contact {ContactId} from M365 account {AccountId}", contactId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting contact {ContactId} from M365 account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    private static Models.Contact MapGraphContact(GraphContact contact, string accountId)
+    {
+        var emails = contact.EmailAddresses?.Select(e => new ContactEmail
+        {
+            Address = e.Address ?? string.Empty,
+            Label = "work"
+        }).ToList() ?? new List<ContactEmail>();
+
+        var phones = new List<ContactPhone>();
+        if (!string.IsNullOrEmpty(contact.MobilePhone))
+        {
+            phones.Add(new ContactPhone { Number = contact.MobilePhone, Label = "mobile" });
+        }
+        if (contact.BusinessPhones != null)
+        {
+            phones.AddRange(contact.BusinessPhones.Select(p => new ContactPhone { Number = p, Label = "work" }));
+        }
+        if (contact.HomePhones != null)
+        {
+            phones.AddRange(contact.HomePhones.Select(p => new ContactPhone { Number = p, Label = "home" }));
+        }
+
+        var addresses = new List<ContactAddress>();
+        if (contact.HomeAddress != null)
+        {
+            addresses.Add(MapGraphAddress(contact.HomeAddress, "home"));
+        }
+        if (contact.BusinessAddress != null)
+        {
+            addresses.Add(MapGraphAddress(contact.BusinessAddress, "business"));
+        }
+        if (contact.OtherAddress != null)
+        {
+            addresses.Add(MapGraphAddress(contact.OtherAddress, "other"));
+        }
+
+        return new Models.Contact
+        {
+            Id = contact.Id ?? string.Empty,
+            AccountId = accountId,
+            DisplayName = contact.DisplayName ?? string.Empty,
+            GivenName = contact.GivenName ?? string.Empty,
+            Surname = contact.Surname ?? string.Empty,
+            EmailAddresses = emails,
+            PhoneNumbers = phones,
+            JobTitle = contact.JobTitle ?? string.Empty,
+            CompanyName = contact.CompanyName ?? string.Empty,
+            Department = contact.Department ?? string.Empty,
+            Addresses = addresses,
+            Birthday = contact.Birthday?.DateTime,
+            Notes = contact.PersonalNotes ?? string.Empty,
+            CreatedDateTime = contact.CreatedDateTime?.DateTime,
+            LastModifiedDateTime = contact.LastModifiedDateTime?.DateTime
+        };
+    }
+
+    private static ContactAddress MapGraphAddress(PhysicalAddress address, string label)
+    {
+        return new ContactAddress
+        {
+            Street = address.Street ?? string.Empty,
+            City = address.City ?? string.Empty,
+            State = address.State ?? string.Empty,
+            PostalCode = address.PostalCode ?? string.Empty,
+            Country = address.CountryOrRegion ?? string.Empty,
+            Label = label
+        };
+    }
+
+    #endregion
+}

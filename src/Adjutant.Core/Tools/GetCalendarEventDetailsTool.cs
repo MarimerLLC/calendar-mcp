@@ -1,0 +1,114 @@
+using System.ComponentModel;
+using System.Text.Json;
+using Adjutant.Core.Models;
+using Adjutant.Core.Services;
+using Adjutant.Core.Utilities;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
+using ModelContextProtocol.Server;
+
+namespace Adjutant.Core.Tools;
+
+/// <summary>
+/// MCP tool for getting full calendar event details including attendee responses, 
+/// free/busy status, recurrence, and online meeting information
+/// </summary>
+[McpServerToolType]
+public sealed class GetCalendarEventDetailsTool(
+    IAccountRegistry accountRegistry,
+    IProviderServiceFactory providerFactory,
+    ILogger<GetCalendarEventDetailsTool> logger)
+{
+    [McpServerTool, Description("Get full details for a single calendar event including attendee responses, free/busy status, recurrence pattern, and online meeting link. Use this after get_calendar_events to fetch richer data for a specific event. All-day events start and end at local midnight in timeZone and also carry start_date/end_date (yyyy-MM-dd, end date exclusive); these are null for timed events.")]
+    public async Task<string> GetCalendarEventDetails(
+        [Description("IANA timezone name for displaying event times (e.g. `America/Chicago`, `America/New_York`, `Europe/London`, `Asia/Tokyo`). All event times are returned in both UTC and this local timezone.")] string timeZone,
+        [Description("Account ID from get_calendar_events")] string accountId,
+        [Description("Calendar ID from get_calendar_events, or 'primary' for the default calendar")] string calendarId,
+        [Description("Event ID from get_calendar_events")] string eventId)
+    {
+        logger.LogInformation("Getting calendar event details: accountId={AccountId}, calendarId={CalendarId}, eventId={EventId}, timeZone={TimeZone}",
+            accountId, calendarId, eventId, timeZone);
+
+        var tz = TimeZoneHelper.TryGetTimeZone(timeZone);
+        if (tz == null)
+            throw new McpException($"Invalid IANA timezone: '{timeZone}'. Use a valid IANA timezone name such as 'America/Chicago', 'Europe/London', or 'Asia/Tokyo'.");
+
+        ToolGuard.RequireNonEmpty(accountId, nameof(accountId));
+        ToolGuard.RequireNonEmpty(eventId, nameof(eventId));
+
+        var account = await ToolGuard.RequireAccountAsync(
+            accountRegistry, accountId, AccountPermission.CalendarRead);
+
+        try
+        {
+            var provider = providerFactory.GetProvider(account.Provider);
+            var evt = await provider.GetCalendarEventDetailsAsync(
+                accountId,
+                calendarId ?? "primary",
+                eventId,
+                CancellationToken.None);
+
+            if (evt == null)
+                throw new McpException($"Event '{eventId}' not found in account '{accountId}'");
+
+            // All-day events span local midnight to midnight in the requested zone.
+            var range = TimeZoneHelper.GetEffectiveRange(evt, tz);
+
+            var response = new
+            {
+                id = evt.Id,
+                accountId = evt.AccountId,
+                calendarId = evt.CalendarId,
+                subject = evt.Subject,
+                start_utc = TimeZoneHelper.ToUtcString(range.Start),
+                start_local = TimeZoneHelper.ToLocalString(range.Start, tz),
+                end_utc = TimeZoneHelper.ToUtcString(range.End),
+                end_local = TimeZoneHelper.ToLocalString(range.End, tz),
+                start_date = TimeZoneHelper.ToDateString(evt.StartDate),
+                end_date = TimeZoneHelper.ToDateString(evt.EndDate),
+                timezone = timeZone,
+                location = evt.Location,
+                body = evt.Body,
+                bodyFormat = evt.BodyFormat,
+                organizer = evt.Organizer,
+                organizerName = evt.OrganizerName,
+                attendees = evt.Attendees,
+                attendeeDetails = evt.AttendeeDetails.Select(a => new
+                {
+                    email = a.Email,
+                    name = a.Name,
+                    responseStatus = a.ResponseStatus,
+                    type = a.Type,
+                    isOrganizer = a.IsOrganizer
+                }),
+                isAllDay = evt.IsAllDay,
+                responseStatus = evt.ResponseStatus,
+                showAs = evt.ShowAs,
+                sensitivity = evt.Sensitivity,
+                isCancelled = evt.IsCancelled,
+                isOnlineMeeting = evt.IsOnlineMeeting,
+                onlineMeetingUrl = evt.OnlineMeetingUrl,
+                onlineMeetingProvider = evt.OnlineMeetingProvider,
+                isRecurring = evt.IsRecurring,
+                recurrencePattern = evt.RecurrencePattern,
+                categories = evt.Categories,
+                importance = evt.Importance,
+                createdDateTime = evt.CreatedDateTime,
+                lastModifiedDateTime = evt.LastModifiedDateTime
+            };
+
+            logger.LogInformation("Retrieved calendar event details for {EventId} from account {AccountId}",
+                eventId, accountId);
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+        catch (Exception ex) when (ex is not McpException)
+        {
+            logger.LogError(ex, "Error in get_calendar_event_details tool");
+            throw ToolGuard.Failure("get calendar event details", ex);
+        }
+    }
+}

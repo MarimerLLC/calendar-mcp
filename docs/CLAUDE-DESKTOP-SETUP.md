@@ -44,8 +44,8 @@ If the file doesn't exist or is empty, create it with this content:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "C:\\Program Files\\CalendarMcp\\CalendarMcp.StdioServer.exe",
+    "adjutant": {
+      "command": "C:\\Program Files\\Adjutant\\Adjutant.StdioServer.exe",
       "args": [],
       "env": {}
     }
@@ -57,8 +57,8 @@ If the file doesn't exist or is empty, create it with this content:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "/Users/yourusername/calendar-mcp/CalendarMcp.StdioServer",
+    "adjutant": {
+      "command": "/Users/yourusername/adjutant/Adjutant.StdioServer",
       "args": [],
       "env": {}
     }
@@ -68,7 +68,7 @@ If the file doesn't exist or is empty, create it with this content:
 
 #### Existing Configuration
 
-If you already have other MCP servers configured, add the `calendar-mcp` entry to the existing `mcpServers` object:
+If you already have other MCP servers configured, add the `adjutant` entry to the existing `mcpServers` object:
 
 ```json
 {
@@ -77,8 +77,8 @@ If you already have other MCP servers configured, add the `calendar-mcp` entry t
       "command": "...",
       "args": []
     },
-    "calendar-mcp": {
-      "command": "/path/to/CalendarMcp.StdioServer",
+    "adjutant": {
+      "command": "/path/to/Adjutant.StdioServer",
       "args": [],
       "env": {}
     }
@@ -94,25 +94,25 @@ If you already have other MCP servers configured, add the `calendar-mcp` entry t
 
 **Windows:**
 1. Open File Explorer and navigate to where you extracted the files
-2. Right-click on `CalendarMcp.StdioServer.exe`
+2. Right-click on `Adjutant.StdioServer.exe`
 3. Select "Properties"
 4. Copy the path from the "Location" field
-5. Append `\\CalendarMcp.StdioServer.exe` to the path
+5. Append `\\Adjutant.StdioServer.exe` to the path
 6. Use double backslashes (`\\`) in the JSON
 
 Example:
-- If extracted to: `C:\Program Files\CalendarMcp\`
-- Configuration: `"C:\\Program Files\\CalendarMcp\\CalendarMcp.StdioServer.exe"`
+- If extracted to: `C:\Program Files\Adjutant\`
+- Configuration: `"C:\\Program Files\\Adjutant\\Adjutant.StdioServer.exe"`
 
 **macOS/Linux:**
 1. Open Terminal
 2. Navigate to your installation directory
 3. Run: `pwd` to get the current path
-4. Append `/CalendarMcp.StdioServer` to the path
+4. Append `/Adjutant.StdioServer` to the path
 
 Example:
-- If extracted to: `~/calendar-mcp/`
-- Configuration: `"/Users/yourusername/calendar-mcp/CalendarMcp.StdioServer"`
+- If extracted to: `~/adjutant/`
+- Configuration: `"/Users/yourusername/adjutant/Adjutant.StdioServer"`
 
 ### Step 4: Optional Configuration
 
@@ -123,8 +123,8 @@ If you want to use a custom location for `appsettings.json`:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "/path/to/CalendarMcp.StdioServer",
+    "adjutant": {
+      "command": "/path/to/Adjutant.StdioServer",
       "args": ["--config", "/path/to/custom/appsettings.json"],
       "env": {}
     }
@@ -139,12 +139,12 @@ You can pass environment variables to the server:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "/path/to/CalendarMcp.StdioServer",
+    "adjutant": {
+      "command": "/path/to/Adjutant.StdioServer",
       "args": [],
       "env": {
         "DOTNET_ENVIRONMENT": "Production",
-        "CALENDAR_MCP_LOG_LEVEL": "Information"
+        "ADJUTANT_LOG_LEVEL": "Information"
       }
     }
   }
@@ -224,10 +224,10 @@ When am I free next week?
 
 **Solutions:**
 1. Verify the `command` path is correct
-2. Check that `CalendarMcp.StdioServer` or `CalendarMcp.StdioServer.exe` exists at that path
+2. Check that `Adjutant.StdioServer` or `Adjutant.StdioServer.exe` exists at that path
 3. On Linux/macOS, ensure the binary is executable:
    ```bash
-   chmod +x /path/to/CalendarMcp.StdioServer
+   chmod +x /path/to/Adjutant.StdioServer
    ```
 4. Check the JSON syntax is valid (no missing commas, brackets, or quotes)
 
@@ -238,13 +238,13 @@ When am I free next week?
 **Solution:**
 1. Configure accounts using the CLI tool:
    ```bash
-   CalendarMcp.Cli add-m365-account
+   Adjutant.Cli add-m365-account
    # or
-   CalendarMcp.Cli add-google-account
+   Adjutant.Cli add-google-account
    ```
 2. Verify accounts are configured:
    ```bash
-   CalendarMcp.Cli list-accounts
+   Adjutant.Cli list-accounts
    ```
 3. Restart Claude Desktop
 
@@ -255,11 +255,11 @@ When am I free next week?
 **Solution:**
 1. Test the account:
    ```bash
-   CalendarMcp.Cli test-account <account-id>
+   Adjutant.Cli test-account <account-id>
    ```
 2. Re-authenticate if needed:
    ```bash
-   CalendarMcp.Cli add-m365-account  # Re-run with same account ID
+   Adjutant.Cli add-m365-account  # Re-run with same account ID
    ```
 3. Check Azure AD / Google Cloud Console for proper permissions
 
@@ -270,7 +270,7 @@ When am I free next week?
 **Solution:**
 Use double backslashes and keep the quotes:
 ```json
-"command": "C:\\Program Files\\CalendarMcp\\CalendarMcp.StdioServer.exe"
+"command": "C:\\Program Files\\Adjutant\\Adjutant.StdioServer.exe"
 ```
 
 ### JSON Syntax Errors
@@ -294,10 +294,10 @@ Use an online JSON validator like [jsonlint.com](https://jsonlint.com/)
 1. Try running the server manually to see error messages:
    ```bash
    # Windows
-   "C:\Program Files\CalendarMcp\CalendarMcp.StdioServer.exe"
+   "C:\Program Files\Adjutant\Adjutant.StdioServer.exe"
    
    # macOS/Linux
-   /path/to/CalendarMcp.StdioServer
+   /path/to/Adjutant.StdioServer
    ```
 
 2. Check for missing dependencies or configuration files
@@ -313,7 +313,7 @@ Ensure each server has a unique identifier in the configuration:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": { ... },
+    "adjutant": { ... },
     "other-server": { ... }
   }
 }
@@ -343,8 +343,8 @@ To enable detailed logging for troubleshooting:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "/path/to/CalendarMcp.StdioServer",
+    "adjutant": {
+      "command": "/path/to/Adjutant.StdioServer",
       "args": ["--config", "/path/to/appsettings.json"],
       "env": {}
     }
@@ -359,13 +359,13 @@ You can run different configurations for testing:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp-prod": {
-      "command": "/path/to/CalendarMcp.StdioServer",
+    "adjutant-prod": {
+      "command": "/path/to/Adjutant.StdioServer",
       "args": ["--config", "/path/to/appsettings.json"],
       "env": {}
     },
-    "calendar-mcp-dev": {
-      "command": "/path/to/dev/CalendarMcp.StdioServer",
+    "adjutant-dev": {
+      "command": "/path/to/dev/Adjutant.StdioServer",
       "args": ["--config", "/path/to/appsettings.Development.json"],
       "env": {
         "DOTNET_ENVIRONMENT": "Development"
@@ -407,7 +407,7 @@ User: "Find free time that doesn't conflict with any of my calendars"
 - **Configure Additional Accounts**: Add more M365, Outlook.com, or Google accounts
 - **Explore Features**: Try different queries and explore what the MCP server can do
 - **Customize Settings**: Adjust logging, routing, and other settings in `appsettings.json`
-- **Provide Feedback**: Report issues or suggest features on [GitHub](https://github.com/MarimerLLC/calendar-mcp/issues)
+- **Provide Feedback**: Report issues or suggest features on [GitHub](https://github.com/MarimerLLC/adjutant/issues)
 
 ## Related Documentation
 

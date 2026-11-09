@@ -163,7 +163,7 @@ MCP servers can be exposed via different transports, requiring separate host app
 
 All business logic, services, and MCP tool implementations reside in a **shared class library**:
 
-- **CalendarMcp.Core** (or similar naming)
+- **Adjutant.Core** (or similar naming)
   - MCP tool implementations
   - Provider services (M365, Google, Outlook.com)
   - Account registry and configuration
@@ -176,19 +176,19 @@ All business logic, services, and MCP tool implementations reside in a **shared 
 ### Project References
 
 ```
-CalendarMcp.Server.csproj (Console - stdio transport)
-  └─> References: CalendarMcp.Core.csproj
+Adjutant.Server.csproj (Console - stdio transport)
+  └─> References: Adjutant.Core.csproj
   └─> Contains: Program.cs (stdio transport setup)
 
-CalendarMcp.Web.csproj (ASP.NET Core - HTTP/SSE transport)
-  └─> References: CalendarMcp.Core.csproj
+Adjutant.Web.csproj (ASP.NET Core - HTTP/SSE transport)
+  └─> References: Adjutant.Core.csproj
   └─> Contains: Program.cs (HTTP/SSE transport setup)
 
-CalendarMcp.Setup.csproj (Console - account setup)
-  └─> References: CalendarMcp.Core.csproj
+Adjutant.Setup.csproj (Console - account setup)
+  └─> References: Adjutant.Core.csproj
   └─> Contains: Interactive authentication and configuration tool
 
-CalendarMcp.Core.csproj (Class Library)
+Adjutant.Core.csproj (Class Library)
   └─> Contains: All business logic and services
   └─> No transport-specific code
 ```
@@ -267,7 +267,7 @@ All three provider integrations have been validated through working spike projec
 
 ### Implementation Strategy
 
-Based on spike findings, Calendar-MCP will:
+Based on spike findings, Adjutant will:
 
 1. **Use Direct SDK Integration** - No external MCP servers or Node.js processes
    - Simpler architecture

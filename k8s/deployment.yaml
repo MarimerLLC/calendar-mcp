@@ -1,59 +1,59 @@
 # Adjutant HTTP Server - Kubernetes Deployment
-# All resources here are pinned to the calendar-mcp namespace, so these commands
+# All resources here are pinned to the adjutant namespace, so these commands
 # do not depend on the namespace your kubectl context happens to default to.
 # Prerequisites:
-#   0. Create the namespace: kubectl create namespace calendar-mcp
+#   0. Create the namespace: kubectl create namespace adjutant
 #   1. Create the secret: kubectl apply -f secret.yaml
 #   2. Create the PVC: kubectl apply -f pvc.yaml
 #   3. Deploy: kubectl apply -f deployment.yaml
-#   4. Access via port-forward: kubectl port-forward -n calendar-mcp svc/calendar-mcp 8080:8080
+#   4. Access via port-forward: kubectl port-forward -n adjutant svc/adjutant 8080:8080
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: calendar-mcp
-  namespace: calendar-mcp
+  name: adjutant
+  namespace: adjutant
   labels:
-    app: calendar-mcp
+    app: adjutant
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      app: calendar-mcp
+      app: adjutant
   template:
     metadata:
       labels:
-        app: calendar-mcp
+        app: adjutant
     spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
         fsGroup: 1000
       containers:
-        - name: calendar-mcp
-          image: docker.io/rockylhotka/calendar-mcp-http:1.10.0
+        - name: adjutant
+          image: docker.io/rockylhotka/adjutant:2.0.0
           ports:
             - containerPort: 8080
               name: http
           env:
-            - name: CALENDAR_MCP_ADMIN_TOKEN
+            - name: ADJUTANT_ADMIN_TOKEN
               valueFrom:
                 secretKeyRef:
-                  name: calendar-mcp-secrets
+                  name: adjutant-secrets
                   key: admin-token
             # Optional: supply the MCP endpoint API key from the Secret rather than letting the
             # server generate one onto the PVC at first start. Uncomment together with the
             # mcp-api-key entry in secret.yaml.
-            # - name: CALENDAR_MCP_MCP_KEY
+            # - name: ADJUTANT_MCP_KEY
             #   valueFrom:
             #     secretKeyRef:
-            #       name: calendar-mcp-secrets
+            #       name: adjutant-secrets
             #       key: mcp-api-key
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://alloy.loki.svc.cluster.local:4317"
             - name: OTEL_SERVICE_NAME
-              value: "calendar-mcp"
+              value: "adjutant"
           volumeMounts:
             - name: data
               mountPath: /app/data
@@ -79,15 +79,15 @@ spec:
       volumes:
         - name: data
           persistentVolumeClaim:
-            claimName: calendar-mcp-data
+            claimName: adjutant-data
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: calendar-mcp
-  namespace: calendar-mcp
+  name: adjutant
+  namespace: adjutant
   labels:
-    app: calendar-mcp
+    app: adjutant
 spec:
   type: ClusterIP
   ports:
@@ -96,20 +96,20 @@ spec:
       protocol: TCP
       name: http
   selector:
-    app: calendar-mcp
+    app: adjutant
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: calendar-mcp-tailscale
-  namespace: calendar-mcp
+  name: adjutant-tailscale
+  namespace: adjutant
   annotations:
-    tailscale.com/hostname: calendar-mcp
+    tailscale.com/hostname: adjutant
 spec:
   ingressClassName: tailscale
   tls:
     - hosts:
-        - calendar-mcp.tail920062.ts.net
+        - adjutant.tail920062.ts.net
   rules:
     - http:
         paths:
@@ -117,6 +117,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: calendar-mcp
+                name: adjutant
                 port:
                   number: 8080

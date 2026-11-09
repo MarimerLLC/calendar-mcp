@@ -216,7 +216,7 @@ ollama pull qwen2:1.5b
 
 ```bash
 # Test routing decision latency
-calendar-mcp-setup benchmark-router
+adjutant-setup benchmark-router
 
 # Output:
 # Testing router with 100 sample queries...

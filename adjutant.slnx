@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="src/Adjutant.Auth/Adjutant.Auth.csproj" />
+  <Project Path="src/Adjutant.Cli/Adjutant.Cli.csproj" />
+  <Project Path="src/Adjutant.Core/Adjutant.Core.csproj" />
+  <Project Path="src/Adjutant.StdioServer/Adjutant.StdioServer.csproj" />
+  <Project Path="src/Adjutant.HttpServer/Adjutant.HttpServer.csproj" />
+  <Project Path="src/Adjutant.Tests/Adjutant.Tests.csproj" />
+</Solution>

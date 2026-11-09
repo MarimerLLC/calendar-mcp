@@ -1,6 +1,6 @@
 # HTTP Head Research Documentation
 
-This directory contains research and planning documents for adding HTTP transport support to Calendar-MCP, enabling containerized/headless deployments.
+This directory contains research and planning documents for adding HTTP transport support to Adjutant, enabling containerized/headless deployments.
 
 ## 📄 Documents
 
@@ -63,7 +63,7 @@ Read this for:
 
 ### ✅ HTTP Head is Feasible
 
-The research confirms that adding HTTP transport to Calendar-MCP is technically feasible and can be implemented in **8-10 days** for a minimum viable product.
+The research confirms that adding HTTP transport to Adjutant is technically feasible and can be implemented in **8-10 days** for a minimum viable product.
 
 ### ⭐ Recommended Solution
 
@@ -121,7 +121,7 @@ Single-user private environment:
 
 - **Research**: GitHub Copilot (AI Agent)
 - **Date**: February 12, 2026
-- **Issue**: [Add HTTP head for MCP server](https://github.com/MarimerLLC/calendar-mcp/issues/XXX)
+- **Issue**: [Add HTTP head for MCP server](https://github.com/MarimerLLC/adjutant/issues/XXX)
 
 ---
 

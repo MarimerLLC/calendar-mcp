@@ -2,13 +2,13 @@
 
 **Date**: February 16, 2026  
 **Status**: Research Complete - Ready for Implementation Planning  
-**Issue**: [Unsubscribe from email lists](https://github.com/MarimerLLC/calendar-mcp/issues/XXX)
+**Issue**: [Unsubscribe from email lists](https://github.com/MarimerLLC/adjutant/issues/XXX)
 
 ---
 
 ## 📋 Overview
 
-This research explores how to implement an email unsubscribe tool for the Calendar-MCP server, enabling AI assistants to help users unsubscribe from unwanted email lists across Microsoft 365, Outlook.com, and Google Workspace accounts.
+This research explores how to implement an email unsubscribe tool for the Adjutant server, enabling AI assistants to help users unsubscribe from unwanted email lists across Microsoft 365, Outlook.com, and Google Workspace accounts.
 
 ## 📚 Documentation Structure
 

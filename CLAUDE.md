@@ -7,5 +7,5 @@
 
 ## Kubernetes
 
-- Namespace: `calendar-mcp`
+- Namespace: `adjutant`
 - Manifests in `k8s/` directory

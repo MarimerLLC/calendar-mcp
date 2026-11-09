@@ -29,13 +29,13 @@
 ```csharp
 // Good - Per-account isolation
 var cacheOptions = new StorageCreationPropertiesBuilder(
-    "CalendarMcp.{accountId}.cache",  // Unique per account
+    "Adjutant.{accountId}.cache",  // Unique per account
     MsalCacheHelper.UserRootDirectory)
     .Build();
 
 // Bad - Shared token cache (security risk!)
 var cacheOptions = new StorageCreationPropertiesBuilder(
-    "CalendarMcp.cache",  // ❌ Shared across accounts
+    "Adjutant.cache",  // ❌ Shared across accounts
     MsalCacheHelper.UserRootDirectory)
     .Build();
 ```
@@ -132,9 +132,9 @@ var clientId = account.ProviderConfig["clientId"];
 For local development, use .NET user secrets:
 
 ```bash
-cd src/CalendarMcp.StdioServer
+cd src/Adjutant.StdioServer
 dotnet user-secrets init
-dotnet user-secrets set "CalendarMcp:Accounts:0:ProviderConfig:ClientId" "your-client-id"
+dotnet user-secrets set "Adjutant:Accounts:0:ProviderConfig:ClientId" "your-client-id"
 ```
 
 Access in code:
@@ -149,15 +149,15 @@ var config = builder.Configuration
 For production deployments:
 
 ```bash
-export CALENDAR_MCP_Accounts__0__ProviderConfig__ClientId="your-client-id"
-export CALENDAR_MCP_Accounts__0__ProviderConfig__TenantId="your-tenant-id"
+export ADJUTANT_Accounts__0__ProviderConfig__ClientId="your-client-id"
+export ADJUTANT_Accounts__0__ProviderConfig__TenantId="your-tenant-id"
 ```
 
 Or in Docker:
 ```yaml
 environment:
-  - CALENDAR_MCP_Accounts__0__ProviderConfig__ClientId=${CLIENT_ID}
-  - CALENDAR_MCP_Accounts__0__ProviderConfig__TenantId=${TENANT_ID}
+  - ADJUTANT_Accounts__0__ProviderConfig__ClientId=${CLIENT_ID}
+  - ADJUTANT_Accounts__0__ProviderConfig__TenantId=${TENANT_ID}
 ```
 
 ## Input Validation
@@ -266,7 +266,7 @@ Telemetry should be:
 
 ```json
 {
-  "CalendarMcp": {
+  "Adjutant": {
     "Telemetry": {
       "Enabled": true,
       "MinimumLevel": "Information"

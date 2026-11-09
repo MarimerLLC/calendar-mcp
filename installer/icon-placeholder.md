@@ -1,6 +1,6 @@
 # Icon Placeholder
 
-This directory should contain `calendar-mcp-icon.ico` for the Windows installer.
+This directory should contain `adjutant-icon.ico` for the Windows installer.
 
 ## Creating an Icon
 
@@ -19,10 +19,10 @@ This directory should contain `calendar-mcp-icon.ico` for the Windows installer.
 
 ## Temporary Solution
 
-If you don't have an icon, comment out this line in `CalendarMcp-Setup.iss`:
+If you don't have an icon, comment out this line in `Adjutant-Setup.iss`:
 
 ```iss
-; SetupIconFile=calendar-mcp-icon.ico
+; SetupIconFile=adjutant-icon.ico
 ```
 
 The installer will use the default Inno Setup icon.

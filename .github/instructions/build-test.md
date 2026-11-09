@@ -17,28 +17,28 @@
 
 Pre-built binaries are self-contained and **do not** require the .NET runtime to be installed.
 
-Download from [Releases](https://github.com/MarimerLLC/calendar-mcp/releases).
+Download from [Releases](https://github.com/MarimerLLC/adjutant/releases).
 
 ## Building the Project
 
 ### Build All Projects
 
 ```bash
-cd /home/runner/work/calendar-mcp/calendar-mcp
+cd /home/runner/work/adjutant/adjutant
 dotnet build
 ```
 
 This builds all projects in the solution:
-- `CalendarMcp.Core` - Core library
-- `CalendarMcp.StdioServer` - MCP stdio server
-- `CalendarMcp.HttpServer` - HTTP server with Blazor UI
-- `CalendarMcp.Cli` - CLI tool for account management
-- `CalendarMcp.Auth` - Authentication middleware
+- `Adjutant.Core` - Core library
+- `Adjutant.StdioServer` - MCP stdio server
+- `Adjutant.HttpServer` - HTTP server with Blazor UI
+- `Adjutant.Cli` - CLI tool for account management
+- `Adjutant.Auth` - Authentication middleware
 
 ### Build Specific Project
 
 ```bash
-dotnet build src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj
+dotnet build src/Adjutant.StdioServer/Adjutant.StdioServer.csproj
 ```
 
 ### Build for Release
@@ -53,7 +53,7 @@ For distribution without requiring .NET runtime:
 
 **Windows (x64):**
 ```bash
-dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
   -c Release \
   -r win-x64 \
   --self-contained true \
@@ -62,7 +62,7 @@ dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
 
 **Linux (x64):**
 ```bash
-dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
   -c Release \
   -r linux-x64 \
   --self-contained true \
@@ -71,7 +71,7 @@ dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
 
 **macOS (ARM64 - M1/M2/M3):**
 ```bash
-dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
   -c Release \
   -r osx-arm64 \
   --self-contained true \
@@ -80,7 +80,7 @@ dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
 
 **macOS (x64 - Intel):**
 ```bash
-dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
   -c Release \
   -r osx-x64 \
   --self-contained true \
@@ -89,7 +89,7 @@ dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
 
 Published executables will be in:
 ```
-src/CalendarMcp.StdioServer/bin/Release/net10.0/{runtime}/publish/
+src/Adjutant.StdioServer/bin/Release/net10.0/{runtime}/publish/
 ```
 
 ## Testing
@@ -108,9 +108,9 @@ When adding tests, follow these patterns:
 
 **Create test project:**
 ```bash
-dotnet new xunit -n CalendarMcp.Core.Tests -o tests/CalendarMcp.Core.Tests
-dotnet add tests/CalendarMcp.Core.Tests/CalendarMcp.Core.Tests.csproj reference src/CalendarMcp.Core/CalendarMcp.Core.csproj
-dotnet sln add tests/CalendarMcp.Core.Tests/CalendarMcp.Core.Tests.csproj
+dotnet new xunit -n Adjutant.Core.Tests -o tests/Adjutant.Core.Tests
+dotnet add tests/Adjutant.Core.Tests/Adjutant.Core.Tests.csproj reference src/Adjutant.Core/Adjutant.Core.csproj
+dotnet sln add tests/Adjutant.Core.Tests/Adjutant.Core.Tests.csproj
 ```
 
 **Run tests:**
@@ -127,18 +127,18 @@ dotnet test --collect:"XPlat Code Coverage"
 
 **Test the stdio server:**
 ```bash
-dotnet run --project src/CalendarMcp.StdioServer
+dotnet run --project src/Adjutant.StdioServer
 ```
 
 **Test the CLI tool:**
 ```bash
-dotnet run --project src/CalendarMcp.Cli -- list-accounts
-dotnet run --project src/CalendarMcp.Cli -- add-account
+dotnet run --project src/Adjutant.Cli -- list-accounts
+dotnet run --project src/Adjutant.Cli -- add-account
 ```
 
 **Test the HTTP server:**
 ```bash
-dotnet run --project src/CalendarMcp.HttpServer
+dotnet run --project src/Adjutant.HttpServer
 # Navigate to http://localhost:5000
 ```
 
@@ -155,42 +155,42 @@ dotnet run --project src/CalendarMcp.HttpServer
 
 **Configuration Location:**
 ```powershell
-%LOCALAPPDATA%\CalendarMcp\appsettings.json
-# Typically: C:\Users\{username}\AppData\Local\CalendarMcp\appsettings.json
+%LOCALAPPDATA%\Adjutant\appsettings.json
+# Typically: C:\Users\{username}\AppData\Local\Adjutant\appsettings.json
 ```
 
 **Token Storage:**
 - Microsoft: DPAPI encrypted storage in user profile
-- Google: Encrypted file storage in `%LOCALAPPDATA%\CalendarMcp\tokens\{accountId}\`
+- Google: Encrypted file storage in `%LOCALAPPDATA%\Adjutant\tokens\{accountId}\`
 
 ### Linux
 
 **Configuration Location:**
 ```bash
-~/.local/share/CalendarMcp/appsettings.json
-# Or: $XDG_DATA_HOME/CalendarMcp/appsettings.json
+~/.local/share/Adjutant/appsettings.json
+# Or: $XDG_DATA_HOME/Adjutant/appsettings.json
 ```
 
 **Token Storage:**
 - Microsoft: Encrypted file storage (no DPAPI on Linux)
-- Google: Encrypted file storage in `~/.local/share/CalendarMcp/tokens/{accountId}/`
+- Google: Encrypted file storage in `~/.local/share/Adjutant/tokens/{accountId}/`
 
 **Environment Variables:**
 ```bash
-export CALENDAR_MCP_Telemetry__Enabled=true
-export CALENDAR_MCP_Accounts__0__Id=work-account
+export ADJUTANT_Telemetry__Enabled=true
+export ADJUTANT_Accounts__0__Id=work-account
 ```
 
 ### macOS
 
 **Configuration Location:**
 ```bash
-~/Library/Application Support/CalendarMcp/appsettings.json
+~/Library/Application Support/Adjutant/appsettings.json
 ```
 
 **Token Storage:**
 - Microsoft: Keychain storage (macOS-specific)
-- Google: Encrypted file storage in `~/Library/Application Support/CalendarMcp/tokens/{accountId}/`
+- Google: Encrypted file storage in `~/Library/Application Support/Adjutant/tokens/{accountId}/`
 
 ## Configuration File Setup
 
@@ -198,20 +198,20 @@ export CALENDAR_MCP_Accounts__0__Id=work-account
 
 1. **Run the CLI tool to set up first account:**
    ```bash
-   dotnet run --project src/CalendarMcp.Cli -- add-account
+   dotnet run --project src/Adjutant.Cli -- add-account
    ```
 
 2. **Or manually create `appsettings.json`:**
 
    Get the config file path:
    ```bash
-   dotnet run --project src/CalendarMcp.Cli -- config-path
+   dotnet run --project src/Adjutant.Cli -- config-path
    ```
 
    Create the file with this structure:
    ```json
    {
-     "CalendarMcp": {
+     "Adjutant": {
        "Accounts": [
          {
            "id": "work-m365",
@@ -238,9 +238,9 @@ export CALENDAR_MCP_Accounts__0__Id=work-account
 Any configuration can be overridden with environment variables:
 
 ```bash
-# Format: CALENDAR_MCP_{Section}__{Property}
-export CALENDAR_MCP_Telemetry__Enabled=false
-export CALENDAR_MCP_Telemetry__MinimumLevel=Debug
+# Format: ADJUTANT_{Section}__{Property}
+export ADJUTANT_Telemetry__Enabled=false
+export ADJUTANT_Telemetry__MinimumLevel=Debug
 ```
 
 ## Docker
@@ -248,7 +248,7 @@ export CALENDAR_MCP_Telemetry__MinimumLevel=Debug
 ### Build Docker Image
 
 ```bash
-docker build -t calendar-mcp:latest .
+docker build -t adjutant:latest .
 ```
 
 ### Run with Docker Compose
@@ -269,7 +269,7 @@ volumes:
 
 **Namespace:**
 ```bash
-kubectl create namespace calendar-mcp
+kubectl create namespace adjutant
 ```
 
 **Deploy manifests:**
@@ -279,8 +279,8 @@ kubectl apply -f k8s/
 
 **Check status:**
 ```bash
-kubectl get pods -n calendar-mcp
-kubectl logs -n calendar-mcp deployment/calendar-mcp
+kubectl get pods -n adjutant
+kubectl logs -n adjutant deployment/adjutant
 ```
 
 ## Common Build Issues
@@ -317,7 +317,7 @@ MSYS_NO_PATHCONV=1 docker run -v /app:/app myimage
 
 ### Visual Studio 2022
 
-1. Open `calendar-mcp.slnx` solution file
+1. Open `adjutant.slnx` solution file
 2. Set startup project (StdioServer, HttpServer, or Cli)
 3. F5 to run with debugging
 
@@ -357,8 +357,8 @@ dotnet build --verbosity detailed
 ### Check Configuration
 
 ```bash
-dotnet run --project src/CalendarMcp.Cli -- config-path
-cat $(dotnet run --project src/CalendarMcp.Cli -- config-path)
+dotnet run --project src/Adjutant.Cli -- config-path
+cat $(dotnet run --project src/Adjutant.Cli -- config-path)
 ```
 
 ### View Logs

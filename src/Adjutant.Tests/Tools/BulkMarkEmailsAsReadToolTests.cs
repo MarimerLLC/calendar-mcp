@@ -1,0 +1,57 @@
+using System.Text.Json;
+using Adjutant.Core.Models;
+using Adjutant.Core.Services;
+using Adjutant.Core.Tools;
+using Adjutant.Tests.Helpers;
+using Microsoft.Extensions.Logging.Abstractions;
+using ModelContextProtocol;
+using Rocks;
+
+namespace Adjutant.Tests.Tools;
+
+[TestClass]
+public class BulkMarkEmailsAsReadToolTests
+{
+    [TestMethod]
+    public async Task BulkMarkEmailsAsRead_EmptyArray_ThrowsMcpException()
+    {
+        var regExp = new IAccountRegistryCreateExpectations();
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        var tool = new BulkMarkEmailsAsReadTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<BulkMarkEmailsAsReadTool>.Instance);
+
+        var ex = await Assert.ThrowsExactlyAsync<McpException>(
+            () => tool.BulkMarkEmailsAsRead([], true));
+        Assert.AreEqual("items array must not be empty", ex.Message);
+    }
+
+    [TestMethod]
+    public async Task BulkMarkEmailsAsRead_Success_ReturnsResults()
+    {
+        var account = TestData.CreateAccount(id: "acc-1", provider: "microsoft365");
+
+        var regExp = new IAccountRegistryCreateExpectations();
+        regExp.Setups.GetAccountAsync("acc-1")
+            .ReturnValue(Task.FromResult<AccountInfo?>(account));
+
+        var provExp = new IProviderServiceCreateExpectations();
+        provExp.Setups.MarkEmailAsReadAsync("acc-1", "e1", true, Arg.Any<CancellationToken>())
+            .ReturnValue(Task.CompletedTask);
+
+        var factExp = new IProviderServiceFactoryCreateExpectations();
+        factExp.Setups.GetProvider("microsoft365").ReturnValue(provExp.Instance());
+
+        var tool = new BulkMarkEmailsAsReadTool(regExp.Instance(), factExp.Instance(),
+            NullLogger<BulkMarkEmailsAsReadTool>.Instance);
+
+        var result = await tool.BulkMarkEmailsAsRead([new BulkEmailItem { AccountId = "acc-1", EmailId = "e1" }], true);
+        var doc = JsonDocument.Parse(result);
+
+        Assert.AreEqual(1, doc.RootElement.GetProperty("succeeded").GetInt32());
+        Assert.AreEqual(0, doc.RootElement.GetProperty("failed").GetInt32());
+
+        regExp.Verify();
+        factExp.Verify();
+        provExp.Verify();
+    }
+}

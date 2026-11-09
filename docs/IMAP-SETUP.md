@@ -1,6 +1,6 @@
 # IMAP/SMTP Setup Guide
 
-This guide walks through configuring an IMAP/SMTP mailbox in calendar-mcp. The IMAP provider is **email-only** — calendar and contact tools throw `NotSupportedException` for these accounts. Use it when:
+This guide walks through configuring an IMAP/SMTP mailbox in adjutant. The IMAP provider is **email-only** — calendar and contact tools throw `NotSupportedException` for these accounts. Use it when:
 
 - You need an unattended mailbox on a consumer Gmail account where OAuth's 7-day refresh-token expiry would otherwise force weekly re-auth.
 - You want to attach a non-Microsoft, non-Google mailbox (Fastmail, Apple iCloud, a self-hosted IMAP server) without writing a new provider.
@@ -23,9 +23,9 @@ Gmail requires 2-Step Verification before you can mint an app password.
 1. Sign in to the Google account you want the bot to use.
 2. Enable 2-Step Verification at <https://myaccount.google.com/security>.
 3. Generate an app password at <https://myaccount.google.com/apppasswords>.
-   - "App" — pick "Mail" (or "Other" and label it `calendar-mcp`).
+   - "App" — pick "Mail" (or "Other" and label it `adjutant`).
    - Copy the 16-character password Google shows you. It won't be shown again.
-4. Use the address as `username` and the 16-character app password as `password` in calendar-mcp. The defaults (`imap.gmail.com:993`, `smtp.gmail.com:587`, `[Gmail]/Sent Mail`, `[Gmail]/Trash`) are correct out of the box.
+4. Use the address as `username` and the 16-character app password as `password` in adjutant. The defaults (`imap.gmail.com:993`, `smtp.gmail.com:587`, `[Gmail]/Sent Mail`, `[Gmail]/Trash`) are correct out of the box.
 
 App passwords don't expire and aren't subject to the unverified-app refresh-token treadmill — the bot stays authenticated indefinitely until you revoke the app password.
 
@@ -59,7 +59,7 @@ The admin UI encrypts the password before persisting, so the value in `appsettin
 
 ## Configuration via JSON
 
-Add an entry to `CalendarMcp.Accounts` in `appsettings.json`:
+Add an entry to `Adjutant.Accounts` in `appsettings.json`:
 
 ```json
 {
@@ -83,25 +83,25 @@ Add an entry to `CalendarMcp.Accounts` in `appsettings.json`:
 }
 ```
 
-You can paste the password as plaintext if you must — calendar-mcp will read it (no `ENC:` prefix means "treat as plaintext"). The next time the entry is saved through the admin UI, it will be re-saved encrypted. Encrypting it ahead of time requires running through the UI; there is no CLI tool for offline encryption today.
+You can paste the password as plaintext if you must — adjutant will read it (no `ENC:` prefix means "treat as plaintext"). The next time the entry is saved through the admin UI, it will be re-saved encrypted. Encrypting it ahead of time requires running through the UI; there is no CLI tool for offline encryption today.
 
 ## Folder semantics
 
 - `inboxFolder` is the folder `get_emails` reads from when no folder is specified. Defaults to `INBOX`.
-- `sentFolder` is where calendar-mcp APPENDs a copy of every message you send via `send_email`. APPEND failure is non-fatal — the message still goes out — but you'll see a warning in logs.
+- `sentFolder` is where adjutant APPENDs a copy of every message you send via `send_email`. APPEND failure is non-fatal — the message still goes out — but you'll see a warning in logs.
 - `trashFolder` is where `delete_email` moves messages. The provider does **not** EXPUNGE — that matches Gmail and most modern clients, and lets users recover messages from Trash.
 
 If your provider doesn't have a single canonical Sent or Trash folder name, set the values explicitly.
 
 ## Email IDs
 
-IMAP messages are identified by `(folder, UIDVALIDITY, UID)`. calendar-mcp encodes that as `folder/uidvalidity/uid` — for example `INBOX/1234567890/4567` or `[Gmail]/Trash/1234567890/42`. Internal slashes inside the folder name are preserved.
+IMAP messages are identified by `(folder, UIDVALIDITY, UID)`. adjutant encodes that as `folder/uidvalidity/uid` — for example `INBOX/1234567890/4567` or `[Gmail]/Trash/1234567890/42`. Internal slashes inside the folder name are preserved.
 
 When the underlying folder gets recreated (rare — it changes UIDVALIDITY), previously-issued IDs become invalid. The provider detects this and returns a clear error rather than silently fetching the wrong message.
 
 ## Password storage
 
-Passwords are encrypted at rest using ASP.NET DataProtection. Stored values look like `ENC:CfDJ8...`. The keystore lives at `<data-dir>/keys/` — `/app/data/keys/` in the k8s deployment, `%LOCALAPPDATA%\CalendarMcp\keys\` on Windows. Back up the data directory and you keep both the encrypted secrets and the keys to read them.
+Passwords are encrypted at rest using ASP.NET DataProtection. Stored values look like `ENC:CfDJ8...`. The keystore lives at `<data-dir>/keys/` — `/app/data/keys/` in the k8s deployment, `%LOCALAPPDATA%\Adjutant\keys\` on Windows. Back up the data directory and you keep both the encrypted secrets and the keys to read them.
 
 See [`security.md`](security.md#password-encryption-at-rest-imap-and-dav-accounts) for the threat model.
 

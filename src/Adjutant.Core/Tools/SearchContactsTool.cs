@@ -1,0 +1,113 @@
+using System.ComponentModel;
+using System.Text.Json;
+using Adjutant.Core.Models;
+using Adjutant.Core.Services;
+using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
+using ModelContextProtocol.Server;
+
+namespace Adjutant.Core.Tools;
+
+/// <summary>
+/// MCP tool for searching contacts
+/// </summary>
+[McpServerToolType]
+public sealed class SearchContactsTool(
+    IAccountRegistry accountRegistry,
+    IProviderServiceFactory providerFactory,
+    ILogger<SearchContactsTool> logger)
+{
+    [McpServerTool, Description("Search contacts by name, email, or company for specific account or all accounts")]
+    public async Task<string> SearchContacts(
+        [Description("Search query string")] string query,
+        [Description("Specific account ID, or omit for all accounts")] string? accountId = null,
+        [Description("Number of contacts to retrieve")] int count = 50)
+    {
+        logger.LogInformation("Searching contacts: query={Query}, accountId={AccountId}, count={Count}",
+            query, accountId, count);
+
+        if (string.IsNullOrWhiteSpace(query))
+            throw new McpException("query is required");
+
+        List<AccountInfo> validAccounts;
+        if (string.IsNullOrEmpty(accountId))
+        {
+            validAccounts = (await accountRegistry.GetAllAccountsAsync()).ToList();
+            if (validAccounts.Count == 0)
+                throw new McpException("No accounts found");
+
+            // Skip accounts without contact-read permission (and providers with no contacts
+            // at all) rather than fanning out into a NotSupportedException.
+            validAccounts = ToolGuard.FilterByPermission(
+                validAccounts, AccountPermission.ContactsRead, logger, "search_contacts");
+            if (validAccounts.Count == 0)
+                throw ToolGuard.NoPermittedAccounts(AccountPermission.ContactsRead);
+        }
+        else
+        {
+            validAccounts = new List<AccountInfo>
+            {
+                await ToolGuard.RequireAccountAsync(accountRegistry, accountId, AccountPermission.ContactsRead)
+            };
+        }
+
+        try
+        {
+
+            // A failed account is reported here rather than being indistinguishable from one with no data.
+            var warnings = new List<object>();
+
+            var tasks = validAccounts.Select(async account =>
+            {
+                try
+                {
+                    var provider = providerFactory.GetProvider(account!.Provider);
+                    var contacts = await provider.SearchContactsAsync(account.Id, query, count, CancellationToken.None);
+                    return contacts;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Error searching contacts in account {AccountId}", account!.Id);
+                    lock (warnings)
+                    {
+                        warnings.Add(new { accountId = account.Id, error = ToolGuard.DescribeAccountFailure(ex, "contacts") });
+                    }
+                    return Enumerable.Empty<Contact>();
+                }
+            });
+
+            var results = await Task.WhenAll(tasks);
+            var allContacts = results.SelectMany(c => c)
+                .OrderBy(c => c.DisplayName)
+                .ToList();
+
+            var response = new
+            {
+                contacts = allContacts.Select(c => new
+                {
+                    id = c.Id,
+                    accountId = c.AccountId,
+                    displayName = c.DisplayName,
+                    emailAddresses = c.EmailAddresses.Select(e => e.Address),
+                    phoneNumbers = c.PhoneNumbers.Select(p => p.Number),
+                    companyName = c.CompanyName,
+                    jobTitle = c.JobTitle
+                }),
+                warnings = warnings.Count > 0 ? warnings : null
+            };
+
+            logger.LogInformation("Found {Count} contacts matching '{Query}' from {AccountCount} accounts",
+                allContacts.Count, query, validAccounts.Count);
+
+            return JsonSerializer.Serialize(response, new JsonSerializerOptions
+            {
+                WriteIndented = true
+            });
+        }
+        catch (Exception ex) when (ex is not McpException)
+        {
+            logger.LogError(ex, "Error in search_contacts tool");
+            throw ToolGuard.Failure("search contacts", ex);
+        }
+    }
+}

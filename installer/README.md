@@ -4,9 +4,9 @@ This directory contains the Windows installer configuration for Adjutant.
 
 ## Files
 
-- **CalendarMcp-Setup.iss**: Inno Setup script for creating the Windows installer
+- **Adjutant-Setup.iss**: Inno Setup script for creating the Windows installer
 - **installer-readme.txt**: Information displayed to users during installation
-- **calendar-mcp-icon.ico**: Application icon (optional, create if needed)
+- **adjutant-icon.ico**: Application icon (optional, create if needed)
 
 ## Building the Installer
 
@@ -14,7 +14,7 @@ This directory contains the Windows installer configuration for Adjutant.
 
 1. Install [Inno Setup](https://jrsoftware.org/isinfo.php) (free)
 2. Build the Adjutant projects in Release mode
-3. Ensure release binaries are in `../release/calendar-mcp-win-x64/`
+3. Ensure release binaries are in `../release/adjutant-win-x64/`
 
 ### Build Process
 
@@ -22,14 +22,14 @@ This directory contains the Windows installer configuration for Adjutant.
 
 ```bash
 # 1. Build the projects
-dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true
-dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true
+dotnet publish src/Adjutant.Cli/Adjutant.Cli.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true
+dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj --configuration Release --runtime win-x64 --self-contained true -p:PublishSingleFile=true
 
 # 2. Run Inno Setup compiler
-iscc installer/CalendarMcp-Setup.iss
+iscc installer/Adjutant-Setup.iss
 ```
 
-The installer will be created as `release/calendar-mcp-setup-win-x64.exe`
+The installer will be created as `release/adjutant-setup-win-x64.exe`
 
 #### Automated Build (GitHub Actions)
 
@@ -50,7 +50,7 @@ The installer will be uploaded as a release asset.
 
 ### Changing Version
 
-The version is **not** set in `CalendarMcp-Setup.iss`. The script reads it from the
+The version is **not** set in `Adjutant-Setup.iss`. The script reads it from the
 built payload at compile time with `GetFileVersion`, so the installer always matches
 the version the binaries were actually built with.
 
@@ -60,18 +60,18 @@ To change it, edit `VersionPrefix` in `Directory.Build.props` at the repo root:
 ```
 
 Then rebuild the payload so the new version is stamped into the binaries. Compiling
-without a payload in `..\release\calendar-mcp-win-x64\` fails with an explicit message
+without a payload in `..\release\adjutant-win-x64\` fails with an explicit message
 rather than silently producing a wrongly-versioned installer.
 
 ### Adding Icon
 
 1. Create or obtain a `.ico` file
-2. Save as `calendar-mcp-icon.ico` in this directory
+2. Save as `adjutant-icon.ico` in this directory
 3. The installer script already references it
 
 ### Modifying PATH Behavior
 
-Edit the `[Tasks]` section in `CalendarMcp-Setup.iss`:
+Edit the `[Tasks]` section in `Adjutant-Setup.iss`:
 ```iss
 Name: "addtopath"; Description: "Add Adjutant to system PATH"; Flags: checkedonce
 ```
@@ -89,12 +89,12 @@ Name: "addtopath"; Description: "Add Adjutant to system PATH"; Flags: checkedonc
 ## Troubleshooting
 
 **Error: "Can't find source files"**
-- Ensure release binaries are built and in `../release/calendar-mcp-win-x64/`
+- Ensure release binaries are built and in `../release/adjutant-win-x64/`
 
 **Error: "Invalid icon file"**
 - Comment out the `SetupIconFile` line if you don't have an icon:
   ```iss
-  ; SetupIconFile=calendar-mcp-icon.ico
+  ; SetupIconFile=adjutant-icon.ico
   ```
 
 **Installer requires admin privileges**
@@ -104,5 +104,5 @@ Name: "addtopath"; Description: "Add Adjutant to system PATH"; Flags: checkedonc
 ## Support
 
 For issues with the installer:
-- [GitHub Issues](https://github.com/MarimerLLC/calendar-mcp/issues)
+- [GitHub Issues](https://github.com/MarimerLLC/adjutant/issues)
 - [Installation Documentation](../docs/INSTALLATION.md)

@@ -4,7 +4,7 @@ A Model Context Protocol (MCP) server that gives AI assistants access to email, 
 
 ## Overview
 
-Calendar-MCP aggregates email, calendar, and contact information from multiple providers into a unified set of MCP tools. AI assistants like Claude Desktop, VS Code with Copilot, and other MCP-compatible clients can query across all your accounts at once, search emails, check calendars, find free time, send messages, create events, and manage contacts.
+Adjutant aggregates email, calendar, and contact information from multiple providers into a unified set of MCP tools. AI assistants like Claude Desktop, VS Code with Copilot, and other MCP-compatible clients can query across all your accounts at once, search emails, check calendars, find free time, send messages, create events, and manage contacts.
 
 ### Supported Providers
 
@@ -70,7 +70,7 @@ See [docs/mcp-tools.md](docs/mcp-tools.md) for full tool specifications.
 Finding a meeting time with people outside your own organization means comparing calendars you can't see.
 [Scheduler](https://github.com/MarimerLLC/scheduler) is an MCP server for exactly that: the organizer proposes
 times, and everyone invited votes on each one from their own assistant or from a link in the invitation email,
-without anyone sharing a calendar. It never reads calendars itself, which is where Calendar-MCP comes in. With
+without anyone sharing a calendar. It never reads calendars itself, which is where Adjutant comes in. With
 both connected, an assistant can:
 
 - **Organize:** find free times with `find_available_times`, propose them through Scheduler, and once a time
@@ -79,7 +79,7 @@ both connected, an assistant can:
   `search_emails`, check each proposed time with `get_calendar_events`, vote through Scheduler, and accept the
   organizer's invitation later with `respond_to_event`.
 
-Neither depends on the other; Calendar-MCP works the same without Scheduler.
+Neither depends on the other; Adjutant works the same without Scheduler.
 
 ## Getting Started
 
@@ -91,15 +91,15 @@ Neither depends on the other; Calendar-MCP works the same without Scheduler.
 
 ### Install
 
-Download a pre-built package from [Releases](https://github.com/MarimerLLC/calendar-mcp/releases):
+Download a pre-built package from [Releases](https://github.com/MarimerLLC/adjutant/releases):
 
 | Platform | Package |
 |----------|---------|
-| Windows (installer) | `calendar-mcp-setup-win-x64.exe` |
-| Windows (zip) | `calendar-mcp-win-x64.zip` |
-| Linux x64 | `calendar-mcp-linux-x64.tar.gz` |
-| macOS Intel | `calendar-mcp-osx-x64.tar.gz` |
-| macOS Apple Silicon | `calendar-mcp-osx-arm64.tar.gz` |
+| Windows (installer) | `adjutant-setup-win-x64.exe` |
+| Windows (zip) | `adjutant-win-x64.zip` |
+| Linux x64 | `adjutant-linux-x64.tar.gz` |
+| macOS Intel | `adjutant-osx-x64.tar.gz` |
+| macOS Apple Silicon | `adjutant-osx-arm64.tar.gz` |
 
 See the [Installation Guide](docs/INSTALLATION.md) for detailed steps.
 
@@ -109,17 +109,17 @@ Use the CLI to add accounts:
 
 ```bash
 # Microsoft 365 or Outlook.com
-CalendarMcp.Cli add-m365-account
+Adjutant.Cli add-m365-account
 
 # Google Workspace or Gmail
-CalendarMcp.Cli add-google-account
+Adjutant.Cli add-google-account
 
 # CalDAV / CardDAV (iCloud, Fastmail, Nextcloud, custom)
-CalendarMcp.Cli add-dav-account
+Adjutant.Cli add-dav-account
 
 # Verify
-CalendarMcp.Cli list-accounts
-CalendarMcp.Cli test-account <account-id>
+Adjutant.Cli list-accounts
+Adjutant.Cli test-account <account-id>
 ```
 
 Account setup guides:
@@ -134,8 +134,8 @@ Account setup guides:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "C:\\Program Files\\Adjutant\\CalendarMcp.StdioServer.exe",
+    "adjutant": {
+      "command": "C:\\Program Files\\Adjutant\\Adjutant.StdioServer.exe",
       "args": [],
       "env": {}
     }
@@ -156,7 +156,7 @@ OAuth sign-in (see [MCP OAuth](docs/configuration.md#mcp-oauth-http-server)).
 The default mode. The AI assistant launches the server as a subprocess communicating over stdin/stdout.
 
 ```bash
-CalendarMcp.StdioServer
+Adjutant.StdioServer
 ```
 
 ### HTTP Server (Containerized)
@@ -165,17 +165,17 @@ For remote or shared deployments. Includes a Blazor admin UI and health check en
 
 ```bash
 # Run directly
-dotnet run --project src/CalendarMcp.HttpServer
+dotnet run --project src/Adjutant.HttpServer
 
 # Or via Docker
-docker build -t calendar-mcp-http .
-docker run -p 8080:8080 -v calendar-mcp-data:/app/data calendar-mcp-http
+docker build -t adjutant-http .
+docker run -p 8080:8080 -v adjutant-data:/app/data adjutant-http
 ```
 
 The MCP endpoint requires an API key. On first start the server generates one and prints it to
 the log — copy it from there, as it is hashed at rest and never shown again. Clients send it as
 `Authorization: Bearer <key>` or `X-Api-Key: <key>`; to supply your own key instead, set
-`CALENDAR_MCP_MCP_KEY`.
+`ADJUTANT_MCP_KEY`.
 
 MCP clients that support OAuth (Claude Code, claude.ai / Claude Desktop connectors, VS Code) can
 connect without a key once an admin sign-in provider is configured: add the server URL and sign in.
@@ -191,33 +191,33 @@ Manifests for Kubernetes are in [`k8s/`](k8s/), and a Compose file is at
 ## Building from Source
 
 ```bash
-git clone https://github.com/MarimerLLC/calendar-mcp.git
-cd calendar-mcp
-dotnet build src/calendar-mcp.slnx --configuration Release
+git clone https://github.com/MarimerLLC/adjutant.git
+cd adjutant
+dotnet build src/adjutant.slnx --configuration Release
 ```
 
 ### Project Structure
 
 ```
 src/
-├── CalendarMcp.Core           Core library — models, providers, MCP tools, services
-├── CalendarMcp.Auth           Authentication helpers (MSAL, Google OAuth)
-├── CalendarMcp.Cli            CLI for account management
-├── CalendarMcp.StdioServer    MCP server (stdio transport)
-└── CalendarMcp.HttpServer     MCP server (HTTP transport) with admin UI
+├── Adjutant.Core           Core library — models, providers, MCP tools, services
+├── Adjutant.Auth           Authentication helpers (MSAL, Google OAuth)
+├── Adjutant.Cli            CLI for account management
+├── Adjutant.StdioServer    MCP server (stdio transport)
+└── Adjutant.HttpServer     MCP server (HTTP transport) with admin UI
 ```
 
 ### Run from Source
 
 ```bash
 # Stdio server
-dotnet run --project src/CalendarMcp.StdioServer
+dotnet run --project src/Adjutant.StdioServer
 
 # HTTP server
-dotnet run --project src/CalendarMcp.HttpServer
+dotnet run --project src/Adjutant.HttpServer
 
 # CLI
-dotnet run --project src/CalendarMcp.Cli -- list-accounts
+dotnet run --project src/Adjutant.Cli -- list-accounts
 ```
 
 ## Configuration
@@ -226,9 +226,9 @@ Account and server configuration is stored in JSON files:
 
 | Platform | Location |
 |----------|----------|
-| Windows | `%LOCALAPPDATA%\CalendarMcp\` |
-| Linux / macOS | `~/.local/share/CalendarMcp/` |
-| Override | Set `CALENDAR_MCP_CONFIG` environment variable |
+| Windows | `%LOCALAPPDATA%\Adjutant\` |
+| Linux / macOS | `~/.local/share/Adjutant/` |
+| Override | Set `ADJUTANT_CONFIG` environment variable |
 
 See [docs/configuration.md](docs/configuration.md) for the full configuration reference.
 
@@ -255,7 +255,7 @@ Contributions are welcome. Please read our [Code of Conduct](CODE_OF_CONDUCT.md)
 Here's how to get started:
 
 1. Fork the repository and create a feature branch.
-2. Build and verify your changes compile: `dotnet build src/calendar-mcp.slnx`
+2. Build and verify your changes compile: `dotnet build src/adjutant.slnx`
 3. Follow the existing code style and patterns — the project uses standard C#/.NET conventions.
 4. Open a pull request against `main`. The CI workflow will build automatically.
 

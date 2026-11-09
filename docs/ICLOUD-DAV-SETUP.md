@@ -6,7 +6,7 @@ This guide configures Apple iCloud calendars and contacts in Adjutant via the **
 
 1. An Apple Account with **two-factor authentication** enabled.
 2. An **app-specific password** from [account.apple.com](https://account.apple.com) (Apple Account → Sign-In and Security → App-Specific Passwords).
-   - Label it e.g. `calendar-mcp`.
+   - Label it e.g. `adjutant`.
    - Copy the 16-character password; Apple shows it only once.
 3. Do **not** use your normal Apple ID password — CalDAV/CardDAV will reject it.
 
@@ -35,9 +35,9 @@ No interactive OAuth step is required.
 ## CLI
 
 ```bash
-CalendarMcp.Cli add-dav-account
-CalendarMcp.Cli list-accounts
-CalendarMcp.Cli test-account personal-icloud
+Adjutant.Cli add-dav-account
+Adjutant.Cli list-accounts
+Adjutant.Cli test-account personal-icloud
 ```
 
 `add-dav-account` prompts for preset, credentials, and URLs (seeded by preset), optionally PROPFINDs the endpoints, encrypts the password, and writes `appsettings.json`. `reauth` / `logout` do not apply to DAV (password in config); rotate the app-specific password and update the account instead.

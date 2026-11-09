@@ -2,10 +2,10 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: calendar-mcp-data
-  namespace: calendar-mcp
+  name: adjutant-data
+  namespace: adjutant
   labels:
-    app: calendar-mcp
+    app: adjutant
 spec:
   accessModes:
     - ReadWriteOnce

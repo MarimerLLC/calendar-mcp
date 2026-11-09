@@ -1,4 +1,4 @@
-# GitHub Copilot Instructions for Calendar-MCP
+# GitHub Copilot Instructions for Adjutant
 
 This repository contains a Model Context Protocol (MCP) server written in C# / .NET 10 that provides unified access to multiple email and calendar accounts across Microsoft 365, Outlook.com, and Google Workspace.
 
@@ -28,8 +28,8 @@ This MCP server enables AI assistants (Claude, ChatGPT, GitHub Copilot) to acces
 
 ```
 /src                    # Main source code
-  /CalendarMcp.Core     # Core business logic and services
-  /CalendarMcp.StdioServer  # MCP stdio server implementation
+  /Adjutant.Core     # Core business logic and services
+  /Adjutant.StdioServer  # MCP stdio server implementation
 /docs                   # Comprehensive technical documentation
 /spikes                 # Spike/experimental projects
 /.github/instructions   # Detailed Copilot instructions
@@ -131,7 +131,7 @@ When building console applications:
 See [Common Code Patterns](instructions/patterns.md#mcp-tool-implementation-pattern) for step-by-step guide with examples.
 
 **Quick checklist:**
-- [ ] Create tool class in `src/CalendarMcp.Core/Tools/` with `[McpServerToolType]` attribute
+- [ ] Create tool class in `src/Adjutant.Core/Tools/` with `[McpServerToolType]` attribute
 - [ ] Add tool method with `[McpServerTool]` attribute and descriptions
 - [ ] Register in `ServiceCollectionExtensions.cs` as Singleton
 - [ ] Register in both `StdioServer/Program.cs` and `HttpServer/Program.cs` with `.WithTools<YourTool>()`

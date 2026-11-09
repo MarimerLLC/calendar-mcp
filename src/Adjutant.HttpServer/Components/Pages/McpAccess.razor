@@ -1,0 +1,467 @@
+@page "/admin/ui/access"
+@page "/admin/ui/keys"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using Adjutant.Core.Configuration
+@using Adjutant.Core.Security
+@using Adjutant.HttpServer.Identity
+@using Microsoft.Extensions.Options
+@inject IMcpKeyStore KeyStore
+@inject IOptionsMonitor<AdjutantConfiguration> ServerConfig
+@inject ConnectedApps ConnectedApps
+@inject OAuthAvailability OAuth
+@inject TimeProvider Time
+
+@* "/admin/ui/keys" is the page's old address (MCP Keys), kept so bookmarks still work. *@
+
+<PageTitle>MCP Access - Adjutant</PageTitle>
+
+<h1 class="mb-4"><i class="bi bi-key me-2"></i>MCP Access</h1>
+
+@if (!ServerConfig.CurrentValue.Mcp.RequireApiKey)
+{
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle me-1"></i>
+        <strong>Access control is disabled.</strong>
+        <code>Adjutant:Mcp:RequireApiKey</code> is <code>false</code>, so the MCP endpoint
+        accepts any caller that can reach it and the keys and apps below are not being checked.
+    </div>
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger alert-dismissible">
+        <i class="bi bi-exclamation-triangle me-1"></i> @_error
+        <button type="button" class="btn-close" @onclick="() => _error = null"></button>
+    </div>
+}
+
+<h2 class="h4 mb-3">Keys</h2>
+
+@if (_newSecret is not null)
+{
+    <div class="card border-success mb-4">
+        <div class="card-header bg-success-subtle">
+            <i class="bi bi-check-circle me-1"></i>Key created — copy it now
+        </div>
+        <div class="card-body">
+            <p class="text-muted">
+                This is the only time the key is shown. It is hashed before storage and cannot
+                be recovered; if you lose it, revoke it and create another.
+            </p>
+
+            <label class="form-label">Key</label>
+            <input class="form-control font-monospace mb-3" readonly value="@_newSecret" />
+
+            <label class="form-label">Add it to a client</label>
+            <ul class="nav nav-tabs mb-2">
+                @foreach (var (id, label) in Snippets)
+                {
+                    <li class="nav-item">
+                        <button class="nav-link @(id == _snippet ? "active" : "")"
+                                @onclick="() => _snippet = id">@label</button>
+                    </li>
+                }
+            </ul>
+            <pre class="bg-body-secondary p-3 rounded"><code>@SnippetText</code></pre>
+
+            <button class="btn btn-outline-secondary btn-sm" @onclick="() => _newSecret = null">
+                Done
+            </button>
+        </div>
+    </div>
+}
+
+<div class="card mb-4">
+    <div class="card-header"><i class="bi bi-plus-circle me-1"></i>Create a key</div>
+    <div class="card-body">
+        <div class="input-group" style="max-width: 680px;">
+            <input class="form-control" @bind="_newLabel"
+                   placeholder="What will use this key? e.g. RockBot agent" />
+            <select class="form-select" style="max-width: 160px;" @bind="_newLifetimeDays"
+                    aria-label="Key lifetime">
+                @foreach (var (days, label) in Lifetimes)
+                {
+                    <option value="@days">@label</option>
+                }
+            </select>
+            <button class="btn btn-primary" @onclick="Create" disabled="@_busy">
+                <i class="bi bi-plus-lg me-1"></i>Create
+            </button>
+        </div>
+        <div class="form-text">
+            Give each client its own key, so one can be revoked without disturbing the others.
+            A key stops working when it expires; choose <strong>No expiry</strong> for a headless
+            agent that nobody would notice losing access. Apps that sign in with OAuth (below)
+            don't need a key at all.
+        </div>
+    </div>
+</div>
+
+<div class="card mb-5">
+    <div class="card-header"><i class="bi bi-list-ul me-1"></i>Existing keys</div>
+    <div class="card-body">
+        @if (_keys.Count == 0)
+        {
+            <p class="text-muted mb-0">No keys yet.</p>
+        }
+        else
+        {
+            var now = Time.GetUtcNow();
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>Label</th>
+                        <th>Created</th>
+                        <th>Last used</th>
+                        <th>Expires</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var key in _keys)
+                    {
+                        <tr class="@(key.IsUsable(now) ? "" : "opacity-50")">
+                            <td>
+                                @key.Label
+                                <div class="text-muted small font-monospace">@key.Id</div>
+                            </td>
+                            <td class="small">@key.CreatedUtc.LocalDateTime.ToString("g")</td>
+                            <td class="small">
+                                @if (key.LastUsedUtc is null)
+                                {
+                                    <span class="text-muted">never</span>
+                                }
+                                else
+                                {
+                                    @key.LastUsedUtc.Value.LocalDateTime.ToString("g")
+                                }
+                            </td>
+                            <td class="small">
+                                @if (key.ExpiresUtc is not { } expires)
+                                {
+                                    <span class="text-muted">never</span>
+                                }
+                                else
+                                {
+                                    @expires.LocalDateTime.ToString("d")
+                                    @if (key.IsActive && key.IsExpired(now))
+                                    {
+                                        <span class="badge text-bg-secondary ms-1">expired</span>
+                                    }
+                                    else if (key.IsActive && expires - now <= ExpiryWarning)
+                                    {
+                                        <span class="badge text-bg-warning ms-1">@DaysLeft(expires, now)</span>
+                                    }
+                                }
+                            </td>
+                            <td class="text-end">
+                                @if (key.IsActive)
+                                {
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => Revoke(key)" disabled="@_busy">
+                                        Revoke
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary">
+                                        revoked @key.RevokedUtc!.Value.LocalDateTime.ToString("g")
+                                    </span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="form-text mb-0">
+                Revoked and expired keys are kept for the record and don't work. "Last used" is
+                written lazily, so it can lag real activity by a few minutes.
+            </p>
+        }
+    </div>
+</div>
+
+<h2 class="h4 mb-3">Connected apps</h2>
+
+@if (!OAuth.IsAvailable)
+{
+    <div class="alert alert-secondary">
+        <i class="bi bi-info-circle me-1"></i>
+        OAuth sign-in isn't offered, because no Google or Microsoft sign-in provider is configured
+        on <a href="admin/ui/settings">Settings</a> (or <code>Adjutant:Mcp:EnableOAuth</code> is
+        <code>false</code>). Until it is, apps can only connect with a key, and any app connected
+        earlier can't reach the server.
+    </div>
+}
+
+<div class="card">
+    <div class="card-body">
+        @if (_apps is null)
+        {
+            <p class="text-muted mb-0">Loading…</p>
+        }
+        else if (_apps.Count == 0)
+        {
+            <p class="text-muted mb-0">
+                No apps connected. Add this server's URL (<code>@ServerUrl</code>) in Claude Code,
+                Claude Desktop or VS Code to connect one with a sign-in instead of a key.
+            </p>
+        }
+        else
+        {
+            <table class="table table-sm align-middle">
+                <thead>
+                    <tr>
+                        <th>App</th>
+                        <th>Redirects to</th>
+                        <th>Approved by</th>
+                        <th>Connected</th>
+                        <th>Last active</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var app in _apps)
+                    {
+                        <tr>
+                            <td>
+                                @app.Name
+                                @if (app.Publisher is not null)
+                                {
+                                    <span class="badge text-bg-success ms-1" title="Named by a client metadata document on @app.Publisher">
+                                        verified: @app.Publisher
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary ms-1" title="Registered dynamically; the app chose its own name">
+                                        unverified name
+                                    </span>
+                                }
+                                <div class="text-muted small font-monospace text-break">@app.ClientId</div>
+                            </td>
+                            <td class="small">
+                                @foreach (var host in app.RedirectHosts)
+                                {
+                                    <div><code>@host</code></div>
+                                }
+                            </td>
+                            <td class="small">@string.Join(", ", app.ApprovedBy)</td>
+                            <td class="small">@app.ConnectedUtc?.LocalDateTime.ToString("g")</td>
+                            <td class="small">@app.LastActiveUtc?.LocalDateTime.ToString("g")</td>
+                            <td class="text-end text-nowrap">
+                                @if (_confirmDisconnect == app.ApplicationId)
+                                {
+                                    <button class="btn btn-sm btn-danger me-1"
+                                            @onclick="() => DisconnectAsync(app)" disabled="@_busy">
+                                        Confirm
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-secondary"
+                                            @onclick="() => _confirmDisconnect = null" disabled="@_busy">
+                                        Cancel
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-danger"
+                                            @onclick="() => _confirmDisconnect = app.ApplicationId" disabled="@_busy">
+                                        Disconnect
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+            <p class="form-text mb-0">
+                Disconnect stops the app at once; to use it again, connect it again from the app
+                and approve it. "Last active" is when the app last renewed its access, about once
+                an hour while it's in use.
+            </p>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Keys this close to expiring get a warning badge.</summary>
+    private static readonly TimeSpan ExpiryWarning = TimeSpan.FromDays(14);
+
+    /// <summary>Lifetime choices for a new key, in days; 0 means no expiry.</summary>
+    private static readonly (int Days, string Label)[] Lifetimes =
+    [
+        (30, "30 days"),
+        (90, "90 days"),
+        (180, "180 days"),
+        (365, "365 days"),
+        (0, "No expiry")
+    ];
+
+    private List<McpApiKey> _keys = [];
+    private List<ConnectedApp>? _apps;
+    private string _newLabel = "";
+    private int _newLifetimeDays = 90;
+    private string? _newSecret;
+    private string _snippet = "claude-code";
+    private string? _confirmDisconnect;
+    private string? _error;
+    private bool _busy;
+
+    private static readonly (string Id, string Label)[] Snippets =
+    [
+        ("claude-code", "Claude Code"),
+        ("vscode", "VS Code"),
+        ("mcp-remote", "mcp-remote"),
+        ("curl", "curl")
+    ];
+
+    private string ServerUrl
+    {
+        get
+        {
+            var baseUrl = ServerConfig.CurrentValue.ExternalBaseUrl;
+            return string.IsNullOrWhiteSpace(baseUrl)
+                ? "https://your-server.example.com/"
+                : baseUrl.TrimEnd('/') + "/";
+        }
+    }
+
+    private string SnippetText => _snippet switch
+    {
+        "claude-code" =>
+            $"""
+            claude mcp add --transport http adjutant {ServerUrl} \
+              --header "Authorization: Bearer {_newSecret}"
+            """,
+        "vscode" =>
+            $$"""
+            {
+              "servers": {
+                "adjutant": {
+                  "type": "http",
+                  "url": "{{ServerUrl}}",
+                  "headers": { "Authorization": "Bearer {{_newSecret}}" }
+                }
+              }
+            }
+            """,
+        "mcp-remote" =>
+            $$"""
+            {
+              "mcpServers": {
+                "adjutant": {
+                  "command": "npx",
+                  "args": [
+                    "-y", "mcp-remote", "{{ServerUrl}}",
+                    "--header", "Authorization: Bearer {{_newSecret}}"
+                  ]
+                }
+              }
+            }
+            """,
+        // Doubled delimiters so the JSON body's own braces stay literal.
+        _ =>
+            $$"""
+            curl -H "Authorization: Bearer {{_newSecret}}" \
+                 -H "Accept: application/json, text/event-stream" \
+                 -H "Content-Type: application/json" \
+                 -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+                 {{ServerUrl}}
+            """
+    };
+
+    private static string DaysLeft(DateTimeOffset expires, DateTimeOffset now)
+    {
+        var days = (int)Math.Ceiling((expires - now).TotalDays);
+        return days <= 1 ? "expires within a day" : $"expires in {days} days";
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        ReloadKeys();
+        await ReloadAppsAsync();
+    }
+
+    private void ReloadKeys() => _keys = [.. KeyStore.List()];
+
+    private async Task ReloadAppsAsync()
+    {
+        try
+        {
+            _apps = [.. await ConnectedApps.ListAsync()];
+        }
+        catch (Exception ex)
+        {
+            _apps = [];
+            _error = "Couldn't read connected apps: " + ex.Message;
+        }
+    }
+
+    private void Create()
+    {
+        if (string.IsNullOrWhiteSpace(_newLabel))
+        {
+            _error = "Give the key a label so you can tell it apart later.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            TimeSpan? lifetime = _newLifetimeDays > 0 ? TimeSpan.FromDays(_newLifetimeDays) : null;
+            var (_, secret) = KeyStore.Create(_newLabel, lifetime);
+            _newSecret = secret;
+            _newLabel = "";
+            ReloadKeys();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Revoke(McpApiKey key)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            KeyStore.Revoke(key.Id);
+            ReloadKeys();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DisconnectAsync(ConnectedApp app)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            if (!await ConnectedApps.DisconnectAsync(app.ApplicationId))
+                _error = $"{app.Name} is no longer registered.";
+            _confirmDisconnect = null;
+            await ReloadAppsAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

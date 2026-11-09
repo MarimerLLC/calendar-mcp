@@ -1,8 +1,0 @@
-<Solution>
-  <Project Path="src/CalendarMcp.Auth/CalendarMcp.Auth.csproj" />
-  <Project Path="src/CalendarMcp.Cli/CalendarMcp.Cli.csproj" />
-  <Project Path="src/CalendarMcp.Core/CalendarMcp.Core.csproj" />
-  <Project Path="src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj" />
-  <Project Path="src/CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj" />
-  <Project Path="src/CalendarMcp.Tests/CalendarMcp.Tests.csproj" />
-</Solution>

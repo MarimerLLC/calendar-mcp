@@ -2,7 +2,7 @@
 
 ## Overview
 
-Calendar-MCP implements **per-account authentication** with strict isolation between accounts. Each account maintains its own authentication context, credentials, and token storage.
+Adjutant implements **per-account authentication** with strict isolation between accounts. Each account maintains its own authentication context, credentials, and token storage.
 
 ## Account Isolation Hierarchy
 
@@ -60,7 +60,7 @@ Token Cache (unique per account - ALWAYS separate)
 - Different organizations have different security policies
 - Shared app = simpler setup, fewer app registrations to manage
 - Per-tenant app = required for strict IT environments
-- **Calendar-MCP supports both**: User configures ClientId per account as needed
+- **Adjutant supports both**: User configures ClientId per account as needed
 
 ### Why Per-Account Token Storage?
 
@@ -78,7 +78,7 @@ Token Cache (unique per account - ALWAYS separate)
 
 **Per-Account Cache File**:
 ```
-%LOCALAPPDATA%/CalendarMcp/msal_cache_{accountId}.bin
+%LOCALAPPDATA%/Adjutant/msal_cache_{accountId}.bin
 ```
 
 Examples:
@@ -92,7 +92,7 @@ Examples:
 var cacheFileName = $"msal_cache_{accountId}.bin";
 var cacheFilePath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "CalendarMcp",
+    "Adjutant",
     cacheFileName
 );
 
@@ -123,13 +123,13 @@ cacheHelper.RegisterCache(app.UserTokenCache);
 
 **Per-Account Directory**:
 ```
-~/.credentials/calendar-mcp/{accountId}/
+~/.credentials/adjutant/{accountId}/
   └── Google.Apis.Auth.OAuth2.Responses.TokenResponse-{userEmail}
 ```
 
 Examples:
-- `~/.credentials/calendar-mcp/personal-gmail/` (personal Gmail)
-- `~/.credentials/calendar-mcp/work-gsuite/` (G Suite account)
+- `~/.credentials/adjutant/personal-gmail/` (personal Gmail)
+- `~/.credentials/adjutant/work-gsuite/` (G Suite account)
 
 **Implementation Pattern** (from GoogleWorkspace spike):
 ```csharp
@@ -137,7 +137,7 @@ Examples:
 var credPath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
     ".credentials",
-    $"calendar-mcp-{accountId}"
+    $"adjutant-{accountId}"
 );
 
 var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
@@ -157,11 +157,11 @@ var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
 
 ## Authentication Flow (Per-Account)
 
-### 1. Initial Setup (via `calendar-mcp-setup` CLI)
+### 1. Initial Setup (via `adjutant-setup` CLI)
 
 ```
 For EACH account:
-  → User runs: calendar-mcp-setup add-account
+  → User runs: adjutant-setup add-account
   → Interactive prompts for account details
   → Browser opens for OAuth consent
   → Token stored in per-account cache

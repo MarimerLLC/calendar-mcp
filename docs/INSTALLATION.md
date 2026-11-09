@@ -46,8 +46,8 @@ This is the easiest method and does not require installing .NET on your system.
 
 **Step 1: Download Installer**
 
-1. Go to the [Releases page](https://github.com/MarimerLLC/calendar-mcp/releases) on GitHub
-2. Download `calendar-mcp-setup-win-x64.exe`
+1. Go to the [Releases page](https://github.com/MarimerLLC/adjutant/releases) on GitHub
+2. Download `adjutant-setup-win-x64.exe`
 
 **Step 2: Run Installer**
 
@@ -73,41 +73,41 @@ This is the easiest method and does not require installing .NET on your system.
 **Verify Installation:**
 ```powershell
 # Open a new Command Prompt or PowerShell window
-CalendarMcp.Cli --version
+Adjutant.Cli --version
 
 # If not in PATH, use full path:
-"C:\Program Files\Adjutant\CalendarMcp.Cli.exe" --version
+"C:\Program Files\Adjutant\Adjutant.Cli.exe" --version
 ```
 
 #### Manual Installation (All Platforms)
 
 #### Step 1: Download
 
-1. Go to the [Releases page](https://github.com/MarimerLLC/calendar-mcp/releases) on GitHub
+1. Go to the [Releases page](https://github.com/MarimerLLC/adjutant/releases) on GitHub
 2. Download the appropriate archive for your platform:
-   - **Windows**: `calendar-mcp-win-x64.zip`
-   - **Linux**: `calendar-mcp-linux-x64.tar.gz`
-   - **macOS (Intel)**: `calendar-mcp-osx-x64.tar.gz`
-   - **macOS (Apple Silicon)**: `calendar-mcp-osx-arm64.tar.gz`
+   - **Windows**: `adjutant-win-x64.zip`
+   - **Linux**: `adjutant-linux-x64.tar.gz`
+   - **macOS (Intel)**: `adjutant-osx-x64.tar.gz`
+   - **macOS (Apple Silicon)**: `adjutant-osx-arm64.tar.gz`
 
 #### Step 2: Extract
 
 **Windows:**
 1. Right-click the downloaded `.zip` file
 2. Select "Extract All..."
-3. Choose a destination folder (e.g., `C:\Program Files\CalendarMcp`)
+3. Choose a destination folder (e.g., `C:\Program Files\Adjutant`)
 4. Click "Extract"
 
 **Linux/macOS:**
 ```bash
 # For Linux
-tar -xzf calendar-mcp-linux-x64.tar.gz -C ~/calendar-mcp
+tar -xzf adjutant-linux-x64.tar.gz -C ~/adjutant
 
 # For macOS (Intel)
-tar -xzf calendar-mcp-osx-x64.tar.gz -C ~/calendar-mcp
+tar -xzf adjutant-osx-x64.tar.gz -C ~/adjutant
 
 # For macOS (Apple Silicon)
-tar -xzf calendar-mcp-osx-arm64.tar.gz -C ~/calendar-mcp
+tar -xzf adjutant-osx-arm64.tar.gz -C ~/adjutant
 ```
 
 #### Step 3: Add to PATH (Optional but Recommended)
@@ -118,7 +118,7 @@ This allows you to run the CLI tool from any directory.
 1. Open "System Properties" → "Advanced" → "Environment Variables"
 2. Under "User variables" or "System variables", find "Path"
 3. Click "Edit" → "New"
-4. Add the path to your extracted folder (e.g., `C:\Program Files\CalendarMcp`)
+4. Add the path to your extracted folder (e.g., `C:\Program Files\Adjutant`)
 5. Click "OK" on all dialogs
 6. **Restart your terminal/command prompt** for changes to take effect
 
@@ -126,7 +126,7 @@ This allows you to run the CLI tool from any directory.
 Add the following line to your shell configuration file (`~/.bashrc`, `~/.zshrc`, etc.):
 
 ```bash
-export PATH="$HOME/calendar-mcp:$PATH"
+export PATH="$HOME/adjutant:$PATH"
 ```
 
 Then reload your shell configuration:
@@ -141,25 +141,25 @@ If you prefer to build from source or need the latest development version:
 #### Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/MarimerLLC/calendar-mcp.git
-cd calendar-mcp
+git clone https://github.com/MarimerLLC/adjutant.git
+cd adjutant
 ```
 
 #### Step 2: Build
 
 ```bash
 # Build in release mode
-dotnet build calendar-mcp.slnx --configuration Release
+dotnet build adjutant.slnx --configuration Release
 
 # Or publish as self-contained for your platform
 # Windows
-dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+dotnet publish src/Adjutant.Cli/Adjutant.Cli.csproj \
   --configuration Release \
   --runtime win-x64 \
   --self-contained true \
   --output ./publish/win-x64/cli
 
-dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
   --configuration Release \
   --runtime win-x64 \
   --self-contained true \
@@ -181,11 +181,11 @@ See the detailed [M365 Setup Guide](M365-SETUP.md) for:
 **Quick Start:**
 ```bash
 # Run the CLI tool to add a Microsoft 365 account
-CalendarMcp.Cli add-m365-account
+Adjutant.Cli add-m365-account
 
 # Or if not in PATH:
-./CalendarMcp.Cli add-m365-account    # Linux/macOS
-.\CalendarMcp.Cli.exe add-m365-account  # Windows
+./Adjutant.Cli add-m365-account    # Linux/macOS
+.\Adjutant.Cli.exe add-m365-account  # Windows
 ```
 
 ### Setting up On-premises Exchange (EWS)
@@ -201,10 +201,10 @@ endpoint and allows Basic authentication over HTTPS. See the detailed
 
 ```bash
 # Prompts for the EWS URL, username and password, checks the connection, and saves the account
-CalendarMcp.Cli add-exchange-account
+Adjutant.Cli add-exchange-account
 
 # Check the endpoint and credentials again later
-CalendarMcp.Cli test-account <account-id>
+Adjutant.Cli test-account <account-id>
 ```
 
 On the HTTP server, use **Add Account** → **Exchange (on-premises)** in the admin UI instead.
@@ -223,11 +223,11 @@ See the detailed [Google Setup Guide](GOOGLE-SETUP.md) for:
 **Quick Start:**
 ```bash
 # Run the CLI tool to add a Google account
-CalendarMcp.Cli add-google-account
+Adjutant.Cli add-google-account
 
 # Or if not in PATH:
-./CalendarMcp.Cli add-google-account    # Linux/macOS
-.\CalendarMcp.Cli.exe add-google-account  # Windows
+./Adjutant.Cli add-google-account    # Linux/macOS
+.\Adjutant.Cli.exe add-google-account  # Windows
 ```
 
 ### Setting up CalDAV / CardDAV (iCloud, Fastmail, Nextcloud)
@@ -236,8 +236,8 @@ See the detailed [iCloud CalDAV/CardDAV Setup Guide](ICLOUD-DAV-SETUP.md) for Ap
 
 **Quick Start:**
 ```bash
-CalendarMcp.Cli add-dav-account
-CalendarMcp.Cli test-account <account-id>
+Adjutant.Cli add-dav-account
+Adjutant.Cli test-account <account-id>
 ```
 
 Presets: `icloud`, `icloud-cn`, `fastmail`, `nextcloud`, `generic`.
@@ -266,8 +266,8 @@ See the detailed [Claude Desktop Setup Guide](CLAUDE-DESKTOP-SETUP.md) for:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "C:\\Program Files\\CalendarMcp\\CalendarMcp.StdioServer.exe",
+    "adjutant": {
+      "command": "C:\\Program Files\\Adjutant\\Adjutant.StdioServer.exe",
       "args": [],
       "env": {}
     }
@@ -279,8 +279,8 @@ See the detailed [Claude Desktop Setup Guide](CLAUDE-DESKTOP-SETUP.md) for:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "/home/username/calendar-mcp/CalendarMcp.StdioServer",
+    "adjutant": {
+      "command": "/home/username/adjutant/Adjutant.StdioServer",
       "args": [],
       "env": {}
     }
@@ -301,17 +301,17 @@ Add the server to `~/.config/opencode/opencode.jsonc` (Windows:
   "mcp": {
     "calendar": {
       "type": "local",
-      "command": ["C:\\CalendarMcp\\bin\\CalendarMcp.StdioServer.exe"],
+      "command": ["C:\\Adjutant\\bin\\Adjutant.StdioServer.exe"],
       "enabled": true,
       "environment": {
-        "CALENDAR_MCP_CONFIG": "C:\\CalendarMcp\\config"
+        "ADJUTANT_CONFIG": "C:\\Adjutant\\config"
       }
     }
   }
 }
 ```
 
-`CALENDAR_MCP_CONFIG` must point at the directory holding `appsettings.json`, not at the file
+`ADJUTANT_CONFIG` must point at the directory holding `appsettings.json`, not at the file
 itself. Restart OpenCode after editing the config, then run `opencode mcp list` to confirm the
 server reports `connected`.
 
@@ -321,7 +321,7 @@ VS Code support for MCP servers is still emerging. As of now:
 
 1. Install the MCP extension (if available)
 2. Configure the MCP server in VS Code settings
-3. Reference the path to `CalendarMcp.StdioServer` executable
+3. Reference the path to `Adjutant.StdioServer` executable
 
 **Note:** MCP support in VS Code is limited. Check the [VS Code MCP documentation](https://code.visualstudio.com/) for the latest information.
 
@@ -329,7 +329,7 @@ VS Code support for MCP servers is still emerging. As of now:
 
 Any MCP-compatible client can use this server. The key configuration elements are:
 
-- **Command**: Path to the `CalendarMcp.StdioServer` executable
+- **Command**: Path to the `Adjutant.StdioServer` executable
 - **Protocol**: stdio (standard input/output)
 - **Environment**: Optional environment variables
 
@@ -346,10 +346,10 @@ For repeatable installs, self-contained publishing, upgrades, and rollbacks, see
 
 ```bash
 # List configured accounts
-CalendarMcp.Cli list-accounts
+Adjutant.Cli list-accounts
 
 # Test a specific account
-CalendarMcp.Cli test-account <account-id>
+Adjutant.Cli test-account <account-id>
 ```
 
 ### Verify MCP Server
@@ -369,7 +369,7 @@ If you encounter issues, see the [Troubleshooting](#troubleshooting) section bel
 - Ensure you've extracted all files (don't run from inside the zip file)
 
 **Linux/macOS:**
-- Ensure the binaries are executable: `chmod +x CalendarMcp.Cli CalendarMcp.StdioServer`
+- Ensure the binaries are executable: `chmod +x Adjutant.Cli Adjutant.StdioServer`
 - On macOS, you may need to allow the app in System Preferences → Security & Privacy
 
 ### CLI Tool Not Found
@@ -381,12 +381,12 @@ If you encounter issues, see the [Troubleshooting](#troubleshooting) section bel
 ### MCP Server Connection Issues
 
 - Verify the path in your MCP client configuration is correct
-- Check that accounts are configured: `CalendarMcp.Cli list-accounts`
+- Check that accounts are configured: `Adjutant.Cli list-accounts`
 - Look for error logs in the MCP client
 
 ### Authentication Issues
 
-- Re-run the account setup: `CalendarMcp.Cli add-m365-account` or `add-google-account`
+- Re-run the account setup: `Adjutant.Cli add-m365-account` or `add-google-account`
 - Check Azure AD / Google Cloud Console for proper app configuration
 - Verify required permissions/scopes are granted
 
@@ -394,14 +394,14 @@ If you encounter issues, see the [Troubleshooting](#troubleshooting) section bel
 
 **Linux/macOS:**
 ```bash
-chmod +x CalendarMcp.Cli
-chmod +x CalendarMcp.StdioServer
+chmod +x Adjutant.Cli
+chmod +x Adjutant.StdioServer
 ```
 
 ### Path Issues on Windows
 
-- Use double backslashes in JSON: `C:\\Program Files\\CalendarMcp\\...`
-- Or use forward slashes: `C:/Program Files/CalendarMcp/...`
+- Use double backslashes in JSON: `C:\\Program Files\\Adjutant\\...`
+- Or use forward slashes: `C:/Program Files/Adjutant/...`
 - Ensure no trailing spaces in the path
 
 ## Next Steps
@@ -411,10 +411,10 @@ After successful installation:
 1. **Configure Accounts**: Follow the [M365 Setup Guide](M365-SETUP.md) and [Google Setup Guide](GOOGLE-SETUP.md)
 2. **Test the Server**: Use Claude Desktop to interact with your emails and calendar
 3. **Explore Features**: See the [README](../README.md) for available commands and use cases
-4. **Join the Community**: Report issues and contribute on [GitHub](https://github.com/MarimerLLC/calendar-mcp)
+4. **Join the Community**: Report issues and contribute on [GitHub](https://github.com/MarimerLLC/adjutant)
 
 ## Support
 
-- **Issues**: [GitHub Issues](https://github.com/MarimerLLC/calendar-mcp/issues)
+- **Issues**: [GitHub Issues](https://github.com/MarimerLLC/adjutant/issues)
 - **Documentation**: [docs/](.)
 - **License**: MIT - see [LICENSE](../LICENSE)

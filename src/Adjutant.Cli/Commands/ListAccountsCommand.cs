@@ -1,0 +1,351 @@
+using Adjutant.Core.Providers;
+using Spectre.Console;
+using Spectre.Console.Cli;
+using Adjutant.Auth;
+using Adjutant.Core.Configuration;
+using Adjutant.Core.Models;
+using Adjutant.Core.Services;
+using System.Text.Json;
+using System.ComponentModel;
+
+namespace Adjutant.Cli.Commands;
+
+/// <summary>
+/// Command to list configured accounts
+/// </summary>
+public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
+{
+    private readonly IM365AuthenticationService _m365AuthService;
+    private readonly IGoogleAuthenticationService _googleAuthService;
+
+    public class Settings : CommandSettings
+    {
+        [Description("Path to appsettings.json (default: %LOCALAPPDATA%/Adjutant/appsettings.json)")]
+        [CommandOption("--config")]
+        public string? ConfigPath { get; init; }
+    }
+
+    public ListAccountsCommand(IM365AuthenticationService m365AuthService, IGoogleAuthenticationService googleAuthService)
+    {
+        _m365AuthService = m365AuthService;
+        _googleAuthService = googleAuthService;
+    }
+
+    public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
+    {
+        AnsiConsole.Write(new FigletText("Adjutant")
+            .Centered()
+            .Color(Color.Blue));
+
+        AnsiConsole.MarkupLine("[bold]Configured Accounts[/]");
+        AnsiConsole.WriteLine();
+
+        // Determine config file path - use shared ConfigurationPaths by default
+        var configPath = settings.ConfigPath ?? ConfigurationPaths.GetConfigFilePath();
+
+        if (!File.Exists(configPath))
+        {
+            AnsiConsole.MarkupLine($"[red]Error: Configuration file not found at {configPath}[/]");
+            AnsiConsole.MarkupLine($"[yellow]Default location: {ConfigurationPaths.GetConfigFilePath()}[/]");
+            AnsiConsole.MarkupLine("[dim]Run 'add-m365-account' to create the configuration and add an account.[/]");
+            return 1;
+        }
+
+        AnsiConsole.MarkupLine($"[dim]Using configuration: {configPath}[/]");
+        AnsiConsole.WriteLine();
+
+        try
+        {
+            // Load configuration
+            var jsonString = await File.ReadAllTextAsync(configPath);
+            var jsonDoc = JsonDocument.Parse(jsonString);
+
+            // Look for Adjutant.Accounts (PascalCase) in the config
+            if (!jsonDoc.RootElement.TryGetProperty("Adjutant", out var adjutantElement) ||
+                !adjutantElement.TryGetProperty("Accounts", out var accountsElement))
+            {
+                AnsiConsole.MarkupLine("[yellow]No accounts configured.[/]");
+                return 0;
+            }
+
+            var accounts = accountsElement.Deserialize<List<Dictionary<string, JsonElement>>>();
+
+            if (accounts == null || accounts.Count == 0)
+            {
+                AnsiConsole.MarkupLine("[yellow]No accounts configured.[/]");
+                return 0;
+            }
+
+            // Create table
+            var table = new Table();
+            table.Border(TableBorder.Rounded);
+            table.AddColumn("[bold]ID[/]");
+            table.AddColumn("[bold]Display Name[/]");
+            table.AddColumn("[bold]Provider[/]");
+            table.AddColumn("[bold]Enabled[/]");
+            table.AddColumn("[bold]Status[/]");
+            table.AddColumn("[bold]Permissions[/]");
+            table.AddColumn("[bold]Domains[/]");
+
+            await AnsiConsole.Status()
+                .StartAsync("Checking credentials...", async ctx =>
+                {
+                    foreach (var account in accounts)
+                    {
+                        // Support both PascalCase and camelCase property names for backwards compatibility
+                        var id = GetStringValue(account, "Id", "id");
+                        var displayName = GetStringValue(account, "DisplayName", "displayName");
+                        var provider = GetStringValue(account, "Provider", "provider");
+                        var enabled = GetBoolValue(account, "Enabled", "enabled");
+
+                        var domains = "";
+                        if (TryGetElement(account, out var domainsElem, "Domains", "domains") &&
+                            domainsElem.ValueKind == JsonValueKind.Array)
+                        {
+                            var domainList = domainsElem.Deserialize<List<string>>() ?? new List<string>();
+                            domains = string.Join(", ", domainList);
+                        }
+
+                        var enabledStr = enabled ? "[green]Yes[/]" : "[red]No[/]";
+
+                        // Check credential status
+                        var statusStr = await GetCredentialStatusAsync(account, id, provider);
+
+                        table.AddRow(
+                            id,
+                            displayName,
+                            provider,
+                            enabledStr,
+                            statusStr,
+                            DescribePermissions(account, id, provider),
+                            domains
+                        );
+                    }
+                });
+
+            AnsiConsole.Write(table);
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine($"[dim]Total accounts: {accounts.Count}[/]");
+            AnsiConsole.MarkupLine("[dim]Run 'reauth <account-id>' to reauthenticate an account.[/]");
+
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
+            return 1;
+        }
+    }
+
+    /// <summary>
+    /// Renders the account's effective permissions — its grants intersected with what the
+    /// provider supports — so a revoked capability is visible without opening the config file.
+    /// </summary>
+    private static string DescribePermissions(Dictionary<string, JsonElement> account, string accountId, string provider)
+    {
+        var providerConfig = new Dictionary<string, string>();
+        if (TryGetElement(account, out var providerConfigElem, "ProviderConfig", "providerConfig"))
+        {
+            providerConfig = providerConfigElem.Deserialize<Dictionary<string, string>>()
+                ?? new Dictionary<string, string>();
+        }
+
+        var accountInfo = new AccountInfo
+        {
+            Id = accountId,
+            DisplayName = "",
+            Provider = provider,
+            ProviderConfig = providerConfig,
+            Permissions = ReadPermissions(account)
+        };
+
+        var granted = AccountPermissions.AllPermissions
+            .Where(p => AccountCapabilities.IsAllowed(accountInfo, p))
+            .Select(AccountPermissions.ToPropertyName)
+            .ToList();
+
+        return granted.Count > 0 ? string.Join(", ", granted) : "[red]none[/]";
+    }
+
+    /// <summary>
+    /// Reads the optional Permissions block. Flags the file omits default to granted, so
+    /// configs written before permissions existed still show every capability.
+    /// </summary>
+    private static AccountPermissions ReadPermissions(Dictionary<string, JsonElement> account)
+    {
+        if (!TryGetElement(account, out var elem, "Permissions", "permissions")
+            || elem.ValueKind != JsonValueKind.Object)
+        {
+            return AccountPermissions.All;
+        }
+
+        var permissions = AccountPermissions.All;
+        foreach (var permission in AccountPermissions.AllPermissions)
+        {
+            var camel = AccountPermissions.ToPropertyName(permission);
+            var pascal = char.ToUpperInvariant(camel[0]) + camel[1..];
+
+            if (!elem.TryGetProperty(pascal, out var value) && !elem.TryGetProperty(camel, out value))
+                continue;
+
+            if (value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                permissions = permissions.With(permission, value.GetBoolean());
+        }
+        return permissions;
+    }
+
+    /// <summary>
+    /// Check if the account has a valid cached credential
+    /// </summary>
+    private async Task<string> GetCredentialStatusAsync(Dictionary<string, JsonElement> account, string accountId, string provider)
+    {
+        try
+        {
+            // Get provider config
+            if (!TryGetElement(account, out var providerConfigElem, "ProviderConfig", "providerConfig"))
+            {
+                return "[yellow]No config[/]";
+            }
+
+            var providerConfig = providerConfigElem.Deserialize<Dictionary<string, string>>()
+                ?? new Dictionary<string, string>();
+
+            // Build a temporary AccountInfo to use the shared auth-requirement logic
+            var accountInfo = new AccountInfo
+            {
+                Id = accountId,
+                DisplayName = "",
+                Provider = provider,
+                ProviderConfig = providerConfig
+            };
+
+            if (!AccountValidation.RequiresAuthentication(accountInfo))
+            {
+                var delegateId = AccountValidation.GetAuthDelegateAccountId(accountInfo);
+                if (delegateId is not null)
+                    return $"[dim]Auth via {delegateId}[/]";
+                return "[dim]No auth required[/]";
+            }
+
+            if (provider == "google")
+            {
+                return await CheckGoogleCredentialAsync(accountId, providerConfig);
+            }
+            else if (provider == "microsoft365" || provider == "outlook.com")
+            {
+                return await CheckMicrosoftCredentialAsync(accountId, providerConfig);
+            }
+            else if (IsPasswordProvider(provider))
+            {
+                return HasPasswordConfigured(providerConfig)
+                    ? "[green]Configured[/]"
+                    : "[red]Missing password[/]";
+            }
+            else
+            {
+                return "[yellow]Unknown[/]";
+            }
+        }
+        catch
+        {
+            return "[yellow]Error[/]";
+        }
+    }
+
+    private async Task<string> CheckMicrosoftCredentialAsync(string accountId, Dictionary<string, string> providerConfig)
+    {
+        // Try both PascalCase and camelCase for config keys
+        if (!providerConfig.TryGetValue("TenantId", out var tenantId))
+            providerConfig.TryGetValue("tenantId", out tenantId);
+        if (!providerConfig.TryGetValue("ClientId", out var clientId))
+            providerConfig.TryGetValue("clientId", out clientId);
+
+        if (string.IsNullOrEmpty(tenantId) || string.IsNullOrEmpty(clientId))
+        {
+            return "[yellow]Missing config[/]";
+        }
+
+        var scopes = new[] { "Mail.Read", "Calendars.ReadWrite" };
+
+        var token = await _m365AuthService.GetTokenSilentlyAsync(
+            tenantId,
+            clientId,
+            scopes,
+            accountId);
+
+        return token != null ? "[green]Logged in[/]" : "[red]Not logged in[/]";
+    }
+
+    private async Task<string> CheckGoogleCredentialAsync(string accountId, Dictionary<string, string> providerConfig)
+    {
+        // Try both PascalCase and camelCase for config keys
+        if (!providerConfig.TryGetValue("ClientId", out var clientId))
+            providerConfig.TryGetValue("clientId", out clientId);
+        if (!providerConfig.TryGetValue("ClientSecret", out var clientSecret))
+            providerConfig.TryGetValue("clientSecret", out clientSecret);
+
+        if (string.IsNullOrEmpty(clientId) || string.IsNullOrEmpty(clientSecret))
+        {
+            return "[yellow]Missing config[/]";
+        }
+
+        var scopes = Adjutant.Core.Constants.GoogleScopes.ReadOnly;
+
+        var hasCredential = await _googleAuthService.HasValidCredentialAsync(
+            clientId,
+            clientSecret,
+            scopes,
+            accountId);
+
+        return hasCredential ? "[green]Logged in[/]" : "[red]Not logged in[/]";
+    }
+
+    private static bool IsPasswordProvider(string provider) =>
+        provider.Equals("dav", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("caldav", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("carddav", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("imap", StringComparison.OrdinalIgnoreCase)
+        || provider.Equals("imap-smtp", StringComparison.OrdinalIgnoreCase)
+        || ExchangeEwsProviderService.IsExchangeAccountType(provider);
+
+    private static bool HasPasswordConfigured(Dictionary<string, string> providerConfig) =>
+        providerConfig.Any(kv =>
+            kv.Key.Equals("password", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value));
+
+    /// <summary>
+    /// Try to get a JsonElement by checking multiple property names (for case-insensitive lookup)
+    /// </summary>
+    private static bool TryGetElement(Dictionary<string, JsonElement> dict, out JsonElement element, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (dict.TryGetValue(name, out element))
+                return true;
+        }
+        element = default;
+        return false;
+    }
+
+    /// <summary>
+    /// Get a string value, checking multiple property names
+    /// </summary>
+    private static string GetStringValue(Dictionary<string, JsonElement> dict, params string[] names)
+    {
+        if (TryGetElement(dict, out var elem, names) && elem.ValueKind == JsonValueKind.String)
+            return elem.GetString() ?? "";
+        return "";
+    }
+
+    /// <summary>
+    /// Get a bool value, checking multiple property names
+    /// </summary>
+    private static bool GetBoolValue(Dictionary<string, JsonElement> dict, params string[] names)
+    {
+        if (TryGetElement(dict, out var elem, names))
+        {
+            if (elem.ValueKind == JsonValueKind.True) return true;
+            if (elem.ValueKind == JsonValueKind.False) return false;
+        }
+        return false;
+    }
+}
