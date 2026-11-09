@@ -68,6 +68,7 @@ only returns an error.
 - Attachments are metadata only: no download of inbound bytes and no outbound attachments.
 - No contacts.
 - Only the mailbox's default calendar; any other `calendarId` is refused.
+- The `archive` folder alias is refused; use another named folder or an EWS folder ID.
 - Search date filters are sent day-first (`dd/MM/yyyy`). On servers with a month-first locale,
   date-range searches may match the wrong days.
 - Zoom meetings are not created; put an existing Zoom URL in the event's location or body.

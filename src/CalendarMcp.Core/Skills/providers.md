@@ -14,8 +14,12 @@ given account.
   Only the mailbox's default calendar is exposed: omit `calendarId` (or pass
   `primary`); any other calendarId is refused.
 - **Email**: list/search/details, send, delete, mark read/unread, move.
+  Meeting invitations, responses and cancellations are listed as mail.
   Attachment metadata is available, but attachment bytes and outbound
   attachments are not implemented.
+- **Folders**: `inbox`, `sentitems`, `drafts`, `deleteditems`
+  (`trash`), `junkemail` (`spam`), or an EWS folder ID. `archive` is
+  not supported and is refused.
 - **Search**: uses EWS AQS `QueryString`; EWS rejects combining it with a
   `Restriction`. Date filters are sent day-first (`dd/MM/yyyy`), which
   matches day-first server locales; on a month-first server, prefer a

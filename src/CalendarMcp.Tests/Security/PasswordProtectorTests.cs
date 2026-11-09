@@ -50,7 +50,9 @@ public class PasswordProtectorTests
     [TestMethod]
     [DataRow("")]
     [DataRow(null)]
-    public void Protect_PassesEmptyOrNullThroughUnchanged(string? input)
+    [DataRow("   ")]
+    [DataRow("\t")]
+    public void Protect_PassesEmptyNullOrWhitespaceThroughUnchanged(string? input)
     {
         var protector = CreateProtector();
 

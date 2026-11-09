@@ -54,7 +54,10 @@ template. The provider-specific part is `ProviderConfig`:
 
 - Calendar listing, event listing and details, create/update/delete, and invite responses.
 - Group free/busy through EWS `GetUserAvailability`, exposed as the `find_available_times` tool.
-- Email listing, search and details, send, delete, mark read/unread, and move.
+- Email listing, search and details, send, delete, mark read/unread, and move. Meeting
+  invitations, responses and cancellations are listed along with ordinary messages.
+- Folders: `inbox`, `sentitems`, `drafts`, `deleteditems` (alias `trash`), `junkemail` (alias
+  `spam`), or an EWS folder ID. The `archive` alias is not supported yet and is refused.
 - Received attachments return metadata only. Downloading inbound attachment bytes and attaching
   files to outbound messages are not implemented.
 - Contacts are not implemented for this provider.

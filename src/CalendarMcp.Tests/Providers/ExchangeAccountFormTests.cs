@@ -34,17 +34,34 @@ public class ExchangeAccountFormTests
     }
 
     [TestMethod]
-    public void AddForm_WithoutAPassword_FailsValidation()
+    [DataRow("")]
+    [DataRow("   ")]
+    public void AddForm_WithoutAPassword_FailsValidation(string password)
     {
         var form = new CreateAccountFormModel
         {
             Id = "work-exchange", DisplayName = "Work", Provider = "exchange",
-            EwsUrl = "https://mail.example.com/EWS/Exchange.asmx", Username = "me@example.com"
+            EwsUrl = "https://mail.example.com/EWS/Exchange.asmx", Username = "me@example.com", Password = password
         };
 
         var account = form.ToAccountInfo(Protector);
 
         Assert.IsFalse(AccountValidation.ValidateProviderConfig(account.Provider, account.ProviderConfig).Item1);
+    }
+
+    [TestMethod]
+    public void EditForm_ClearingThePasswordToWhitespace_FailsValidation()
+    {
+        var form = EditAccountFormModel.FromAccountInfo(TestData.CreateAccount(id: "ex", provider: "exchange",
+            providerConfig: new()
+            {
+                ["ewsUrl"] = "https://mail.example.com/EWS/Exchange.asmx", ["username"] = "me", ["password"] = "plain"
+            }), Protector);
+        form.Password = "  ";
+
+        var saved = form.ToAccountInfo(Protector);
+
+        Assert.IsFalse(AccountValidation.ValidateProviderConfig(saved.Provider, saved.ProviderConfig).Item1);
     }
 
     [TestMethod]

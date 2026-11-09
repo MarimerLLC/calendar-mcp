@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using CalendarMcp.Core.Configuration;
 using CalendarMcp.Core.Models;
 using CalendarMcp.Core.Providers;
 using CalendarMcp.Core.Security;
@@ -9,6 +10,7 @@ using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Tools;
 using CalendarMcp.Tests.Helpers;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol;
 
@@ -314,6 +316,112 @@ public class ExchangeEwsProviderServiceTests
         Assert.AreEqual(0, handler.Calls);
     }
 
+    [TestMethod]
+    public async Task Probe_SendsNonAsciiCredentialsAsUtf8()
+    {
+        using var ews = new Ews();
+        var captured = new List<HttpRequestMessage>();
+        using var client = new HttpClient(new Recording(ews, captured));
+
+        await ExchangeEwsProviderService.ProbeAsync(client, "https://mail.example.com/EWS/Exchange.asmx", "jürgen", "pässwörd€");
+
+        var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(captured[0].Headers.Authorization!.Parameter!));
+        Assert.AreEqual("jürgen:pässwörd€", decoded);
+    }
+
+    [TestMethod]
+    public async Task ListAndSearchEmails_IncludeMeetingMessagesAndSkipRecipientFields()
+    {
+        using var ews = new Ews();
+        ews.Responses["FindItem"] = """
+            <m:FindItemResponse><m:ResponseMessages><m:FindItemResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode>
+            <m:RootFolder IncludesLastItemInRange="true"><t:Items>
+              <t:Message><t:ItemId Id="M1"/><t:Subject>Hello</t:Subject></t:Message>
+              <t:MeetingRequest><t:ItemId Id="M2"/><t:Subject>Invite</t:Subject></t:MeetingRequest>
+              <t:MeetingResponse><t:ItemId Id="M3"/><t:Subject>Accepted</t:Subject></t:MeetingResponse>
+              <t:MeetingCancellation><t:ItemId Id="M4"/><t:Subject>Canceled</t:Subject></t:MeetingCancellation>
+              <t:CalendarItem><t:ItemId Id="C1"/><t:Subject>Not mail</t:Subject></t:CalendarItem>
+            </t:Items></m:RootFolder></m:FindItemResponseMessage></m:ResponseMessages></m:FindItemResponse>
+            """;
+        var provider = ews.Provider();
+
+        var listed = (await provider.GetEmailsAsync("ex")).Select(e => e.Subject).ToArray();
+        var found = (await provider.SearchEmailsAsync("ex", "subject:x")).Select(e => e.Subject).ToArray();
+
+        var expected = new[] { "Hello", "Invite", "Accepted", "Canceled" };
+        CollectionAssert.AreEqual(expected, listed);
+        CollectionAssert.AreEqual(expected, found);
+        foreach (var request in ews.Requests)
+        {
+            var fields = request.Descendants(T + "FieldURI").Select(f => (string?)f.Attribute("FieldURI")).ToList();
+            CollectionAssert.DoesNotContain(fields, "message:ToRecipients");
+            CollectionAssert.DoesNotContain(fields, "message:CcRecipients");
+        }
+    }
+
+    [TestMethod]
+    public async Task EmailDetails_ReadsAMeetingRequestWithItsRecipients()
+    {
+        using var ews = new Ews();
+        ews.Responses["GetItem"] = """
+            <m:GetItemResponse><m:ResponseMessages><m:GetItemResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode>
+            <m:Items><t:MeetingRequest><t:ItemId Id="M2"/><t:Subject>Invite</t:Subject>
+              <t:ToRecipients><t:Mailbox><t:EmailAddress>me@example.com</t:EmailAddress></t:Mailbox></t:ToRecipients>
+            </t:MeetingRequest></m:Items></m:GetItemResponseMessage></m:ResponseMessages></m:GetItemResponse>
+            """;
+
+        var email = await ews.Provider().GetEmailDetailsAsync("ex", $"ews:{B64("inbox")}:{B64("M2")}");
+
+        Assert.IsNotNull(email);
+        Assert.AreEqual("Invite", email.Subject);
+        CollectionAssert.Contains(email.To, "me@example.com");
+        var fields = ews.Requests[0].Descendants(T + "FieldURI").Select(f => (string?)f.Attribute("FieldURI")).ToList();
+        CollectionAssert.Contains(fields, "message:ToRecipients");
+    }
+
+    [TestMethod]
+    [DataRow("Inbox", "DistinguishedFolderId", "inbox")]
+    [DataRow("DeletedItems", "DistinguishedFolderId", "deleteditems")]
+    [DataRow("JunkEmail", "DistinguishedFolderId", "junkemail")]
+    [DataRow("Trash", "DistinguishedFolderId", "deleteditems")]
+    [DataRow("AAMkADc3MWUy=", "FolderId", "AAMkADc3MWUy=")]
+    public async Task Folders_UseLowercaseDistinguishedIdsAndKeepOpaqueIds(string folder, string element, string id)
+    {
+        using var ews = new Ews();
+
+        await ews.Provider().GetEmailsAsync("ex", folder: folder);
+
+        var parent = ews.Requests[0].Descendants(M + "ParentFolderIds").Single().Elements().Single();
+        Assert.AreEqual(element, parent.Name.LocalName);
+        Assert.AreEqual(id, (string?)parent.Attribute("Id"));
+    }
+
+    [TestMethod]
+    public async Task Folders_RefuseArchiveWithoutSendingARequest()
+    {
+        using var ews = new Ews();
+
+        var ex = await Assert.ThrowsExactlyAsync<ProviderOperationException>(() =>
+            ews.Provider().GetEmailsAsync("ex", folder: "archive"));
+
+        StringAssert.Contains(ex.Message, "archive");
+        Assert.AreEqual(0, ews.Requests.Count);
+    }
+
+    [TestMethod]
+    public void EwsHttpHandler_DoesNotShareCookiesAcrossAccounts()
+    {
+        using var services = new ServiceCollection().AddLogging().AddCalendarMcpCore().BuildServiceProvider();
+        HttpMessageHandler? handler = services.GetRequiredService<IHttpMessageHandlerFactory>()
+            .CreateHandler(ExchangeEwsProviderService.ClientName);
+        while (handler is DelegatingHandler delegating)
+            handler = delegating.InnerHandler;
+
+        var primary = handler as HttpClientHandler;
+        Assert.IsNotNull(primary);
+        Assert.IsFalse(primary.UseCookies);
+    }
+
     /// <summary>Passes requests to the fake EWS endpoint and keeps them for header checks.</summary>
     private sealed class Recording(HttpMessageHandler inner, List<HttpRequestMessage> captured) : DelegatingHandler(inner)
     {
@@ -354,6 +462,8 @@ public class ExchangeEwsProviderServiceTests
         public readonly List<AccountInfo> Accounts = [Exchange("ex")];
         public readonly Dictionary<string, string> Items = new();
         public readonly List<XDocument> Requests = [];
+        /// <summary>Response bodies by operation name, replacing the canned ones below.</summary>
+        public readonly Dictionary<string, string> Responses = new();
         public IEnumerable<string> Operations => Requests.Select(r => r.Descendants().First(e => e.Parent?.Name.LocalName == "Body").Name.LocalName);
 
         public ExchangeEwsProviderService Provider() => new(NullLogger<ExchangeEwsProviderService>.Instance, this, this,
@@ -370,7 +480,7 @@ public class ExchangeEwsProviderServiceTests
             var doc = XDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
             Requests.Add(doc);
             var operation = doc.Descendants().First(e => e.Parent?.Name.LocalName == "Body");
-            var body = operation.Name.LocalName switch
+            var body = Responses.TryGetValue(operation.Name.LocalName, out var custom) ? custom : operation.Name.LocalName switch
             {
                 "FindItem" => $"""
                     <m:FindItemResponse><m:ResponseMessages><m:FindItemResponseMessage ResponseClass="Success"><m:ResponseCode>NoError</m:ResponseCode>

@@ -113,7 +113,9 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
             Content = new StringContent(envelope.ToString(SaveOptions.DisableFormatting), Encoding.UTF8, "text/xml")
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic",
-            Convert.ToBase64String(Encoding.ASCII.GetBytes($"{cfg.Username}:{cfg.Password}")));
+            // UTF-8, as RFC 7617 specifies for Basic credentials; ASCII would turn every
+            // non-ASCII character into '?'.
+            Convert.ToBase64String(Encoding.UTF8.GetBytes($"{cfg.Username}:{cfg.Password}")));
 
         HttpResponseMessage response;
         try
@@ -168,7 +170,7 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
         if (query is not null) operation.Add(query);
 
         var doc = await SendAsync(accountId, operation, cancellationToken);
-        return doc.Descendants().Where(e => e.Name.LocalName == "Message")
+        return MailItems(doc)
             .Select(e => MapEmailSummary(e, accountId, folder ?? "inbox"))
             .Where(e => e is not null).Cast<EmailMessage>().ToList();
     }
@@ -194,7 +196,7 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
         if (terms.Count > 0) operation.Add(new XElement(M + "QueryString", string.Join(" ", terms)));
 
         var doc = await SendAsync(accountId, operation, cancellationToken);
-        return doc.Descendants().Where(e => e.Name.LocalName == "Message")
+        return MailItems(doc)
             .Select(e => MapEmailSummary(e, accountId, folder ?? "inbox"))
             .Where(e => e is not null).Cast<EmailMessage>().ToList();
     }
@@ -213,7 +215,7 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
             new XElement(M + "ItemIds", new XElement(T + "ItemId", new XAttribute("Id", itemId))));
 
         var doc = await SendAsync(accountId, operation, cancellationToken);
-        var message = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "Message");
+        var message = MailItems(doc).FirstOrDefault();
         if (message is null) return null;
 
         var result = MapEmailSummary(message, accountId, folder, includeBody: true);
@@ -528,7 +530,19 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
     #region Helpers
 
     private static XElement EmailSummaryShape() => new(M + "ItemShape", new XElement(T + "BaseShape", "IdOnly"),
-        new XElement(T + "AdditionalProperties", Field("item:Subject"), Field("item:DateTimeReceived"), Field("message:From"), Field("message:ToRecipients"), Field("message:CcRecipients"), Field("message:IsRead"), Field("item:HasAttachments")));
+        new XElement(T + "AdditionalProperties", Field("item:Subject"), Field("item:DateTimeReceived"), Field("message:From"), Field("message:IsRead"), Field("item:HasAttachments")));
+
+    /// <summary>
+    /// EWS returns meeting invitations, responses and cancellations as their own item types, not
+    /// as <c>Message</c>, so all of them count as mail. Only direct children of an <c>Items</c>
+    /// container (<c>t:Items</c> from FindItem, <c>m:Items</c> from GetItem) are items; a
+    /// <c>Message</c> nested in an attachment is not.
+    /// </summary>
+    private static readonly HashSet<string> MailItemTypes =
+        ["Message", "MeetingMessage", "MeetingRequest", "MeetingResponse", "MeetingCancellation"];
+
+    private static IEnumerable<XElement> MailItems(XDocument doc) =>
+        doc.Descendants().Where(e => e.Name.LocalName == "Items").SelectMany(e => e.Elements()).Where(e => MailItemTypes.Contains(e.Name.LocalName));
 
     private static XElement CalendarItemShape(bool details) => new(M + "ItemShape", new XElement(T + "BaseShape", details ? "Default" : "IdOnly"),
         new XElement(T + "AdditionalProperties", Field("item:Subject"), Field("calendar:Start"), Field("calendar:End"), Field("calendar:Location"), Field("calendar:IsAllDayEvent"), Field("calendar:LegacyFreeBusyStatus"), Field("calendar:IsRecurring"), Field("calendar:Organizer"), Field("calendar:RequiredAttendees"), Field("calendar:OptionalAttendees"), Field("calendar:IsCancelled"), Field("calendar:MyResponseType"), Field("calendar:StartTimeZoneId"), Field("item:DateTimeCreated"), Field("item:LastModifiedTime"),
@@ -745,8 +759,15 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
     private static XElement FolderId(string folder)
     {
         var value = EwsFolderAlias(folder);
+        if (value.Equals("archive", StringComparison.OrdinalIgnoreCase))
+            throw new ProviderOperationException(
+                "The 'archive' folder is not supported for Exchange accounts yet. Use 'inbox', 'sentitems', " +
+                "'drafts', 'deleteditems' or 'junkemail', or pass an EWS folder ID.");
+        // Distinguished folder names are case-sensitive lowercase in EWS; opaque folder IDs are kept as-is.
         var ids = new HashSet<string>(["inbox", "sentitems", "drafts", "deleteditems", "junkemail", "calendar"], StringComparer.OrdinalIgnoreCase);
-        return ids.Contains(value) ? new XElement(T + "DistinguishedFolderId", new XAttribute("Id", value)) : new XElement(T + "FolderId", new XAttribute("Id", value));
+        return ids.Contains(value)
+            ? new XElement(T + "DistinguishedFolderId", new XAttribute("Id", value.ToLowerInvariant()))
+            : new XElement(T + "FolderId", new XAttribute("Id", value));
     }
     private static IEnumerable<XElement> SplitEmails(string? value) => (value ?? "").Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(Mailbox);
 
