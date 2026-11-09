@@ -1,5 +1,11 @@
 # On-premises Exchange (EWS) setup
 
+> **Unverified.** The provider's tests run against a fake EWS endpoint. Its current request shapes
+> have not been run against a real Exchange server, and the write tools have never been verified
+> live. Try read-only calls first, test write paths on throwaway items, and report results in
+> [#110](https://github.com/MarimerLLC/calendar-mcp/issues/110). See the
+> [changelog](../changelogs/2026-11-08-exchange-ews.md) for what has and hasn't been checked.
+
 The `exchange` provider gives Adjutant calendar and email access to on-premises Exchange
 (verified against Exchange 2019) through Exchange Web Services (EWS) over HTTPS with HTTP Basic
 authentication. Use it when the server exposes an EWS endpoint such as

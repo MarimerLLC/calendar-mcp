@@ -194,6 +194,9 @@ Use the `exchange` provider when the mailbox lives on an Exchange server that ex
 endpoint and allows Basic authentication over HTTPS. See the detailed
 [On-premises Exchange Setup Guide](EWS-ONPREM-SETUP.md) for the full walkthrough.
 
+> **Unverified:** this provider has not yet been verified against a real Exchange server. Start
+> with read-only calls and see the setup guide for details.
+
 **Quick Start:**
 
 ```bash
