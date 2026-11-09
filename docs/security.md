@@ -2,7 +2,7 @@
 
 ## Overview
 
-Calendar-MCP handles sensitive data including emails, calendar events, and authentication tokens. Security is built into the design from the ground up.
+Adjutant handles sensitive data including emails, calendar events, and authentication tokens. Security is built into the design from the ground up.
 
 ## Transport Security (HTTP server)
 
@@ -12,7 +12,7 @@ The HTTP server exposes three surfaces with independent protection:
 |---|---|
 | `/` (MCP protocol), `/attachments/*` | MCP API key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` — or an MCP OAuth access token issued by this server |
 | `/connect/*`, `/.well-known/oauth-*` | MCP OAuth authorization server; only offered while an admin sign-in provider is configured |
-| `/admin/*` (REST API) | Admin token — `CALENDAR_MCP_ADMIN_TOKEN` |
+| `/admin/*` (REST API) | Admin token — `ADJUTANT_ADMIN_TOKEN` |
 | `/admin/ui/*` (Blazor console) | Session cookie, issued after OIDC sign-in or admin-token login |
 | `/health`, `/health/ready` | Anonymous (Kubernetes probes) |
 
@@ -29,8 +29,8 @@ The HTTP server exposes three surfaces with independent protection:
 - **Optional expiry.** A new key can be given a lifetime (30, 90, 180 or 365 days; the console
   defaults to 90) or none. From its `expiresUtc` on, an expired key is refused like a revoked
   one, and a warning naming it is logged at most every five minutes. Keys created before
-  expiry existed, the first-start key and the `CALENDAR_MCP_MCP_KEY` environment key never expire.
-- **Enforced by default.** `CalendarMcp:Mcp:RequireApiKey` defaults to `true`. If no key exists
+  expiry existed, the first-start key and the `ADJUTANT_MCP_KEY` environment key never expire.
+- **Enforced by default.** `Adjutant:Mcp:RequireApiKey` defaults to `true`. If no key exists
   at startup, one is generated and logged rather than leaving the endpoint open.
 - **Refuses plaintext transport.** With enforcement on, a non-loopback `http://`
   `ExternalBaseUrl` stops the server from starting, since the key would cross the wire in clear
@@ -110,8 +110,8 @@ The allow-list is the whole authorization model — there are no console roles.
 
 ### Session Handling
 
-- **Cookie hardening tracks the transport.** When `CalendarMcp:ExternalBaseUrl` declares an
-  HTTPS origin, the session cookie is named `__Host-CalendarMcp.AdminAuth` and marked `Secure`.
+- **Cookie hardening tracks the transport.** When `Adjutant:ExternalBaseUrl` declares an
+  HTTPS origin, the session cookie is named `__Host-Adjutant.AdminAuth` and marked `Secure`.
   The `__Host-` prefix is browser-enforced: the cookie must have been set by that exact origin,
   over HTTPS, with no `Domain` attribute — so a sibling host on a shared suffix such as
   `ts.net` cannot overwrite it. Over plain HTTP the cookie keeps its original name and follows
@@ -178,7 +178,7 @@ See [Configuration](configuration.md#admin-console-sign-in-http-server) for setu
 - **Windows**: DPAPI (Data Protection API) encryption
 - **macOS**: Keychain Services encryption
 - **Linux**: LibSecret / GNOME Keyring encryption
-- **File Location**: `%LOCALAPPDATA%/CalendarMcp/msal_cache_{accountId}.bin`
+- **File Location**: `%LOCALAPPDATA%/Adjutant/msal_cache_{accountId}.bin`
 - **Permissions**: Restricted to current user only (0600)
 
 **Implementation via MsalCacheHelper**:
@@ -201,7 +201,7 @@ cacheHelper.RegisterCache(app.UserTokenCache);
 #### Google Accounts
 
 **FileDataStore with File Permissions**:
-- **Storage**: JSON files in `~/.credentials/calendar-mcp/{accountId}/`
+- **Storage**: JSON files in `~/.credentials/adjutant/{accountId}/`
 - **Current State**: ⚠️ Plaintext JSON (access/refresh tokens)
 - **Permissions**: Restricted to current user (0600)
 - **Isolation**: Separate directory per account
@@ -301,8 +301,8 @@ Full flag reference: [Account Permissions](configuration.md#account-permissions)
 **Use environment variables instead**:
 ```bash
 # Secure approaches:
-export CALENDAR_MCP_Router__ApiKey="sk-..."
-export CALENDAR_MCP_Accounts__0__Configuration__ClientSecret="GOCSPX-..."
+export ADJUTANT_Router__ApiKey="sk-..."
+export ADJUTANT_Accounts__0__Configuration__ClientSecret="GOCSPX-..."
 
 # Or use a secrets management service:
 # - Azure Key Vault
@@ -315,9 +315,9 @@ export CALENDAR_MCP_Accounts__0__Configuration__ClientSecret="GOCSPX-..."
 The IMAP/SMTP, CalDAV/CardDAV (`dav`) and on-premises Exchange (`exchange`) providers store their `password` field encrypted via ASP.NET DataProtection. Values written by the admin UI or any future CLI command land in `appsettings.json` as a string starting with the `ENC:` prefix followed by the protected blob.
 
 **Key persistence**:
-- Keys are persisted to `<data-dir>/keys/` (e.g. `/app/data/keys/` in k8s, `%LOCALAPPDATA%\CalendarMcp\keys\` locally).
+- Keys are persisted to `<data-dir>/keys/` (e.g. `/app/data/keys/` in k8s, `%LOCALAPPDATA%\Adjutant\keys\` locally).
 - The same data directory holds `appsettings.json`, so backup/restore of the data volume covers both — but lose the keystore and you lose the ability to decrypt previously-stored passwords.
-- All hosts (`HttpServer`, `StdioServer`, anything else calling `AddCalendarMcpCore`) share the same keystore and can encrypt or decrypt values written by another host.
+- All hosts (`HttpServer`, `StdioServer`, anything else calling `AddAdjutantCore`) share the same keystore and can encrypt or decrypt values written by another host.
 
 **Threat model**:
 - ✅ Protects against config-volume-only leaks (someone reads `appsettings.json` but not the keystore).
@@ -343,7 +343,7 @@ chmod 644 appsettings.json  # Read by owner, readable by others (no secrets)
 
 # Token caches
 chmod 600 msal_cache_*.bin  # Read/write by owner only
-chmod 700 ~/.credentials/calendar-mcp/  # Directory access by owner only
+chmod 700 ~/.credentials/adjutant/  # Directory access by owner only
 ```
 
 ## API Key Protection
@@ -369,7 +369,7 @@ activity?.SetTag("router.backend", "openai");
 
 **Store in environment variables**:
 ```bash
-export CALENDAR_MCP_Google_ClientSecret="GOCSPX-..."
+export ADJUTANT_Google_ClientSecret="GOCSPX-..."
 ```
 
 **Reference in configuration**:
@@ -378,7 +378,7 @@ export CALENDAR_MCP_Google_ClientSecret="GOCSPX-..."
   "accounts": [{
     "provider": "google",
     "configuration": {
-      "clientSecret": "${CALENDAR_MCP_Google_ClientSecret}"
+      "clientSecret": "${ADJUTANT_Google_ClientSecret}"
     }
   }]
 }
@@ -595,15 +595,15 @@ var emails = await _m365Provider.GetEmailsAsync("work-account", ...);
 2. **Delete local token cache**:
    ```bash
    # Microsoft
-   rm "%LOCALAPPDATA%/CalendarMcp/msal_cache_<account-id>.bin"
+   rm "%LOCALAPPDATA%/Adjutant/msal_cache_<account-id>.bin"
    
    # Google
-   rm -rf ~/.credentials/calendar-mcp/<account-id>/
+   rm -rf ~/.credentials/adjutant/<account-id>/
    ```
 
 3. **Re-authenticate**:
    ```bash
-   calendar-mcp-setup refresh-account <account-id>
+   adjutant-setup refresh-account <account-id>
    ```
 
 ### Audit Logging
@@ -633,7 +633,7 @@ var emails = await _m365Provider.GetEmailsAsync("work-account", ...);
 
 **User Rights**:
 - **Right to access**: Users can export their data via provider tools
-- **Right to erasure**: Remove account with `calendar-mcp-setup remove-account`
+- **Right to erasure**: Remove account with `adjutant-setup remove-account`
 - **Data minimization**: Only request necessary scopes
 
 **Data Processing**:
@@ -655,7 +655,7 @@ var emails = await _m365Provider.GetEmailsAsync("work-account", ...);
 
 ## Security Checklist
 
-Before deploying Calendar-MCP:
+Before deploying Adjutant:
 
 - [ ] All API keys stored in environment variables
 - [ ] Token cache files have correct permissions (0600)

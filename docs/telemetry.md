@@ -2,7 +2,7 @@
 
 ## Overview
 
-Calendar-MCP uses OpenTelemetry for comprehensive observability across all components: structured logging, distributed tracing, and metrics collection.
+Adjutant uses OpenTelemetry for comprehensive observability across all components: structured logging, distributed tracing, and metrics collection.
 
 ## Key Features
 
@@ -22,7 +22,7 @@ See [Configuration](configuration.md#opentelemetry-configuration) for complete e
 {
   "telemetry": {
     "enabled": true,
-    "serviceName": "calendar-mcp",
+    "serviceName": "adjutant",
     "console": {
       "enabled": true,
       "logLevel": "Debug"
@@ -37,7 +37,7 @@ See [Configuration](configuration.md#opentelemetry-configuration) for complete e
 {
   "telemetry": {
     "enabled": true,
-    "serviceName": "calendar-mcp",
+    "serviceName": "adjutant",
     "serviceVersion": "1.0.0",
     "otlp": {
       "enabled": true,
@@ -65,7 +65,7 @@ See [Configuration](configuration.md#opentelemetry-configuration) for complete e
 public static class Telemetry
 {
     public static readonly ActivitySource ActivitySource = 
-        new ActivitySource("CalendarMcp", "1.0.0");
+        new ActivitySource("Adjutant", "1.0.0");
 }
 ```
 
@@ -442,14 +442,14 @@ sampler.SampleNormal(rate: 0.1);  // 10% for normal requests
 
 **Find slow router decisions**:
 ```
-service="calendar-mcp" 
+service="adjutant" 
 operation="SmartRouter.Route" 
 duration>500ms
 ```
 
 **Find authentication failures**:
 ```
-service="calendar-mcp"
+service="adjutant"
 tag["error.type"]="auth_failure"
 ```
 

@@ -1,0 +1,174 @@
+﻿using Adjutant.Cli.Commands;
+using Adjutant.Core.Configuration;
+using Adjutant.Core.Providers;
+using Adjutant.Core.Security;
+using Adjutant.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Spectre.Console;
+using Spectre.Console.Cli;
+
+// Set up dependency injection
+var services = new ServiceCollection();
+
+// Add logging
+services.AddLogging(builder =>
+{
+    builder.AddConsole();
+    builder.SetMinimumLevel(LogLevel.Information);
+});
+
+// Add authentication services
+services.AddSingleton<IM365AuthenticationService, M365AuthenticationService>();
+services.AddSingleton<IGoogleAuthenticationService, GoogleAuthenticationService>();
+
+// Shared DataProtection keyring so CLI-written ENC: passwords decrypt in Http/Stdio hosts
+services.AddAdjutantDataProtection();
+
+// Create service provider
+var registrar = new TypeRegistrar(services);
+var app = new CommandApp(registrar);
+
+app.Configure(config =>
+{
+    config.SetApplicationName("adjutant-cli");
+    config.SetInterceptor(new LegacyConfigInterceptor());
+
+    config.AddCommand<AddM365AccountCommand>("add-m365-account")
+        .WithDescription("Add a new Microsoft 365 account")
+        .WithExample(new[] { "add-m365-account" })
+        .WithExample(new[] { "add-m365-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<AddOutlookComAccountCommand>("add-outlook-account")
+        .WithDescription("Add a new Outlook.com personal account (Outlook.com, Hotmail, Live)")
+        .WithExample(new[] { "add-outlook-account" })
+        .WithExample(new[] { "add-outlook-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<AddGoogleAccountCommand>("add-google-account")
+        .WithDescription("Add a new Google account (Gmail, Google Workspace, or custom domain)")
+        .WithExample(new[] { "add-google-account" })
+        .WithExample(new[] { "add-google-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<AddIcsAccountCommand>("add-ics-account")
+        .WithDescription("Add a new ICS calendar feed (read-only calendar via HTTP URL)")
+        .WithExample(new[] { "add-ics-account" })
+        .WithExample(new[] { "add-ics-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<AddJsonAccountCommand>("add-json-account")
+        .WithDescription("Add a JSON calendar file (Power Automate export, local or OneDrive)")
+        .WithExample(new[] { "add-json-account" })
+        .WithExample(new[] { "add-json-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<AddDavAccountCommand>("add-dav-account")
+        .WithDescription("Add a CalDAV/CardDAV account (iCloud, Fastmail, Nextcloud, or custom)")
+        .WithExample(new[] { "add-dav-account" })
+        .WithExample(new[] { "add-dav-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<AddExchangeAccountCommand>("add-exchange-account")
+        .WithDescription("Add an on-premises Exchange account (EWS with Basic auth; unverified)")
+        .WithExample(new[] { "add-exchange-account" })
+        .WithExample(new[] { "add-exchange-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<ListAccountsCommand>("list-accounts")
+        .WithDescription("List all configured accounts")
+        .WithExample(new[] { "list-accounts" })
+        .WithExample(new[] { "list-accounts", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<TestAccountCommand>("test-account")
+        .WithDescription("Test account authentication / connectivity")
+        .WithExample(new[] { "test-account", "work-account" })
+        .WithExample(new[] { "test-account", "work-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<ReauthenticateAccountCommand>("reauth")
+        .WithDescription("Reauthenticate an existing account")
+        .WithExample(new[] { "reauth", "work-account" })
+        .WithExample(new[] { "reauth", "work-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<LogoutAccountCommand>("logout")
+        .WithDescription("Logout an account by clearing cached credentials")
+        .WithExample(new[] { "logout", "work-account" })
+        .WithExample(new[] { "logout", "work-account", "--config", "/path/to/appsettings.json" });
+
+    config.AddCommand<RemoveAccountCommand>("remove-account")
+        .WithDescription("Remove an account from the configuration")
+        .WithExample(new[] { "remove-account", "work-account" })
+        .WithExample(new[] { "remove-account", "work-account", "--force" });
+});
+
+try
+{
+    return await app.RunAsync(args);
+}
+catch (Exception ex)
+{
+    AnsiConsole.WriteException(ex, ExceptionFormats.ShortenEverything);
+    return 1;
+}
+
+/// <summary>
+/// Before any command runs, renames a pre-rename "CalendarMcp" section in the config file it
+/// will use (its --config option, or the default path) to "Adjutant".
+/// </summary>
+sealed class LegacyConfigInterceptor : ICommandInterceptor
+{
+    public void Intercept(CommandContext context, CommandSettings settings)
+    {
+        var configPath = settings.GetType().GetProperty("ConfigPath")?.GetValue(settings) as string
+            ?? ConfigurationPaths.GetConfigFilePath();
+        if (LegacyNames.MigrateConfigFile(configPath))
+        {
+            AnsiConsole.MarkupLine($"[grey]Renamed the CalendarMcp section of {Markup.Escape(configPath)} to Adjutant.[/]");
+        }
+    }
+}
+
+/// <summary>
+/// Type registrar for Spectre.Console.Cli to integrate with Microsoft.Extensions.DependencyInjection
+/// </summary>
+sealed class TypeRegistrar : ITypeRegistrar
+{
+    private readonly IServiceCollection _services;
+
+    public TypeRegistrar(IServiceCollection services)
+    {
+        _services = services;
+    }
+
+    public ITypeResolver Build()
+    {
+        return new TypeResolver(_services.BuildServiceProvider());
+    }
+
+    public void Register(Type service, Type implementation)
+    {
+        _services.AddSingleton(service, implementation);
+    }
+
+    public void RegisterInstance(Type service, object implementation)
+    {
+        _services.AddSingleton(service, implementation);
+    }
+
+    public void RegisterLazy(Type service, Func<object> factory)
+    {
+        _services.AddSingleton(service, _ => factory());
+    }
+}
+
+/// <summary>
+/// Type resolver for Spectre.Console.Cli to integrate with Microsoft.Extensions.DependencyInjection
+/// </summary>
+sealed class TypeResolver : ITypeResolver
+{
+    private readonly IServiceProvider _provider;
+
+    public TypeResolver(IServiceProvider provider)
+    {
+        _provider = provider;
+    }
+
+    public object? Resolve(Type? type)
+    {
+        return type == null ? null : _provider.GetService(type);
+    }
+}

@@ -3,7 +3,7 @@
 > **Unverified.** The provider's tests run against a fake EWS endpoint. Its current request shapes
 > have not been run against a real Exchange server, and the write tools have never been verified
 > live. Try read-only calls first, test write paths on throwaway items, and report results in
-> [#110](https://github.com/MarimerLLC/calendar-mcp/issues/110). See the
+> [#110](https://github.com/MarimerLLC/adjutant/issues/110). See the
 > [changelog](../changelogs/2026-11-08-exchange-ews.md) for what has and hasn't been checked.
 
 The `exchange` provider gives Adjutant calendar and email access to on-premises Exchange
@@ -20,7 +20,7 @@ You need three values: the EWS URL, a username and a password.
 
 - **Admin UI** (HTTP server): **Add Account** → **Exchange (on-premises)**, then fill in the EWS
   URL, username and password. Edit the account later from its card on the dashboard.
-- **CLI**: `CalendarMcp.Cli add-exchange-account` prompts for the same values, offers to check the
+- **CLI**: `Adjutant.Cli add-exchange-account` prompts for the same values, offers to check the
   connection before saving, and writes the account to `appsettings.json`.
 
 Both store the password encrypted with ASP.NET DataProtection (`ENC:…`).
@@ -28,8 +28,8 @@ Both store the password encrypted with ASP.NET DataProtection (`ENC:…`).
 ### Configuring by hand
 
 You can also add the account to `appsettings.json` yourself. The server reads it from its data
-directory: the directory named by `CALENDAR_MCP_CONFIG`, or by default `%LOCALAPPDATA%\CalendarMcp`
-on Windows and `~/.local/share/CalendarMcp` on Linux and macOS.
+directory: the directory named by `ADJUTANT_CONFIG`, or by default `%LOCALAPPDATA%\Adjutant`
+on Windows and `~/.local/share/Adjutant` on Linux and macOS.
 
 [`config/appsettings.example.json`](../config/appsettings.example.json) is a complete account
 template. The provider-specific part is `ProviderConfig`:
@@ -80,7 +80,7 @@ The provider does not create Zoom meetings. Put an existing Zoom URL in the even
 
 ## Verify
 
-1. `CalendarMcp.Cli test-account <account-id>` sends one authenticated EWS request (a `GetFolder`
+1. `Adjutant.Cli test-account <account-id>` sends one authenticated EWS request (a `GetFolder`
    for the inbox) and reports whether the server accepted the credentials. This checks the
    endpoint and the password, not calendar or email access.
 2. Restart your MCP client, then call `list_accounts`, `list_calendars`, `get_calendar_events`

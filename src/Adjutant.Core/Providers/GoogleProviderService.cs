@@ -1,0 +1,1729 @@
+using Adjutant.Core.Models;
+using Adjutant.Core.Services;
+using Adjutant.Core.Utilities;
+using Google.Apis.Auth.OAuth2;
+using Google.Apis.Auth.OAuth2.Responses;
+using Google.Apis.Calendar.v3;
+using Google.Apis.Calendar.v3.Data;
+using Google.Apis.Gmail.v1;
+using Google.Apis.Gmail.v1.Data;
+using Google.Apis.PeopleService.v1;
+using Google.Apis.PeopleService.v1.Data;
+using Google.Apis.Services;
+using Google.Apis.Util;
+using Google.Apis.Util.Store;
+using Microsoft.Extensions.Logging;
+using MimeKit;
+using System.Text;
+using Person = Google.Apis.PeopleService.v1.Data.Person;
+using Event = Google.Apis.Calendar.v3.Data.Event;
+// Disambiguate from MimeKit.MessagePart, introduced by the MimeKit imports above.
+using MessagePart = Google.Apis.Gmail.v1.Data.MessagePart;
+
+namespace Adjutant.Core.Providers;
+
+/// <summary>
+/// Google Workspace/Gmail provider service with OAuth 2.0 authentication integration
+/// </summary>
+public class GoogleProviderService : IGoogleProviderService
+{
+    private readonly ILogger<GoogleProviderService> _logger;
+    private readonly IAccountRegistry _accountRegistry;
+
+    private static readonly string[] DefaultScopes = Constants.GoogleScopes.Default;
+
+    private const string PersonFields = "names,emailAddresses,phoneNumbers,addresses,organizations,biographies,birthdays,memberships,metadata";
+
+    public GoogleProviderService(
+        ILogger<GoogleProviderService> logger,
+        IAccountRegistry accountRegistry)
+    {
+        _logger = logger;
+        _accountRegistry = accountRegistry;
+    }
+
+    /// <summary>
+    /// Get Google credential for an account
+    /// </summary>
+    private async Task<UserCredential> GetCredentialAsync(string accountId, CancellationToken cancellationToken)
+    {
+        var account = await _accountRegistry.GetAccountAsync(accountId);
+        if (account == null)
+        {
+            _logger.LogError("Account {AccountId} not found in registry", accountId);
+            throw new ProviderOperationException($"Account '{accountId}' not found in registry");
+        }
+
+        if (!account.ProviderConfig.TryGetValue("clientId", out var clientId) ||
+            !account.ProviderConfig.TryGetValue("clientSecret", out var clientSecret))
+        {
+            _logger.LogError("Account {AccountId} missing clientId or clientSecret in configuration", accountId);
+            throw new ProviderOperationException($"Account '{accountId}' is missing clientId or clientSecret in its configuration");
+        }
+
+        try
+        {
+            var secrets = new ClientSecrets
+            {
+                ClientId = clientId,
+                ClientSecret = clientSecret
+            };
+
+            var credPath = GetCredentialPath(accountId);
+            
+            // Check if token file exists
+            var tokenFile = Path.Combine(credPath, "Google.Apis.Auth.OAuth2.Responses.TokenResponse-user");
+            if (!File.Exists(tokenFile))
+            {
+                _logger.LogWarning("No cached credential found for Google account {AccountId}. Run CLI to authenticate.", accountId);
+                throw new AccountAuthenticationRequiredException(accountId);
+            }
+
+            var credential = await GoogleWebAuthorizationBroker.AuthorizeAsync(
+                secrets,
+                DefaultScopes,
+                "user",
+                cancellationToken,
+                new FileDataStore(credPath, true)
+            );
+
+            // Refresh token if expired
+            if (credential.Token.IsStale)
+            {
+                var refreshed = await credential.RefreshTokenAsync(cancellationToken);
+                if (!refreshed)
+                {
+                    _logger.LogWarning("Failed to refresh Google token for account {AccountId}", accountId);
+                    throw new AccountAuthenticationRequiredException(accountId);
+                }
+            }
+
+            return credential;
+        }
+        catch (TokenResponseException ex)
+        {
+            // Refresh token expired or revoked (e.g. invalid_grant): only re-authenticating fixes it.
+            _logger.LogWarning(ex, "Google token refresh rejected for account {AccountId}: {Message}", accountId, ex.Message);
+            throw new AccountAuthenticationRequiredException(accountId, ex);
+        }
+        catch (Exception ex) when (ex is not AccountAuthenticationRequiredException)
+        {
+            _logger.LogError(ex, "Error getting Google credential for account {AccountId}: {Message}", accountId, ex.Message);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Get the credential storage path for a specific account
+    /// </summary>
+    private static string GetCredentialPath(string accountId)
+    {
+        return Configuration.ConfigurationPaths.GetGoogleCredentialsDirectory(accountId);
+    }
+
+    private GmailService CreateGmailService(UserCredential credential)
+    {
+        return new GmailService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = "Adjutant"
+        });
+    }
+
+    private CalendarService CreateCalendarService(UserCredential credential)
+    {
+        return new CalendarService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = "Adjutant"
+        });
+    }
+
+    private PeopleServiceService CreatePeopleService(UserCredential credential)
+    {
+        return new PeopleServiceService(new BaseClientService.Initializer
+        {
+            HttpClientInitializer = credential,
+            ApplicationName = "Adjutant"
+        });
+    }
+
+    /// <summary>
+    /// Narrows a Gmail message list to one folder (alias or label ID). Without a folder the
+    /// list keeps Gmail's default view: all mail except spam and trash.
+    /// </summary>
+    private static void ApplyFolder(UsersResource.MessagesResource.ListRequest request, string? folder)
+    {
+        if (string.IsNullOrWhiteSpace(folder))
+            return;
+
+        var filter = MailFolderAliases.ToGmailListFilter(folder);
+        if (filter.LabelId is not null)
+            request.LabelIds = new Repeatable<string>([filter.LabelId]);
+        if (filter.IncludeSpamTrash)
+            request.IncludeSpamTrash = true;
+        if (filter.Query is not null)
+            request.Q = string.IsNullOrEmpty(request.Q) ? filter.Query : $"{request.Q} {filter.Query}";
+    }
+
+    public async Task<IEnumerable<EmailMessage>> GetEmailsAsync(
+        string accountId, 
+        int count = 20, 
+        bool unreadOnly = false, 
+        string? folder = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            
+            var request = service.Users.Messages.List("me");
+            request.MaxResults = count;
+            request.Q = unreadOnly ? "is:unread" : null;
+            ApplyFolder(request, folder);
+            
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            if (response.Messages == null || response.Messages.Count == 0)
+            {
+                _logger.LogInformation("No emails found for Google account {AccountId}", accountId);
+                return Enumerable.Empty<EmailMessage>();
+            }
+
+            var result = new List<EmailMessage>();
+            foreach (var msg in response.Messages)
+            {
+                var fullMessage = await service.Users.Messages.Get("me", msg.Id).ExecuteAsync(cancellationToken);
+                result.Add(ConvertToEmailMessage(fullMessage, accountId));
+            }
+
+            _logger.LogInformation("Retrieved {Count} emails from Google account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching emails from Google account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<EmailMessage>> SearchEmailsAsync(
+        string accountId, 
+        string query, 
+        int count = 20, 
+        DateTime? fromDate = null, 
+        DateTime? toDate = null, 
+        string? folder = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            
+            // Build Gmail search query
+            var searchQuery = query;
+            if (fromDate.HasValue)
+            {
+                searchQuery += $" after:{fromDate.Value:yyyy/MM/dd}";
+            }
+            if (toDate.HasValue)
+            {
+                searchQuery += $" before:{toDate.Value:yyyy/MM/dd}";
+            }
+
+            var request = service.Users.Messages.List("me");
+            request.MaxResults = count;
+            request.Q = searchQuery;
+            ApplyFolder(request, folder);
+            
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            if (response.Messages == null || response.Messages.Count == 0)
+            {
+                _logger.LogInformation("No emails found for search query '{Query}' in Google account {AccountId}", query, accountId);
+                return Enumerable.Empty<EmailMessage>();
+            }
+
+            var result = new List<EmailMessage>();
+            foreach (var msg in response.Messages)
+            {
+                var fullMessage = await service.Users.Messages.Get("me", msg.Id).ExecuteAsync(cancellationToken);
+                result.Add(ConvertToEmailMessage(fullMessage, accountId));
+            }
+
+            _logger.LogInformation("Search returned {Count} emails from Google account {AccountId} for query '{Query}'", 
+                result.Count, accountId, query);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching emails from Google account {AccountId} with query '{Query}'", accountId, query);
+            throw;
+        }
+    }
+
+    public async Task<EmailMessage?> GetEmailDetailsAsync(
+        string accountId, 
+        string emailId, 
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            var message = await service.Users.Messages.Get("me", emailId).ExecuteAsync(cancellationToken);
+
+            if (message == null)
+            {
+                return null;
+            }
+
+            var result = ConvertToEmailMessage(message, accountId, includeBody: true);
+            // Augment with attachment metadata only on detail fetches.
+            if (result.HasAttachments && message.Payload != null)
+            {
+                var index = 0;
+                CollectGmailAttachments(message.Payload, result.Attachments, ref index);
+            }
+            _logger.LogInformation("Retrieved email details for {EmailId} from Google account {AccountId}", emailId, accountId);
+            return result;
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting email details for {EmailId} from Google account {AccountId}", emailId, accountId);
+            throw;
+        }
+    }
+
+    // Gmail surfaces an attachment whenever a part has a filename. We expose
+    // a positional id (part-0, part-1, ...) rather than Gmail's body.attachmentId
+    // because (a) small attachments (< 5 KB) come back inline in body.data with
+    // no separately-fetchable attachmentId, and (b) the positional scheme matches
+    // the IMAP provider so the agent sees a consistent shape.
+    private static void CollectGmailAttachments(MessagePart part, List<EmailAttachment> result, ref int index)
+    {
+        if (!string.IsNullOrEmpty(part.Filename) && part.Body != null)
+        {
+            result.Add(new EmailAttachment
+            {
+                Name = part.Filename,
+                Size = part.Body.Size ?? 0,
+                ContentType = part.MimeType ?? "application/octet-stream",
+                AttachmentId = $"part-{index}",
+            });
+            index++;
+        }
+        if (part.Parts != null)
+        {
+            foreach (var child in part.Parts)
+                CollectGmailAttachments(child, result, ref index);
+        }
+    }
+
+    private static MessagePart? FindGmailPartByIndex(MessagePart part, int target, ref int index)
+    {
+        if (!string.IsNullOrEmpty(part.Filename) && part.Body != null)
+        {
+            if (index == target) return part;
+            index++;
+        }
+        if (part.Parts != null)
+        {
+            foreach (var child in part.Parts)
+            {
+                var found = FindGmailPartByIndex(child, target, ref index);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    public async Task<EmailAttachmentContent?> GetEmailAttachmentContentAsync(
+        string accountId,
+        string emailId,
+        string attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!attachmentId.StartsWith("part-", StringComparison.Ordinal)
+            || !int.TryParse(attachmentId.AsSpan(5), out var targetIndex)
+            || targetIndex < 0)
+        {
+            _logger.LogWarning("Invalid Gmail attachment id {AttachmentId}; expected 'part-N'", attachmentId);
+            return null;
+        }
+
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateGmailService(credential);
+
+            var message = await service.Users.Messages.Get("me", emailId).ExecuteAsync(cancellationToken);
+            if (message?.Payload == null)
+            {
+                _logger.LogWarning("Message {EmailId} has no payload for attachment fetch", emailId);
+                return null;
+            }
+
+            var index = 0;
+            var part = FindGmailPartByIndex(message.Payload, targetIndex, ref index);
+            if (part == null)
+            {
+                _logger.LogWarning("Attachment index {Index} not found on message {EmailId} (have {Count} attachments)",
+                    targetIndex, emailId, index);
+                return null;
+            }
+
+            byte[] bytes;
+            if (!string.IsNullOrEmpty(part.Body?.Data))
+            {
+                // Small attachment — bytes come inline in the message body.
+                bytes = DecodeBase64UrlBytes(part.Body.Data);
+            }
+            else if (!string.IsNullOrEmpty(part.Body?.AttachmentId))
+            {
+                // Larger attachment — separate fetch by Gmail's attachment id.
+                var attData = await service.Users.Messages.Attachments
+                    .Get("me", emailId, part.Body.AttachmentId)
+                    .ExecuteAsync(cancellationToken);
+                if (string.IsNullOrEmpty(attData?.Data))
+                {
+                    _logger.LogWarning("Gmail attachments.get returned no data for {AttachmentId} on {EmailId}",
+                        part.Body.AttachmentId, emailId);
+                    return null;
+                }
+                bytes = DecodeBase64UrlBytes(attData.Data);
+            }
+            else
+            {
+                _logger.LogWarning("Attachment part on {EmailId} has neither inline data nor attachmentId", emailId);
+                return null;
+            }
+
+            return new EmailAttachmentContent
+            {
+                Name = string.IsNullOrEmpty(part.Filename) ? "attachment" : part.Filename,
+                ContentType = part.MimeType,
+                Bytes = bytes,
+            };
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching attachment {AttachmentId} on {EmailId} from Google account {AccountId}",
+                attachmentId, emailId, accountId);
+            throw;
+        }
+    }
+
+    private static byte[] DecodeBase64UrlBytes(string base64Url)
+    {
+        var b64 = base64Url.Replace('-', '+').Replace('_', '/');
+        switch (b64.Length % 4)
+        {
+            case 2: b64 += "=="; break;
+            case 3: b64 += "="; break;
+        }
+        return Convert.FromBase64String(b64);
+    }
+
+    public async Task<string> SendEmailAsync(
+        string accountId,
+        string to,
+        string subject,
+        string body,
+        string bodyFormat = "html",
+        List<string>? cc = null,
+        IReadOnlyList<OutboundEmailAttachment>? attachments = null,
+        string? textBody = null,
+        string? htmlBody = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateGmailService(credential);
+
+            var mime = new MimeMessage();
+            foreach (var addr in to.Split(',', ';'))
+            {
+                var trimmed = addr.Trim();
+                if (trimmed.Length > 0)
+                    mime.To.Add(MailboxAddress.Parse(trimmed));
+            }
+            if (cc is { Count: > 0 })
+            {
+                foreach (var addr in cc)
+                {
+                    var trimmed = addr.Trim();
+                    if (trimmed.Length > 0)
+                        mime.Cc.Add(MailboxAddress.Parse(trimmed));
+                }
+            }
+            mime.Subject = subject;
+
+            var builder = new BodyBuilder();
+            if (bodyFormat.Equals("multipart", StringComparison.OrdinalIgnoreCase))
+            {
+                builder.TextBody = textBody;
+                builder.HtmlBody = htmlBody;
+            }
+            else if (bodyFormat.Equals("html", StringComparison.OrdinalIgnoreCase))
+                builder.HtmlBody = body;
+            else
+                builder.TextBody = body;
+
+            if (attachments is { Count: > 0 })
+            {
+                foreach (var att in attachments)
+                {
+                    MimeAttachmentBuilder.Add(builder, att);
+                }
+            }
+
+            mime.Body = builder.ToMessageBody();
+
+            string rawMessage;
+            using (var ms = new MemoryStream())
+            {
+                await mime.WriteToAsync(ms, cancellationToken);
+                rawMessage = Convert.ToBase64String(ms.ToArray())
+                    .Replace('+', '-')
+                    .Replace('/', '_')
+                    .Replace("=", "");
+            }
+
+            var gmailMessage = new Message
+            {
+                Raw = rawMessage
+            };
+
+            var result = await service.Users.Messages.Send(gmailMessage, "me").ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Email sent successfully from Google account {AccountId} to {To}", accountId, to);
+            return result.Id;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error sending email from Google account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+
+    public async Task DeleteEmailAsync(
+        string accountId,
+        string emailId,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            // Move to trash and remove from inbox instead of permanently deleting
+            var modifyRequest = new ModifyMessageRequest
+            {
+                AddLabelIds = new List<string> { "TRASH" },
+                RemoveLabelIds = new List<string> { "INBOX" }
+            };
+            var request = service.Users.Messages.Modify(modifyRequest, "me", emailId);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Trashed email {EmailId} from Google account {AccountId}", emailId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error trashing email {EmailId} from Google account {AccountId}", emailId, accountId);
+            throw;
+        }
+    }
+
+    public async Task MarkEmailAsReadAsync(
+        string accountId,
+        string emailId,
+        bool isRead,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            var modifyRequest = new ModifyMessageRequest();
+
+            if (isRead)
+            {
+                // Remove UNREAD label to mark as read
+                modifyRequest.RemoveLabelIds = new List<string> { "UNREAD" };
+            }
+            else
+            {
+                // Add UNREAD label to mark as unread
+                modifyRequest.AddLabelIds = new List<string> { "UNREAD" };
+            }
+
+            var request = service.Users.Messages.Modify(modifyRequest, "me", emailId);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Marked email {EmailId} as {ReadStatus} for Google account {AccountId}", 
+                emailId, isRead ? "read" : "unread", accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error marking email {EmailId} as {ReadStatus} for Google account {AccountId}", 
+                emailId, isRead ? "read" : "unread", accountId);
+            throw;
+        }
+    }
+
+    public async Task<string?> MoveEmailAsync(
+        string accountId,
+        string emailId,
+        string destinationFolder,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateGmailService(credential);
+            var modifyRequest = new ModifyMessageRequest();
+
+            // Gmail uses labels instead of folders
+            // Common labels: "INBOX", "TRASH", "SPAM", "STARRED", "IMPORTANT"
+            // Archive is done by removing INBOX label
+            // Map common folder names to label operations. Drafts/sent aliases have no
+            // label move equivalent and fall through to the custom-label path.
+            switch (MailFolderAliases.TryParse(destinationFolder, out var wellKnown) ? wellKnown : (WellKnownMailFolder?)null)
+            {
+                case WellKnownMailFolder.Archive:
+                    // Archive means remove from INBOX
+                    modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+                    break;
+                case WellKnownMailFolder.Trash:
+                    // Move to trash
+                    modifyRequest.AddLabelIds = new List<string> { "TRASH" };
+                    modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+                    break;
+                case WellKnownMailFolder.Spam:
+                    // Move to spam
+                    modifyRequest.AddLabelIds = new List<string> { "SPAM" };
+                    modifyRequest.RemoveLabelIds = new List<string> { "INBOX" };
+                    break;
+                case WellKnownMailFolder.Inbox:
+                    // Move to inbox (in case it was archived)
+                    modifyRequest.AddLabelIds = new List<string> { "INBOX" };
+                    break;
+                default:
+                    // Treat as a custom label ID and add it to the message
+                    // Note: Custom labels are additive - they don't remove INBOX by default
+                    // This preserves the message in inbox while adding the label
+                    modifyRequest.AddLabelIds = new List<string> { destinationFolder };
+                    break;
+            }
+
+            var request = service.Users.Messages.Modify(modifyRequest, "me", emailId);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Moved email {EmailId} to folder/label '{Folder}' for Google account {AccountId}", 
+                emailId, destinationFolder, accountId);
+
+            // Gmail moves by relabeling, so the message keeps its ID.
+            return emailId;
+        }
+        catch (Google.GoogleApiException gex) when (gex.Message.Contains("Label") || gex.Message.Contains("label"))
+        {
+            _logger.LogError(gex, "Invalid label '{Label}' for Google account {AccountId}", 
+                destinationFolder, accountId);
+            throw new ProviderOperationException(
+                $"Invalid label '{destinationFolder}'. Use system labels (INBOX, TRASH, SPAM) or get valid custom label IDs from Gmail settings.", 
+                gex);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error moving email {EmailId} to folder/label '{Folder}' for Google account {AccountId}", 
+                emailId, destinationFolder, accountId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<CalendarInfo>> ListCalendarsAsync(
+        string accountId, 
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+            var request = service.CalendarList.List();
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            if (response.Items == null || response.Items.Count == 0)
+            {
+                _logger.LogInformation("No calendars found for Google account {AccountId}", accountId);
+                return Enumerable.Empty<CalendarInfo>();
+            }
+
+            var result = response.Items.Select(cal => new CalendarInfo
+            {
+                Id = cal.Id,
+                AccountId = accountId,
+                Name = cal.Summary ?? string.Empty,
+                Owner = cal.Id, // Google uses calendar ID as identifier
+                CanEdit = cal.AccessRole == "owner" || cal.AccessRole == "writer",
+                IsDefault = cal.Primary ?? false,
+                Color = cal.BackgroundColor
+            }).ToList();
+
+            _logger.LogInformation("Retrieved {Count} calendars from Google account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing calendars from Google account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<CalendarEvent>> GetCalendarEventsAsync(
+        string accountId, 
+        string? calendarId = null, 
+        DateTime? startDate = null, 
+        DateTime? endDate = null, 
+        int count = 50, 
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+
+            // Default to today and next 30 days if not specified
+            var start = startDate ?? DateTime.UtcNow.Date;
+            var end = endDate ?? DateTime.UtcNow.Date.AddDays(30);
+            var targetCalendarId = calendarId ?? "primary";
+
+            var request = service.Events.List(targetCalendarId);
+            request.TimeMinDateTimeOffset = new DateTimeOffset(start, TimeSpan.Zero);
+            request.TimeMaxDateTimeOffset = new DateTimeOffset(end, TimeSpan.Zero);
+            request.MaxResults = count;
+            request.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
+            request.SingleEvents = true;
+
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            if (response.Items == null || response.Items.Count == 0)
+            {
+                _logger.LogInformation("No events found for Google account {AccountId}", accountId);
+                return Enumerable.Empty<CalendarEvent>();
+            }
+
+            var result = response.Items.Select(evt => new CalendarEvent
+            {
+                Id = evt.Id,
+                AccountId = accountId,
+                CalendarId = targetCalendarId,
+                Subject = evt.Summary ?? string.Empty,
+                Start = GetEventDateTime(evt.Start),
+                End = GetEventDateTime(evt.End),
+                StartDate = TimeZoneHelper.ParseFloatingDate(evt.Start?.Date),
+                EndDate = TimeZoneHelper.ParseFloatingDate(evt.End?.Date),
+                Location = evt.Location ?? string.Empty,
+                Body = evt.Description ?? string.Empty,
+                Organizer = evt.Organizer?.Email ?? string.Empty,
+                Attendees = evt.Attendees?.Select(a => a.Email ?? string.Empty).ToList() ?? [],
+                AttendeeDetails = MapGoogleAttendees(evt.Attendees),
+                IsAllDay = !string.IsNullOrEmpty(evt.Start?.Date),
+                ResponseStatus = GetSelfResponseStatus(evt)
+            }).ToList();
+
+            _logger.LogInformation("Retrieved {Count} events from Google account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting calendar events from Google account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task<CalendarEvent?> GetCalendarEventDetailsAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+            var targetCalendarId = string.IsNullOrEmpty(calendarId) ? "primary" : calendarId;
+
+            var evt = await service.Events.Get(targetCalendarId, eventId).ExecuteAsync(cancellationToken);
+
+            if (evt == null)
+            {
+                return null;
+            }
+
+            var result = new CalendarEvent
+            {
+                Id = evt.Id,
+                AccountId = accountId,
+                CalendarId = targetCalendarId,
+                Subject = evt.Summary ?? string.Empty,
+                Start = GetEventDateTime(evt.Start),
+                End = GetEventDateTime(evt.End),
+                StartDate = TimeZoneHelper.ParseFloatingDate(evt.Start?.Date),
+                EndDate = TimeZoneHelper.ParseFloatingDate(evt.End?.Date),
+                Location = evt.Location ?? string.Empty,
+                Body = evt.Description ?? string.Empty,
+                BodyFormat = "text",
+                Organizer = evt.Organizer?.Email ?? string.Empty,
+                OrganizerName = evt.Organizer?.DisplayName ?? string.Empty,
+                Attendees = evt.Attendees?.Select(a => a.Email ?? string.Empty).ToList() ?? [],
+                AttendeeDetails = MapGoogleAttendees(evt.Attendees),
+                IsAllDay = !string.IsNullOrEmpty(evt.Start?.Date),
+                ResponseStatus = GetSelfResponseStatus(evt),
+                ShowAs = MapGoogleTransparency(evt.Transparency),
+                Sensitivity = MapGoogleVisibility(evt.Visibility),
+                IsCancelled = evt.Status == "cancelled",
+                IsOnlineMeeting = evt.ConferenceData != null,
+                OnlineMeetingUrl = evt.ConferenceData?.EntryPoints?.FirstOrDefault(e => e.EntryPointType == "video")?.Uri 
+                    ?? evt.HangoutLink,
+                OnlineMeetingProvider = MapGoogleConferenceProvider(evt.ConferenceData?.ConferenceSolution?.Name),
+                IsRecurring = !string.IsNullOrEmpty(evt.RecurringEventId),
+                RecurrencePattern = FormatGoogleRecurrence(evt.Recurrence),
+                Categories = [], // Google doesn't have categories in the same way
+                Importance = "normal", // Google doesn't have importance
+                CreatedDateTime = evt.CreatedDateTimeOffset?.DateTime,
+                LastModifiedDateTime = evt.UpdatedDateTimeOffset?.DateTime
+            };
+
+            _logger.LogInformation("Retrieved event details for {EventId} from Google account {AccountId}", eventId, accountId);
+            return result;
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting calendar event details for {EventId} from Google account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
+    public async Task<string> CreateEventAsync(
+        string accountId,
+        string? calendarId,
+        string subject,
+        DateTime start,
+        DateTime end,
+        string? location = null,
+        List<string>? attendees = null,
+        string? body = null,
+        string? timeZone = null,
+        bool isAllDay = false,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+            var targetCalendarId = calendarId ?? "primary";
+
+            var newEvent = new Event
+            {
+                Summary = subject,
+                Description = body,
+                Location = location,
+                Start = EventTimeBuilder.ToGoogle(start, timeZone, isAllDay),
+                End = EventTimeBuilder.ToGoogle(end, timeZone, isAllDay)
+            };
+
+            if (attendees != null && attendees.Count > 0)
+            {
+                newEvent.Attendees = attendees.Select(email => new Google.Apis.Calendar.v3.Data.EventAttendee
+                {
+                    Email = email.Trim()
+                }).ToList();
+            }
+
+            var request = service.Events.Insert(newEvent, targetCalendarId);
+            var createdEvent = await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Created event {EventId} in Google account {AccountId}", createdEvent.Id, accountId);
+            return createdEvent.Id;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating event in Google account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task UpdateEventAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        string? subject = null,
+        DateTime? start = null,
+        DateTime? end = null,
+        string? location = null,
+        List<string>? attendees = null,
+        string? timeZone = null,
+        bool? isAllDay = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+
+            // First, get the existing event
+            var existingEvent = await service.Events.Get(calendarId, eventId).ExecuteAsync(cancellationToken);
+
+            // Update fields
+            if (!string.IsNullOrEmpty(subject))
+            {
+                existingEvent.Summary = subject;
+            }
+            if (!string.IsNullOrEmpty(location))
+            {
+                existingEvent.Location = location;
+            }
+            // Replacing the whole EventDateTime switches between date (all-day) and dateTime.
+            if (start.HasValue)
+            {
+                existingEvent.Start = EventTimeBuilder.ToGoogle(start.Value, timeZone, isAllDay == true);
+            }
+            if (end.HasValue)
+            {
+                existingEvent.End = EventTimeBuilder.ToGoogle(end.Value, timeZone, isAllDay == true);
+            }
+            if (attendees != null)
+            {
+                existingEvent.Attendees = attendees.Select(email => new Google.Apis.Calendar.v3.Data.EventAttendee
+                {
+                    Email = email.Trim()
+                }).ToList();
+            }
+
+            var request = service.Events.Update(existingEvent, calendarId, eventId);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Updated event {EventId} in Google account {AccountId}", eventId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating event {EventId} in Google account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
+    public async Task DeleteEventAsync(
+        string accountId, 
+        string calendarId, 
+        string eventId, 
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+            var request = service.Events.Delete(calendarId, eventId);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Deleted event {EventId} from Google account {AccountId}", eventId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting event {EventId} from Google account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
+    public async Task RespondToEventAsync(
+        string accountId,
+        string calendarId,
+        string eventId,
+        string response,
+        string? comment = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreateCalendarService(credential);
+            
+            // First, get the event to find the current user's attendee entry
+            var getRequest = service.Events.Get(calendarId, eventId);
+            var evt = await getRequest.ExecuteAsync(cancellationToken);
+
+            if (evt.Attendees == null || !evt.Attendees.Any())
+            {
+                throw new ProviderOperationException("Event has no attendees, cannot respond");
+            }
+
+            // Find the current user's attendee entry
+            var myAttendee = evt.Attendees.FirstOrDefault(a => a.Self == true);
+            if (myAttendee == null)
+            {
+                throw new ProviderOperationException("You are not an attendee of this event");
+            }
+
+            // Update the response status
+            var normalizedResponse = response.ToLowerInvariant();
+            myAttendee.ResponseStatus = normalizedResponse switch
+            {
+                "accept" or "accepted" => "accepted",
+                "tentative" or "tentativelyaccepted" => "tentative",
+                "decline" or "declined" => "declined",
+                _ => throw new ArgumentException($"Invalid response type: {response}. Valid values are: accept, tentative, decline")
+            };
+
+            // Note: Google Calendar doesn't support comments like Microsoft Graph, so we just log it
+            if (!string.IsNullOrEmpty(comment))
+            {
+                _logger.LogInformation("Response comment (not sent to organizer): {Comment}", comment);
+            }
+
+            // Update the event with the new response
+            var updateRequest = service.Events.Update(evt, calendarId, eventId);
+            updateRequest.SendUpdates = EventsResource.UpdateRequest.SendUpdatesEnum.All;
+            await updateRequest.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Responded to event {EventId} with {Response} for Google account {AccountId}", 
+                eventId, myAttendee.ResponseStatus, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error responding to event {EventId} for Google account {AccountId}", eventId, accountId);
+            throw;
+        }
+    }
+
+    #region Contact Operations
+
+    public async Task<IEnumerable<Models.Contact>> GetContactsAsync(
+        string accountId,
+        int count = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var request = service.People.Connections.List("people/me");
+            request.PersonFields = PersonFields;
+            request.PageSize = count;
+            request.SortOrder = PeopleResource.ConnectionsResource.ListRequest.SortOrderEnum.LASTMODIFIEDASCENDING;
+
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            if (response.Connections == null || response.Connections.Count == 0)
+            {
+                _logger.LogInformation("No contacts found for Google account {AccountId}", accountId);
+                return Enumerable.Empty<Models.Contact>();
+            }
+
+            var result = response.Connections
+                .Select(p => MapGooglePerson(p, accountId))
+                .ToList();
+
+            _logger.LogInformation("Retrieved {Count} contacts from Google account {AccountId}", result.Count, accountId);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching contacts from Google account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task<IEnumerable<Models.Contact>> SearchContactsAsync(
+        string accountId,
+        string query,
+        int count = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var request = service.People.SearchContacts();
+            request.Query = query;
+            request.ReadMask = PersonFields;
+            request.PageSize = count;
+
+            var response = await request.ExecuteAsync(cancellationToken);
+
+            if (response.Results == null || response.Results.Count == 0)
+            {
+                _logger.LogInformation("No contacts found for search query '{Query}' in Google account {AccountId}", query, accountId);
+                return Enumerable.Empty<Models.Contact>();
+            }
+
+            var result = response.Results
+                .Where(r => r.Person != null)
+                .Select(r => MapGooglePerson(r.Person, accountId))
+                .ToList();
+
+            _logger.LogInformation("Search returned {Count} contacts from Google account {AccountId} for query '{Query}'",
+                result.Count, accountId, query);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching contacts from Google account {AccountId} with query '{Query}'", accountId, query);
+            throw;
+        }
+    }
+
+    public async Task<Models.Contact?> GetContactDetailsAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var resourceName = contactId.StartsWith("people/") ? contactId : $"people/{contactId}";
+            var request = service.People.Get(resourceName);
+            request.PersonFields = PersonFields;
+
+            var person = await request.ExecuteAsync(cancellationToken);
+
+            if (person == null)
+            {
+                return null;
+            }
+
+            var result = MapGooglePerson(person, accountId);
+            _logger.LogInformation("Retrieved contact details for {ContactId} from Google account {AccountId}", contactId, accountId);
+            return result;
+        }
+        catch (Google.GoogleApiException ex) when (ex.HttpStatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Genuinely not found: let the caller report "not found" rather than an error.
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting contact details for {ContactId} from Google account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    public async Task<string> CreateContactAsync(
+        string accountId,
+        string displayName,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var person = new Person
+            {
+                Names = new List<Name>
+                {
+                    new Name
+                    {
+                        DisplayName = displayName,
+                        GivenName = givenName ?? string.Empty,
+                        FamilyName = surname ?? string.Empty
+                    }
+                }
+            };
+
+            if (emailAddresses != null && emailAddresses.Count > 0)
+            {
+                person.EmailAddresses = emailAddresses.Select(e => new EmailAddress
+                {
+                    Value = e.Trim()
+                }).ToList();
+            }
+
+            if (phoneNumbers != null && phoneNumbers.Count > 0)
+            {
+                person.PhoneNumbers = phoneNumbers.Select(p => new PhoneNumber
+                {
+                    Value = p.Trim()
+                }).ToList();
+            }
+
+            if (!string.IsNullOrEmpty(jobTitle) || !string.IsNullOrEmpty(companyName))
+            {
+                person.Organizations = new List<Organization>
+                {
+                    new Organization
+                    {
+                        Title = jobTitle,
+                        Name = companyName
+                    }
+                };
+            }
+
+            if (!string.IsNullOrEmpty(notes))
+            {
+                person.Biographies = new List<Biography>
+                {
+                    new Biography { Value = notes }
+                };
+            }
+
+            var request = service.People.CreateContact(person);
+            var created = await request.ExecuteAsync(cancellationToken);
+
+            var contactId = created.ResourceName ?? string.Empty;
+            _logger.LogInformation("Created contact {ContactId} in Google account {AccountId}", contactId, accountId);
+            return contactId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating contact in Google account {AccountId}", accountId);
+            throw;
+        }
+    }
+
+    public async Task UpdateContactAsync(
+        string accountId,
+        string contactId,
+        string? displayName = null,
+        string? givenName = null,
+        string? surname = null,
+        List<string>? emailAddresses = null,
+        List<string>? phoneNumbers = null,
+        string? jobTitle = null,
+        string? companyName = null,
+        string? notes = null,
+        string? etag = null,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var resourceName = contactId.StartsWith("people/") ? contactId : $"people/{contactId}";
+
+            // Fetch current contact to get etag if not provided
+            if (string.IsNullOrEmpty(etag))
+            {
+                var getRequest = service.People.Get(resourceName);
+                getRequest.PersonFields = PersonFields;
+                var current = await getRequest.ExecuteAsync(cancellationToken);
+                etag = current.ETag;
+            }
+
+            var person = new Person
+            {
+                ETag = etag
+            };
+
+            var updateFields = new List<string>();
+
+            if (!string.IsNullOrEmpty(displayName) || !string.IsNullOrEmpty(givenName) || !string.IsNullOrEmpty(surname))
+            {
+                person.Names = new List<Name>
+                {
+                    new Name
+                    {
+                        DisplayName = displayName ?? string.Empty,
+                        GivenName = givenName ?? string.Empty,
+                        FamilyName = surname ?? string.Empty
+                    }
+                };
+                updateFields.Add("names");
+            }
+
+            if (emailAddresses != null)
+            {
+                person.EmailAddresses = emailAddresses.Select(e => new EmailAddress
+                {
+                    Value = e.Trim()
+                }).ToList();
+                updateFields.Add("emailAddresses");
+            }
+
+            if (phoneNumbers != null)
+            {
+                person.PhoneNumbers = phoneNumbers.Select(p => new PhoneNumber
+                {
+                    Value = p.Trim()
+                }).ToList();
+                updateFields.Add("phoneNumbers");
+            }
+
+            if (!string.IsNullOrEmpty(jobTitle) || !string.IsNullOrEmpty(companyName))
+            {
+                person.Organizations = new List<Organization>
+                {
+                    new Organization
+                    {
+                        Title = jobTitle,
+                        Name = companyName
+                    }
+                };
+                updateFields.Add("organizations");
+            }
+
+            if (!string.IsNullOrEmpty(notes))
+            {
+                person.Biographies = new List<Biography>
+                {
+                    new Biography { Value = notes }
+                };
+                updateFields.Add("biographies");
+            }
+
+            if (updateFields.Count == 0)
+            {
+                _logger.LogWarning("No fields to update for contact {ContactId}", contactId);
+                return;
+            }
+
+            var request = service.People.UpdateContact(person, resourceName);
+            request.UpdatePersonFields = string.Join(",", updateFields);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Updated contact {ContactId} in Google account {AccountId}", contactId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating contact {ContactId} in Google account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    public async Task DeleteContactAsync(
+        string accountId,
+        string contactId,
+        CancellationToken cancellationToken = default)
+    {
+        var credential = await GetCredentialAsync(accountId, cancellationToken);
+
+        try
+        {
+            var service = CreatePeopleService(credential);
+
+            var resourceName = contactId.StartsWith("people/") ? contactId : $"people/{contactId}";
+            var request = service.People.DeleteContact(resourceName);
+            await request.ExecuteAsync(cancellationToken);
+
+            _logger.LogInformation("Deleted contact {ContactId} from Google account {AccountId}", contactId, accountId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting contact {ContactId} from Google account {AccountId}", contactId, accountId);
+            throw;
+        }
+    }
+
+    private static Models.Contact MapGooglePerson(Person person, string accountId)
+    {
+        var name = person.Names?.FirstOrDefault();
+        var org = person.Organizations?.FirstOrDefault();
+
+        var emails = person.EmailAddresses?.Select(e => new ContactEmail
+        {
+            Address = e.Value ?? string.Empty,
+            Label = e.Type ?? "other"
+        }).ToList() ?? new List<ContactEmail>();
+
+        var phones = person.PhoneNumbers?.Select(p => new ContactPhone
+        {
+            Number = p.Value ?? string.Empty,
+            Label = p.Type ?? "other"
+        }).ToList() ?? new List<ContactPhone>();
+
+        var addresses = person.Addresses?.Select(a => new Models.ContactAddress
+        {
+            Street = a.StreetAddress ?? string.Empty,
+            City = a.City ?? string.Empty,
+            State = a.Region ?? string.Empty,
+            PostalCode = a.PostalCode ?? string.Empty,
+            Country = a.Country ?? string.Empty,
+            Label = a.Type ?? "other"
+        }).ToList() ?? new List<Models.ContactAddress>();
+
+        // Extract contact ID from resource name (e.g., "people/c1234567890")
+        var id = person.ResourceName ?? string.Empty;
+
+        DateTime? birthday = null;
+        var bday = person.Birthdays?.FirstOrDefault()?.Date;
+        if (bday != null && bday.Year.HasValue && bday.Month.HasValue && bday.Day.HasValue)
+        {
+            birthday = new DateTime(bday.Year.Value, bday.Month.Value, bday.Day.Value);
+        }
+
+        var groups = person.Memberships?
+            .Where(m => m.ContactGroupMembership != null)
+            .Select(m => m.ContactGroupMembership.ContactGroupId ?? string.Empty)
+            .Where(g => !string.IsNullOrEmpty(g))
+            .ToList() ?? new List<string>();
+
+        var metadata = person.Metadata?.Sources?.FirstOrDefault();
+
+        return new Models.Contact
+        {
+            Id = id,
+            AccountId = accountId,
+            DisplayName = name?.DisplayName ?? string.Empty,
+            GivenName = name?.GivenName ?? string.Empty,
+            Surname = name?.FamilyName ?? string.Empty,
+            EmailAddresses = emails,
+            PhoneNumbers = phones,
+            JobTitle = org?.Title ?? string.Empty,
+            CompanyName = org?.Name ?? string.Empty,
+            Department = org?.Department ?? string.Empty,
+            Addresses = addresses,
+            Birthday = birthday,
+            Notes = person.Biographies?.FirstOrDefault()?.Value ?? string.Empty,
+            Groups = groups,
+            Etag = person.ETag,
+            CreatedDateTime = null, // Google People API doesn't expose creation date directly
+            LastModifiedDateTime = metadata?.UpdateTimeDateTimeOffset?.DateTime
+        };
+    }
+
+    #endregion
+
+    #region Helper Methods
+
+    private EmailMessage ConvertToEmailMessage(Message message, string accountId, bool includeBody = false)
+    {
+        var headers = message.Payload?.Headers ?? [];
+        
+        var subject = GetHeader(headers, "Subject");
+        var from = GetHeader(headers, "From");
+        var to = GetHeader(headers, "To");
+        var cc = GetHeader(headers, "Cc");
+        var date = GetHeader(headers, "Date");
+
+        // Parse from address
+        var (fromEmail, fromName) = ParseEmailAddress(from);
+        
+        // Parse to addresses
+        var toList = ParseEmailAddresses(to);
+        var ccList = ParseEmailAddresses(cc);
+
+        // Parse date
+        var receivedDate = ParseDateHeader(date);
+
+        // Get body
+        var body = includeBody ? GetMessageBody(message) : (message.Snippet ?? string.Empty);
+        var bodyFormat = includeBody && message.Payload?.MimeType?.Contains("html") == true ? "html" : "text";
+
+        // Extract unsubscribe headers
+        var listUnsubscribe = GetHeader(headers, "List-Unsubscribe");
+        var listUnsubscribePost = GetHeader(headers, "List-Unsubscribe-Post");
+
+        return new EmailMessage
+        {
+            Id = message.Id,
+            AccountId = accountId,
+            Subject = subject,
+            From = fromEmail,
+            FromName = fromName,
+            To = toList,
+            Cc = ccList,
+            Body = body,
+            BodyFormat = bodyFormat,
+            ReceivedDateTime = receivedDate,
+            IsRead = !message.LabelIds?.Contains("UNREAD") ?? true,
+            HasAttachments = message.Payload?.Parts?.Any(p => !string.IsNullOrEmpty(p.Filename)) ?? false,
+            UnsubscribeInfo = Utilities.UnsubscribeHeaderParser.Parse(
+                string.IsNullOrEmpty(listUnsubscribe) ? null : listUnsubscribe,
+                string.IsNullOrEmpty(listUnsubscribePost) ? null : listUnsubscribePost)
+        };
+    }
+
+    /// <summary>
+    /// Parses an RFC 2822 Date header to UTC, honoring the header's offset rather than
+    /// the server's local zone. Returns <see cref="DateTime.MinValue"/> if unparseable.
+    /// </summary>
+    internal static DateTime ParseDateHeader(string? date) =>
+        DateTimeOffset.TryParse(date, out var parsed) ? parsed.UtcDateTime : DateTime.MinValue;
+
+    private static string GetHeader(IList<MessagePartHeader> headers, string name)
+    {
+        return headers
+            .FirstOrDefault(h => h.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+            ?.Value ?? string.Empty;
+    }
+
+    private static (string email, string name) ParseEmailAddress(string address)
+    {
+        if (string.IsNullOrEmpty(address))
+            return (string.Empty, string.Empty);
+
+        // Format: "Name <email@example.com>" or just "email@example.com"
+        var angleStart = address.IndexOf('<');
+        var angleEnd = address.IndexOf('>');
+
+        if (angleStart >= 0 && angleEnd > angleStart)
+        {
+            var email = address.Substring(angleStart + 1, angleEnd - angleStart - 1).Trim();
+            var name = address[..angleStart].Trim().Trim('"');
+            return (email, name);
+        }
+
+        return (address.Trim(), string.Empty);
+    }
+
+    private static List<string> ParseEmailAddresses(string addresses)
+    {
+        if (string.IsNullOrEmpty(addresses))
+            return [];
+
+        return addresses
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(a => ParseEmailAddress(a.Trim()).email)
+            .Where(e => !string.IsNullOrEmpty(e))
+            .ToList();
+    }
+
+    private static string GetMessageBody(Message message)
+    {
+        if (message.Payload == null)
+            return string.Empty;
+
+        // Try to get HTML body first, then plain text
+        var body = GetBodyFromParts(message.Payload, "text/html") 
+                ?? GetBodyFromParts(message.Payload, "text/plain")
+                ?? string.Empty;
+
+        return body;
+    }
+
+    private static string? GetBodyFromParts(MessagePart part, string mimeType)
+    {
+        if (part.MimeType == mimeType && part.Body?.Data != null)
+        {
+            return DecodeBase64Url(part.Body.Data);
+        }
+
+        if (part.Parts != null)
+        {
+            foreach (var childPart in part.Parts)
+            {
+                var result = GetBodyFromParts(childPart, mimeType);
+                if (result != null)
+                    return result;
+            }
+        }
+
+        return null;
+    }
+
+    private static string DecodeBase64Url(string base64Url)
+    {
+        var base64 = base64Url
+            .Replace('-', '+')
+            .Replace('_', '/');
+
+        // Add padding if needed
+        switch (base64.Length % 4)
+        {
+            case 2: base64 += "=="; break;
+            case 3: base64 += "="; break;
+        }
+
+        var bytes = Convert.FromBase64String(base64);
+        return Encoding.UTF8.GetString(bytes);
+    }
+
+    internal static DateTimeOffset GetEventDateTime(EventDateTime? eventDateTime)
+    {
+        if (eventDateTime == null)
+            return DateTimeOffset.MinValue;
+
+        if (eventDateTime.DateTimeDateTimeOffset.HasValue)
+            return eventDateTime.DateTimeDateTimeOffset.Value;
+
+        // All-day events carry a floating date ("yyyy-MM-dd"); anchor it to UTC midnight so the
+        // result doesn't depend on the host's time zone. Callers use StartDate/EndDate for display.
+        if (TimeZoneHelper.ParseFloatingDate(eventDateTime.Date) is { } date)
+            return TimeZoneHelper.UtcMidnight(date);
+
+        return DateTimeOffset.MinValue;
+    }
+
+    internal static List<Adjutant.Core.Models.EventAttendee> MapGoogleAttendees(
+        IList<Google.Apis.Calendar.v3.Data.EventAttendee>? attendees) =>
+        attendees?.Select(a => new Adjutant.Core.Models.EventAttendee
+        {
+            Email = a.Email ?? string.Empty,
+            Name = a.DisplayName ?? string.Empty,
+            ResponseStatus = MapGoogleResponseStatus(a.ResponseStatus),
+            Type = a.Optional == true ? "optional" : (a.Resource == true ? "resource" : "required"),
+            IsOrganizer = a.Organizer == true
+        }).ToList() ?? [];
+
+    /// <summary>
+    /// The account owner's response. Google lists the owner as an attendee only when the event
+    /// has guests, so an event the owner organized with no guests counts as accepted, matching
+    /// what Graph reports for the organizer.
+    /// </summary>
+    internal static string GetSelfResponseStatus(Event evt)
+    {
+        var self = evt.Attendees?.FirstOrDefault(a => a.Self == true);
+        if (self != null)
+            return MapGoogleResponseStatus(self.ResponseStatus);
+        return evt.Organizer?.Self == true ? "accepted" : "notResponded";
+    }
+
+    private static string MapGoogleResponseStatus(string? responseStatus)
+    {
+        return responseStatus switch
+        {
+            "accepted" => "accepted",
+            "tentative" => "tentative",
+            "declined" => "declined",
+            "needsAction" => "notResponded",
+            _ => "notResponded"
+        };
+    }
+
+    private static string MapGoogleTransparency(string? transparency)
+    {
+        // Google transparency: "opaque" (busy) or "transparent" (free)
+        return transparency switch
+        {
+            "transparent" => "free",
+            "opaque" => "busy",
+            _ => "busy"
+        };
+    }
+
+    private static string MapGoogleVisibility(string? visibility)
+    {
+        return visibility switch
+        {
+            "public" => "normal",
+            "private" => "private",
+            "confidential" => "confidential",
+            "default" => "normal",
+            _ => "normal"
+        };
+    }
+
+    private static string? MapGoogleConferenceProvider(string? providerName)
+    {
+        if (string.IsNullOrEmpty(providerName))
+            return null;
+            
+        if (providerName.Contains("Meet", StringComparison.OrdinalIgnoreCase))
+            return "googleMeet";
+        if (providerName.Contains("Zoom", StringComparison.OrdinalIgnoreCase))
+            return "zoom";
+            
+        return providerName.ToLowerInvariant().Replace(" ", "");
+    }
+
+    private static string? FormatGoogleRecurrence(IList<string>? recurrence)
+    {
+        if (recurrence == null || recurrence.Count == 0)
+            return null;
+
+        // Parse RRULE format (simplified)
+        var rrule = recurrence.FirstOrDefault(r => r.StartsWith("RRULE:", StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrEmpty(rrule))
+            return "Recurring";
+
+        rrule = rrule.Substring(6); // Remove "RRULE:"
+        var parts = rrule.Split(';').ToDictionary(
+            p => p.Split('=')[0],
+            p => p.Contains('=') ? p.Split('=')[1] : string.Empty,
+            StringComparer.OrdinalIgnoreCase);
+
+        if (!parts.TryGetValue("FREQ", out var freq))
+            return "Recurring";
+
+        var interval = parts.TryGetValue("INTERVAL", out var i) ? int.Parse(i) : 1;
+
+        return freq.ToUpperInvariant() switch
+        {
+            "DAILY" => interval == 1 ? "Daily" : $"Every {interval} days",
+            "WEEKLY" => FormatGoogleWeeklyRecurrence(parts, interval),
+            "MONTHLY" => interval == 1 ? "Monthly" : $"Every {interval} months",
+            "YEARLY" => interval == 1 ? "Yearly" : $"Every {interval} years",
+            _ => "Recurring"
+        };
+    }
+
+    private static string FormatGoogleWeeklyRecurrence(Dictionary<string, string> parts, int interval)
+    {
+        if (!parts.TryGetValue("BYDAY", out var byDay) || string.IsNullOrEmpty(byDay))
+            return interval == 1 ? "Weekly" : $"Every {interval} weeks";
+
+        var days = byDay.Split(',');
+        var dayNames = days.Select(d => d switch
+        {
+            "MO" => "Monday",
+            "TU" => "Tuesday",
+            "WE" => "Wednesday",
+            "TH" => "Thursday",
+            "FR" => "Friday",
+            "SA" => "Saturday",
+            "SU" => "Sunday",
+            _ => d
+        }).ToList();
+
+        if (dayNames.Count == 5 && 
+            dayNames.Contains("Monday") && dayNames.Contains("Tuesday") && 
+            dayNames.Contains("Wednesday") && dayNames.Contains("Thursday") && dayNames.Contains("Friday"))
+        {
+            return "Every weekday";
+        }
+
+        var daysStr = string.Join(", ", dayNames);
+        return interval == 1 ? $"Weekly on {daysStr}" : $"Every {interval} weeks on {daysStr}";
+    }
+
+    #endregion
+}

@@ -26,14 +26,14 @@ jobs:
           dotnet-version: '10.0.x'
       
       - name: Restore dependencies
-        run: dotnet restore calendar-mcp.slnx
+        run: dotnet restore adjutant.slnx
 
       - name: Build solution
-        run: dotnet build calendar-mcp.slnx --configuration Release --no-restore
+        run: dotnet build adjutant.slnx --configuration Release --no-restore
       
       - name: Publish Windows (win-x64)
         run: |
-          dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+          dotnet publish src/Adjutant.Cli/Adjutant.Cli.csproj \
             --configuration Release \
             --runtime win-x64 \
             --self-contained true \
@@ -42,7 +42,7 @@ jobs:
             -p:EnableCompressionInSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true
           
-          dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+          dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
             --configuration Release \
             --runtime win-x64 \
             --self-contained true \
@@ -53,7 +53,7 @@ jobs:
       
       - name: Publish Linux (linux-x64)
         run: |
-          dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+          dotnet publish src/Adjutant.Cli/Adjutant.Cli.csproj \
             --configuration Release \
             --runtime linux-x64 \
             --self-contained true \
@@ -62,7 +62,7 @@ jobs:
             -p:EnableCompressionInSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true
           
-          dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+          dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
             --configuration Release \
             --runtime linux-x64 \
             --self-contained true \
@@ -73,7 +73,7 @@ jobs:
       
       - name: Publish macOS (osx-x64)
         run: |
-          dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+          dotnet publish src/Adjutant.Cli/Adjutant.Cli.csproj \
             --configuration Release \
             --runtime osx-x64 \
             --self-contained true \
@@ -82,7 +82,7 @@ jobs:
             -p:EnableCompressionInSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true
           
-          dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+          dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
             --configuration Release \
             --runtime osx-x64 \
             --self-contained true \
@@ -93,7 +93,7 @@ jobs:
       
       - name: Publish macOS (osx-arm64)
         run: |
-          dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+          dotnet publish src/Adjutant.Cli/Adjutant.Cli.csproj \
             --configuration Release \
             --runtime osx-arm64 \
             --self-contained true \
@@ -102,7 +102,7 @@ jobs:
             -p:EnableCompressionInSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true
           
-          dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+          dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
             --configuration Release \
             --runtime osx-arm64 \
             --self-contained true \
@@ -113,74 +113,74 @@ jobs:
       
       - name: Organize release files (Windows)
         run: |
-          mkdir -p ./release/calendar-mcp-win-x64
-          cp -r ./publish/win-x64/cli/* ./release/calendar-mcp-win-x64/
-          cp -r ./publish/win-x64/server/* ./release/calendar-mcp-win-x64/
-          cp README.md ./release/calendar-mcp-win-x64/
-          cp LICENSE ./release/calendar-mcp-win-x64/
+          mkdir -p ./release/adjutant-win-x64
+          cp -r ./publish/win-x64/cli/* ./release/adjutant-win-x64/
+          cp -r ./publish/win-x64/server/* ./release/adjutant-win-x64/
+          cp README.md ./release/adjutant-win-x64/
+          cp LICENSE ./release/adjutant-win-x64/
       
       - name: Organize release files (Linux)
         run: |
-          mkdir -p ./release/calendar-mcp-linux-x64
-          cp -r ./publish/linux-x64/cli/* ./release/calendar-mcp-linux-x64/
-          cp -r ./publish/linux-x64/server/* ./release/calendar-mcp-linux-x64/
-          cp README.md ./release/calendar-mcp-linux-x64/
-          cp LICENSE ./release/calendar-mcp-linux-x64/
-          chmod +x ./release/calendar-mcp-linux-x64/CalendarMcp.Cli
-          chmod +x ./release/calendar-mcp-linux-x64/CalendarMcp.StdioServer
+          mkdir -p ./release/adjutant-linux-x64
+          cp -r ./publish/linux-x64/cli/* ./release/adjutant-linux-x64/
+          cp -r ./publish/linux-x64/server/* ./release/adjutant-linux-x64/
+          cp README.md ./release/adjutant-linux-x64/
+          cp LICENSE ./release/adjutant-linux-x64/
+          chmod +x ./release/adjutant-linux-x64/Adjutant.Cli
+          chmod +x ./release/adjutant-linux-x64/Adjutant.StdioServer
       
       - name: Organize release files (macOS x64)
         run: |
-          mkdir -p ./release/calendar-mcp-osx-x64
-          cp -r ./publish/osx-x64/cli/* ./release/calendar-mcp-osx-x64/
-          cp -r ./publish/osx-x64/server/* ./release/calendar-mcp-osx-x64/
-          cp README.md ./release/calendar-mcp-osx-x64/
-          cp LICENSE ./release/calendar-mcp-osx-x64/
-          chmod +x ./release/calendar-mcp-osx-x64/CalendarMcp.Cli
-          chmod +x ./release/calendar-mcp-osx-x64/CalendarMcp.StdioServer
+          mkdir -p ./release/adjutant-osx-x64
+          cp -r ./publish/osx-x64/cli/* ./release/adjutant-osx-x64/
+          cp -r ./publish/osx-x64/server/* ./release/adjutant-osx-x64/
+          cp README.md ./release/adjutant-osx-x64/
+          cp LICENSE ./release/adjutant-osx-x64/
+          chmod +x ./release/adjutant-osx-x64/Adjutant.Cli
+          chmod +x ./release/adjutant-osx-x64/Adjutant.StdioServer
       
       - name: Organize release files (macOS ARM64)
         run: |
-          mkdir -p ./release/calendar-mcp-osx-arm64
-          cp -r ./publish/osx-arm64/cli/* ./release/calendar-mcp-osx-arm64/
-          cp -r ./publish/osx-arm64/server/* ./release/calendar-mcp-osx-arm64/
-          cp README.md ./release/calendar-mcp-osx-arm64/
-          cp LICENSE ./release/calendar-mcp-osx-arm64/
-          chmod +x ./release/calendar-mcp-osx-arm64/CalendarMcp.Cli
-          chmod +x ./release/calendar-mcp-osx-arm64/CalendarMcp.StdioServer
+          mkdir -p ./release/adjutant-osx-arm64
+          cp -r ./publish/osx-arm64/cli/* ./release/adjutant-osx-arm64/
+          cp -r ./publish/osx-arm64/server/* ./release/adjutant-osx-arm64/
+          cp README.md ./release/adjutant-osx-arm64/
+          cp LICENSE ./release/adjutant-osx-arm64/
+          chmod +x ./release/adjutant-osx-arm64/Adjutant.Cli
+          chmod +x ./release/adjutant-osx-arm64/Adjutant.StdioServer
       
       - name: Create zip archives
         run: |
           cd ./release
-          zip -r calendar-mcp-win-x64.zip calendar-mcp-win-x64
-          tar -czf calendar-mcp-linux-x64.tar.gz calendar-mcp-linux-x64
-          tar -czf calendar-mcp-osx-x64.tar.gz calendar-mcp-osx-x64
-          tar -czf calendar-mcp-osx-arm64.tar.gz calendar-mcp-osx-arm64
+          zip -r adjutant-win-x64.zip adjutant-win-x64
+          tar -czf adjutant-linux-x64.tar.gz adjutant-linux-x64
+          tar -czf adjutant-osx-x64.tar.gz adjutant-osx-x64
+          tar -czf adjutant-osx-arm64.tar.gz adjutant-osx-arm64
           cd ..
       
       - name: Upload Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: calendar-mcp-win-x64
-          path: ./release/calendar-mcp-win-x64.zip
+          name: adjutant-win-x64
+          path: ./release/adjutant-win-x64.zip
       
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
-          name: calendar-mcp-linux-x64
-          path: ./release/calendar-mcp-linux-x64.tar.gz
+          name: adjutant-linux-x64
+          path: ./release/adjutant-linux-x64.tar.gz
       
       - name: Upload macOS x64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: calendar-mcp-osx-x64
-          path: ./release/calendar-mcp-osx-x64.tar.gz
+          name: adjutant-osx-x64
+          path: ./release/adjutant-osx-x64.tar.gz
       
       - name: Upload macOS ARM64 artifact
         uses: actions/upload-artifact@v4
         with:
-          name: calendar-mcp-osx-arm64
-          path: ./release/calendar-mcp-osx-arm64.tar.gz
+          name: adjutant-osx-arm64
+          path: ./release/adjutant-osx-arm64.tar.gz
   
   build-windows-installer:
     name: Build Windows Installer
@@ -194,12 +194,12 @@ jobs:
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: calendar-mcp-win-x64
+          name: adjutant-win-x64
           path: ./artifacts
       
       - name: Extract Windows artifact
         run: |
-          Expand-Archive -Path ./artifacts/calendar-mcp-win-x64.zip -DestinationPath ./release
+          Expand-Archive -Path ./artifacts/adjutant-win-x64.zip -DestinationPath ./release
         shell: pwsh
       
       - name: Install Inno Setup
@@ -210,17 +210,17 @@ jobs:
       - name: Build Installer
         run: |
           # Comment out the icon line if icon doesn't exist
-          if (-not (Test-Path "installer\calendar-mcp-icon.ico")) {
-            (Get-Content installer\CalendarMcp-Setup.iss) -replace '^SetupIconFile=', ';SetupIconFile=' | Set-Content installer\CalendarMcp-Setup.iss
+          if (-not (Test-Path "installer\adjutant-icon.ico")) {
+            (Get-Content installer\Adjutant-Setup.iss) -replace '^SetupIconFile=', ';SetupIconFile=' | Set-Content installer\Adjutant-Setup.iss
           }
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\CalendarMcp-Setup.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\Adjutant-Setup.iss
         shell: pwsh
       
       - name: Upload Installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: calendar-mcp-setup-win-x64
-          path: ./release/calendar-mcp-setup-win-x64.exe
+          name: adjutant-setup-win-x64
+          path: ./release/adjutant-setup-win-x64.exe
   
   create-release:
     name: Create GitHub Release
@@ -241,11 +241,11 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            ./artifacts/calendar-mcp-win-x64/calendar-mcp-win-x64.zip
-            ./artifacts/calendar-mcp-linux-x64/calendar-mcp-linux-x64.tar.gz
-            ./artifacts/calendar-mcp-osx-x64/calendar-mcp-osx-x64.tar.gz
-            ./artifacts/calendar-mcp-osx-arm64/calendar-mcp-osx-arm64.tar.gz
-            ./artifacts/calendar-mcp-setup-win-x64/calendar-mcp-setup-win-x64.exe
+            ./artifacts/adjutant-win-x64/adjutant-win-x64.zip
+            ./artifacts/adjutant-linux-x64/adjutant-linux-x64.tar.gz
+            ./artifacts/adjutant-osx-x64/adjutant-osx-x64.tar.gz
+            ./artifacts/adjutant-osx-arm64/adjutant-osx-arm64.tar.gz
+            ./artifacts/adjutant-setup-win-x64/adjutant-setup-win-x64.exe
           draft: false
           prerelease: false
           generate_release_notes: true

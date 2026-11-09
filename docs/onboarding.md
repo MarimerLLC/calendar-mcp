@@ -2,11 +2,11 @@
 
 ## Overview
 
-Calendar-MCP requires initial OAuth authentication for each account. Since MCP servers run in non-interactive contexts, we provide a separate CLI tool for account setup.
+Adjutant requires initial OAuth authentication for each account. Since MCP servers run in non-interactive contexts, we provide a separate CLI tool for account setup.
 
 ## Prerequisites: App Registration Setup
 
-**BEFORE using calendar-mcp-setup, you must create app registrations:**
+**BEFORE using adjutant-setup, you must create app registrations:**
 
 ### Microsoft 365 / Outlook.com
 
@@ -18,7 +18,7 @@ Create **one multi-tenant app registration** to use across all M365 tenants:
 
 1. Go to [Azure Portal](https://portal.azure.com) → Azure Active Directory → App registrations
 2. Click "New registration"
-3. Name: "Calendar-MCP" (or your choice)
+3. Name: "Adjutant" (or your choice)
 4. Supported account types: **"Accounts in any organizational directory (Any Azure AD directory - Multitenant)"**
 5. Redirect URI: "Public client/native" → `http://localhost`
 6. Register
@@ -68,7 +68,7 @@ Create **one OAuth client** to use across all Google accounts:
 3. Enable APIs: Gmail API, Google Calendar API, People API
 4. Go to "Credentials" → Create credentials → OAuth client ID
 5. Application type: "Desktop app"
-6. Name: "Calendar-MCP"
+6. Name: "Adjutant"
 7. Copy **Client ID** and **Client Secret** - you'll use these for ALL Google accounts
 8. Go to "OAuth consent screen" → Add scopes:
    - `gmail.readonly`
@@ -90,16 +90,16 @@ Create **separate OAuth client per Workspace organization**:
 **Pros**: Works when Workspace admins enforce OAuth restrictions, more control per org
 **Cons**: More setup work, multiple credentials to manage
 
-## calendar-mcp-setup CLI Tool
+## adjutant-setup CLI Tool
 
 ### Installation
 
 ```bash
 # Install globally
-dotnet tool install -g calendar-mcp-setup
+dotnet tool install -g adjutant-setup
 
 # Or run from source
-cd tools/calendar-mcp-setup
+cd tools/adjutant-setup
 dotnet run
 ```
 
@@ -108,7 +108,7 @@ dotnet run
 #### Add Account
 
 ```bash
-calendar-mcp-setup add-account
+adjutant-setup add-account
 
 # Interactive prompts:
 # 1. Account type via dedicated commands:
@@ -128,7 +128,7 @@ calendar-mcp-setup add-account
 #### List Accounts
 
 ```bash
-calendar-mcp-setup list-accounts
+adjutant-setup list-accounts
 
 # Output:
 # Configured accounts:
@@ -143,7 +143,7 @@ calendar-mcp-setup list-accounts
 #### Test Account
 
 ```bash
-calendar-mcp-setup test-account work-account
+adjutant-setup test-account work-account
 
 # Output:
 # Testing account: work-account
@@ -158,7 +158,7 @@ calendar-mcp-setup test-account work-account
 #### Refresh Account
 
 ```bash
-calendar-mcp-setup refresh-account work-account
+adjutant-setup refresh-account work-account
 
 # Output:
 # Refreshing account: work-account
@@ -172,7 +172,7 @@ calendar-mcp-setup refresh-account work-account
 #### Remove Account
 
 ```bash
-calendar-mcp-setup remove-account work-account
+adjutant-setup remove-account work-account
 
 # Confirmation prompt:
 # Are you sure you want to remove account 'work-account'? (y/N): y
@@ -188,7 +188,7 @@ calendar-mcp-setup remove-account work-account
 ```mermaid
 sequenceDiagram
     participant User
-    participant CLI as calendar-mcp-setup
+    participant CLI as adjutant-setup
     participant Browser
     participant Provider as OAuth Provider
     participant Config as appsettings.json
@@ -238,8 +238,8 @@ Stored in `appsettings.json`:
 
 **Separate from configuration files!**
 
-- **Microsoft**: `%LOCALAPPDATA%/CalendarMcp/msal_cache_{accountId}.bin` (encrypted)
-- **Google**: `~/.credentials/calendar-mcp/{accountId}/` (JSON files)
+- **Microsoft**: `%LOCALAPPDATA%/Adjutant/msal_cache_{accountId}.bin` (encrypted)
+- **Google**: `~/.credentials/adjutant/{accountId}/` (JSON files)
 
 See [Authentication](authentication.md#per-account-token-storage) for details.
 
@@ -266,7 +266,7 @@ See [Authentication](authentication.md#per-account-token-storage) for details.
 [INFO]   ✓ Token refreshed successfully
 [INFO] Initializing account: personal-gmail (google)
 [ERROR]  ✗ Token refresh failed: Invalid grant
-[ERROR]  → Run 'calendar-mcp-setup refresh-account personal-gmail' to re-authenticate
+[ERROR]  → Run 'adjutant-setup refresh-account personal-gmail' to re-authenticate
 [INFO] Initializing account: personal-outlook (outlook.com)
 [INFO]   ✓ Token cache found, valid until 2025-12-04 16:00:00
 [INFO] MCP Server ready with 3 active accounts (1 failed)
@@ -280,7 +280,7 @@ See [Authentication](authentication.md#per-account-token-storage) for details.
 
 **Solution**:
 ```bash
-calendar-mcp-setup refresh-account <account-id>
+adjutant-setup refresh-account <account-id>
 ```
 
 ### "Account not found in configuration"
@@ -289,7 +289,7 @@ calendar-mcp-setup refresh-account <account-id>
 
 **Solution**:
 ```bash
-calendar-mcp-setup add-account
+adjutant-setup add-account
 ```
 
 ### "Browser won't open for OAuth"
@@ -303,8 +303,8 @@ calendar-mcp-setup add-account
 **Cause**: Required scopes not granted during OAuth consent
 
 **Solution**:
-1. Remove account: `calendar-mcp-setup remove-account <account-id>`
-2. Re-add with correct scopes: `calendar-mcp-setup add-account`
+1. Remove account: `adjutant-setup remove-account <account-id>`
+2. Re-add with correct scopes: `adjutant-setup add-account`
 3. Ensure all required permissions granted in consent screen
 
 ## Security Best Practices
@@ -322,10 +322,10 @@ calendar-mcp-setup add-account
 Potential enhancement: Expose onboarding instructions as MCP resource for AI assistant to guide user:
 
 ```typescript
-// MCP resource: mcp://calendar-mcp/onboarding-instructions
+// MCP resource: mcp://adjutant/onboarding-instructions
 {
   "instructions": [
-    "Run: calendar-mcp-setup add-account",
+    "Run: adjutant-setup add-account",
     "Follow interactive prompts",
     "Authenticate in browser when prompted",
     "Repeat for each account"

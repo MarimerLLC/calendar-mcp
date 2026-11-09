@@ -67,7 +67,7 @@ Create **separate OAuth clients** for each Workspace organization.
 3. Click the project dropdown at the top
 4. Click **"New Project"**
 5. Enter project details:
-   - **Project name**: `Calendar-MCP` (or your preferred name)
+   - **Project name**: `Adjutant` (or your preferred name)
    - **Organization**: Select your organization (Workspace only)
    - **Location**: Select parent folder (if applicable)
 6. Click **"Create"**
@@ -113,7 +113,7 @@ You need to enable the Gmail, Google Calendar, and Google People APIs.
 #### Fill in App Information
 
 **App information:**
-- **App name**: `Calendar-MCP`
+- **App name**: `Adjutant`
 - **User support email**: Your email address
 - **App logo**: (Optional) Upload a logo
 
@@ -173,7 +173,7 @@ If your OAuth consent screen is in **"Testing"** publishing status, Google will 
 3. Select application type:
    - **Application type**: `Web application`
 4. Enter name:
-   - **Name**: `Calendar-MCP`
+   - **Name**: `Adjutant`
 5. Under **Authorized redirect URIs**, click **"Add URI"** and add the following:
    - `http://localhost:8642/authorize/` — required for CLI authentication
    - If using the HTTP server admin UI, also add your server's callback URL, e.g.:
@@ -207,15 +207,15 @@ You'll need these values for the CLI tool:
 ### Run Authentication
 
 ```bash
-# If CalendarMcp.Cli is in your PATH:
-CalendarMcp.Cli add-google-account
+# If Adjutant.Cli is in your PATH:
+Adjutant.Cli add-google-account
 
 # Otherwise, use the full path:
 # Windows
-C:\Program Files\CalendarMcp\CalendarMcp.Cli.exe add-google-account
+C:\Program Files\Adjutant\Adjutant.Cli.exe add-google-account
 
 # macOS/Linux
-~/calendar-mcp/CalendarMcp.Cli add-google-account
+~/adjutant/Adjutant.Cli add-google-account
 ```
 
 ### Interactive Prompts
@@ -278,7 +278,7 @@ The CLI will show:
 ### Test the Account
 
 ```bash
-CalendarMcp.Cli test-account personal-gmail
+Adjutant.Cli test-account personal-gmail
 ```
 
 This verifies the cached token can be retrieved and used.
@@ -286,7 +286,7 @@ This verifies the cached token can be retrieved and used.
 ### List All Accounts
 
 ```bash
-CalendarMcp.Cli list-accounts
+Adjutant.Cli list-accounts
 ```
 
 Should show your Google account(s) along with any other configured accounts.
@@ -299,14 +299,14 @@ The MCP server will automatically use the cached tokens when it starts.
 
 ```bash
 # If in PATH:
-CalendarMcp.StdioServer
+Adjutant.StdioServer
 
 # Or use full path:
 # Windows
-C:\Program Files\CalendarMcp\CalendarMcp.StdioServer.exe
+C:\Program Files\Adjutant\Adjutant.StdioServer.exe
 
 # macOS/Linux
-~/calendar-mcp/CalendarMcp.StdioServer
+~/adjutant/Adjutant.StdioServer
 ```
 
 The server will:
@@ -323,11 +323,11 @@ To add multiple Google accounts:
 
 ```bash
 # Add first Gmail account
-CalendarMcp.Cli add-google-account
+Adjutant.Cli add-google-account
 # Enter: personal-gmail, Personal Gmail, client-id, client-secret, user1@gmail.com
 
 # Add second Gmail account
-CalendarMcp.Cli add-google-account
+Adjutant.Cli add-google-account
 # Enter: work-gmail, Work Gmail, client-id, client-secret, user2@gmail.com
 ```
 
@@ -337,11 +337,11 @@ You can use the **same Client ID and Client Secret** for multiple accounts.
 
 ```bash
 # Add Workspace account
-CalendarMcp.Cli add-google-account
+Adjutant.Cli add-google-account
 # Enter: workspace-account, Work Workspace, workspace-client-id, workspace-secret, user@company.com
 
 # Add personal Gmail account
-CalendarMcp.Cli add-google-account
+Adjutant.Cli add-google-account
 # Enter: personal-gmail, Personal Gmail, gmail-client-id, gmail-secret, user@gmail.com
 ```
 
@@ -353,12 +353,12 @@ Tokens are stored in platform-specific locations:
 
 **Windows:**
 ```
-%LOCALAPPDATA%\CalendarMcp\google\{accountId}\Google.Apis.Auth.OAuth2.Responses.TokenResponse-user
+%LOCALAPPDATA%\Adjutant\google\{accountId}\Google.Apis.Auth.OAuth2.Responses.TokenResponse-user
 ```
 
 **macOS/Linux:**
 ```
-~/.local/share/CalendarMcp/google/{accountId}/Google.Apis.Auth.OAuth2.Responses.TokenResponse-user
+~/.local/share/Adjutant/google/{accountId}/Google.Apis.Auth.OAuth2.Responses.TokenResponse-user
 ```
 
 **Container (Docker/K8s):**
@@ -387,7 +387,7 @@ If you need to re-authenticate (e.g., password changed, permissions updated):
 
 ```bash
 # Re-run add-google-account with same account ID
-CalendarMcp.Cli add-google-account
+Adjutant.Cli add-google-account
 # Use the SAME Account ID to overwrite existing configuration
 ```
 
@@ -406,7 +406,7 @@ CalendarMcp.Cli add-google-account
 
 **To bypass the warning temporarily:**
 1. On the "This app isn't verified" screen, click "Advanced"
-2. Click "Go to Calendar-MCP (unsafe)"
+2. Click "Go to Adjutant (unsafe)"
 3. Grant permissions
 
 **For Production:**
@@ -442,7 +442,7 @@ Submit your app for Google verification (requires review process).
 2. Re-run authentication and ensure all permissions are granted
 3. If scopes changed, revoke access and re-authenticate:
    - Go to [Google Account Permissions](https://myaccount.google.com/permissions)
-   - Remove Calendar-MCP app
+   - Remove Adjutant app
    - Re-authenticate with CLI
 
 ### Browser Doesn't Open
@@ -453,7 +453,7 @@ Submit your app for Google verification (requires review process).
 - Check firewall isn't blocking localhost
 - Manually open the URL printed by the CLI
 
-### "Access blocked: Calendar-MCP has not completed the Google verification process"
+### "Access blocked: Adjutant has not completed the Google verification process"
 
 **Cause:** App is unverified and not in testing mode, or user not a test user.
 

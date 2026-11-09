@@ -1,0 +1,36 @@
+@using Adjutant.HttpServer.BlazorAdmin
+
+@*
+    Connection fields for an on-premises Exchange (EWS) account, shared by the add and edit
+    pages. The provider only reads ewsUrl, username and password.
+*@
+
+<div class="alert alert-warning py-2 small">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    The Exchange provider is <strong>unverified</strong>: it hasn't been tested against a real
+    Exchange server yet. Try read-only tools first and report results in
+    <a href="https://github.com/MarimerLLC/adjutant/issues/110" target="_blank" rel="noopener">#110</a>.
+</div>
+<div class="mb-3">
+    <label class="form-label">EWS URL</label>
+    <InputText class="form-control" @bind-Value="Model.EwsUrl"
+               placeholder="https://mail.example.com/EWS/Exchange.asmx" />
+    <div class="form-text">HTTPS endpoint of Exchange Web Services. The server must allow Basic authentication for EWS.</div>
+</div>
+<div class="row">
+    <div class="col-md-6 mb-3">
+        <label class="form-label">Username</label>
+        <InputText class="form-control" @bind-Value="Model.Username" placeholder="user@example.com" />
+        <div class="form-text">The mailbox address or <code>DOMAIN\user</code>, whichever your server accepts.</div>
+    </div>
+    <div class="col-md-6 mb-3">
+        <label class="form-label">Password</label>
+        <InputText class="form-control" type="password" @bind-Value="Model.Password" />
+        <div class="form-text">Stored encrypted via ASP.NET DataProtection.</div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public IExchangeAccountForm Model { get; set; } = default!;
+}

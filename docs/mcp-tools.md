@@ -2,7 +2,7 @@
 
 ## Overview
 
-Calendar-MCP exposes tools through the Model Context Protocol (MCP) that AI assistants can use to query and manage emails, calendars, and contacts across multiple accounts.
+Adjutant exposes tools through the Model Context Protocol (MCP) that AI assistants can use to query and manage emails, calendars, and contacts across multiple accounts.
 
 ## Core Tools
 
@@ -345,7 +345,7 @@ Send email from specific account (requires explicit account selection or smart r
 
 ### Attachment uploads (HTTP mode)
 
-Available only on the HTTP server (`CalendarMcp.HttpServer`). Stdio clients
+Available only on the HTTP server (`Adjutant.HttpServer`). Stdio clients
 must use `base64Content` inline.
 
 `POST /attachments` accepts `multipart/form-data` with exactly one `file`
@@ -371,7 +371,7 @@ unsent uploads; the agent should re-upload on retry.
 
 curl example:
 ```sh
-curl -F file=@report.pdf https://calendar-mcp.tail920062.ts.net/attachments
+curl -F file=@report.pdf https://adjutant.tail920062.ts.net/attachments
 ```
 
 #### `GET /attachments/{attachmentId}`
@@ -389,7 +389,7 @@ GETs against the same ID are fine.
 Returns `404` if the ID is unknown, expired, or already consumed.
 
 ```sh
-curl -OJ https://calendar-mcp.tail920062.ts.net/attachments/AbCdEf1234
+curl -OJ https://adjutant.tail920062.ts.net/attachments/AbCdEf1234
 ```
 
 #### `DELETE /attachments/{attachmentId}`
@@ -399,7 +399,7 @@ success, `404` if the entry was already gone. Polite cleanup for agents
 that uploaded an attachment they decided not to send.
 
 ```sh
-curl -X DELETE https://calendar-mcp.tail920062.ts.net/attachments/AbCdEf1234
+curl -X DELETE https://adjutant.tail920062.ts.net/attachments/AbCdEf1234
 ```
 
 **Returns**:
@@ -882,7 +882,7 @@ account with no data:
 {
   "emails": [ ... ],
   "warnings": [
-    { "accountId": "work", "error": "Account 'work' requires re-authentication (no valid cached credential). Run 'calendar-mcp-cli reauth work' or re-authenticate it from the admin UI." }
+    { "accountId": "work", "error": "Account 'work' requires re-authentication (no valid cached credential). Run 'adjutant-cli reauth work' or re-authenticate it from the admin UI." }
   ]
 }
 ```
@@ -910,11 +910,11 @@ Configuration in Claude Desktop:
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
+    "adjutant": {
       "command": "dotnet",
-      "args": ["run", "--project", "path/to/CalendarMcp.Server.dll"],
+      "args": ["run", "--project", "path/to/Adjutant.Server.dll"],
       "env": {
-        "CALENDAR_MCP_CONFIG": "path/to/appsettings.json"
+        "ADJUTANT_CONFIG": "path/to/appsettings.json"
       }
     }
   }

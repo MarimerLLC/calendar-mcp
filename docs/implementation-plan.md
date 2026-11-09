@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the phased implementation strategy for Calendar-MCP, from foundation to community release.
+This document outlines the phased implementation strategy for Adjutant, from foundation to community release.
 
 ## Development Phases
 
@@ -84,7 +84,7 @@ This document outlines the phased implementation strategy for Calendar-MCP, from
 
 ### Phase 5: Onboarding CLI
 
-19. Create calendar-mcp-setup CLI project
+19. Create adjutant-setup CLI project
 20. Implement add-account flow with interactive prompts
 21. Implement list/test/remove account commands
 22. Add configuration validation

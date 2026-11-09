@@ -1,14 +1,14 @@
-# HTTP Head Implementation Plan for Calendar-MCP
+# HTTP Head Implementation Plan for Adjutant
 
 **Status**: Research & Planning Phase  
 **Date**: February 2026  
-**Purpose**: Enable Calendar-MCP server to run in containerized, headless environments (e.g., private Kubernetes clusters)
+**Purpose**: Enable Adjutant server to run in containerized, headless environments (e.g., private Kubernetes clusters)
 
 ---
 
 ## Executive Summary
 
-This document outlines the research findings and implementation plan for adding an HTTP-based interface to the Calendar-MCP server. The current stdio-based interface works well for local desktop scenarios but cannot be used in containerized, headless cloud environments. This enhancement will enable users to run Calendar-MCP in their private cloud infrastructure while maintaining the same security and privacy guarantees.
+This document outlines the research findings and implementation plan for adding an HTTP-based interface to the Adjutant server. The current stdio-based interface works well for local desktop scenarios but cannot be used in containerized, headless cloud environments. This enhancement will enable users to run Adjutant in their private cloud infrastructure while maintaining the same security and privacy guarantees.
 
 ## Problem Statement
 
@@ -25,8 +25,8 @@ This document outlines the research findings and implementation plan for adding 
    - Direct user interaction with the terminal
 
 3. **Local Storage Dependency**: Configuration and tokens are stored in:
-   - `%LOCALAPPDATA%/CalendarMcp/` (Windows)
-   - `~/.local/share/CalendarMcp/` (Linux/macOS)
+   - `%LOCALAPPDATA%/Adjutant/` (Windows)
+   - `~/.local/share/Adjutant/` (Linux/macOS)
    - Not externalized for container persistence
 
 ### Target Scenario
@@ -235,26 +235,26 @@ Response: { device_code, user_code, verification_url }
 
 **Configuration**:
 - `appsettings.json` - Account definitions, settings
-- Location: `%LOCALAPPDATA%/CalendarMcp/` or `~/.local/share/CalendarMcp/`
+- Location: `%LOCALAPPDATA%/Adjutant/` or `~/.local/share/Adjutant/`
 
 **Token Caches**:
 - Microsoft: `msal_cache_{accountId}.bin` (encrypted via DPAPI/Keychain)
-- Google: `~/.credentials/calendar-mcp-{accountId}/` (JSON files)
+- Google: `~/.credentials/adjutant-{accountId}/` (JSON files)
 
 **Logs**:
-- `logs/calendar-mcp-YYYYMMDD.log` (daily rolling)
+- `logs/adjutant-YYYYMMDD.log` (daily rolling)
 
 #### Containerization Requirements
 
 **Volume Mounts**:
 ```yaml
 volumes:
-  - name: calendar-mcp-data
+  - name: adjutant-data
     persistentVolumeClaim:
-      claimName: calendar-mcp-pvc
-  - name: calendar-mcp-config
+      claimName: adjutant-pvc
+  - name: adjutant-config
     configMap:
-      name: calendar-mcp-config
+      name: adjutant-config
 ```
 
 **Mount Points**:
@@ -263,14 +263,14 @@ volumes:
   ├── appsettings.json
   ├── msal_cache_*.bin
   └── .credentials/
-      └── calendar-mcp-*/
+      └── adjutant-*/
 /app/logs/           # Log directory (optional - could use stdout)
 ```
 
 **Environment Variables**:
 ```bash
-CALENDAR_MCP_CONFIG=/app/data/appsettings.json
-CALENDAR_MCP_DATA_DIR=/app/data
+ADJUTANT_CONFIG=/app/data/appsettings.json
+ADJUTANT_DATA_DIR=/app/data
 ASPNETCORE_URLS=http://+:8080
 OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318  # Optional telemetry
 ```
@@ -355,7 +355,7 @@ fetch('http://localhost:8080/mcp/message', {
 **Security Considerations**:
 - Admin API should require authentication token
 - Token provided via `X-Admin-Token` header
-- Token configured via environment variable: `CALENDAR_MCP_ADMIN_TOKEN`
+- Token configured via environment variable: `ADJUTANT_ADMIN_TOKEN`
 - All admin operations logged for audit
 
 #### Admin Web UI (Optional but Recommended)
@@ -385,10 +385,10 @@ fetch('http://localhost:8080/mcp/message', {
 **Goal**: Get basic HTTP/SSE transport working with existing authentication
 
 **Tasks**:
-1. Create new project: `CalendarMcp.HttpServer`
+1. Create new project: `Adjutant.HttpServer`
    - ASP.NET Core 10 application
    - Kestrel web server
-   - Reference `CalendarMcp.Core`
+   - Reference `Adjutant.Core`
 
 2. Implement MCP HTTP/SSE transport
    - Research ModelContextProtocol HTTP support
@@ -397,7 +397,7 @@ fetch('http://localhost:8080/mcp/message', {
    - Ensure all 10 MCP tools work over HTTP
 
 3. Configuration externalization
-   - Support `CALENDAR_MCP_CONFIG` environment variable
+   - Support `ADJUTANT_CONFIG` environment variable
    - Default to `/app/data/appsettings.json` in container
    - Test configuration hot-reload
 
@@ -414,7 +414,7 @@ fetch('http://localhost:8080/mcp/message', {
    - Test container build and run
 
 **Deliverables**:
-- `CalendarMcp.HttpServer.csproj`
+- `Adjutant.HttpServer.csproj`
 - `Program.cs` with HTTP transport setup
 - `Dockerfile`
 - Basic documentation
@@ -444,7 +444,7 @@ fetch('http://localhost:8080/mcp/message', {
 
 4. Update authentication services
    - Make authentication flow configurable (interactive vs device code)
-   - Environment variable: `CALENDAR_MCP_AUTH_MODE=device-code|interactive`
+   - Environment variable: `ADJUTANT_AUTH_MODE=device-code|interactive`
    - Default to `interactive` for backward compatibility
 
 5. Testing
@@ -484,7 +484,7 @@ fetch('http://localhost:8080/mcp/message', {
 
 4. Security
    - Simple password/token authentication for UI
-   - Environment variable: `CALENDAR_MCP_ADMIN_TOKEN`
+   - Environment variable: `ADJUTANT_ADMIN_TOKEN`
    - Cookie-based session management
 
 5. Testing
@@ -590,7 +590,7 @@ fetch('http://localhost:8080/mcp/message', {
                 │ stdio (stdin/stdout)
                 ▼
 ┌─────────────────────────────────────┐
-│  Calendar-MCP Stdio Server          │
+│  Adjutant Stdio Server          │
 │  ┌───────────────────────────────┐ │
 │  │  MCP Protocol Handler         │ │
 │  └────────────┬──────────────────┘ │
@@ -606,7 +606,7 @@ fetch('http://localhost:8080/mcp/message', {
                 ▼
 ┌─────────────────────────────────────┐
 │  Local Storage                      │
-│  - ~/.local/share/CalendarMcp/      │
+│  - ~/.local/share/Adjutant/      │
 │  - Token caches                     │
 │  - Configuration                    │
 └─────────────────────────────────────┘
@@ -625,7 +625,7 @@ fetch('http://localhost:8080/mcp/message', {
 ┌─────────────────────────────────────────────────┐
 │  Kubernetes Cluster (Private)                   │
 │  ┌────────────────────────────────────────────┐│
-│  │  Calendar-MCP HTTP Server (Container)     ││
+│  │  Adjutant HTTP Server (Container)     ││
 │  │  ┌──────────────────────────────────────┐ ││
 │  │  │  ASP.NET Core Kestrel                │ ││
 │  │  │  - MCP HTTP/SSE endpoint             │ ││
@@ -750,7 +750,7 @@ External (User's Phone/Laptop):
    - Never commit secrets to git
    - Use Kubernetes secrets for sensitive config
    - Example secrets:
-     - `CALENDAR_MCP_ADMIN_TOKEN`
+     - `ADJUTANT_ADMIN_TOKEN`
      - OAuth client secrets (if needed)
 
 ### Threat Model
@@ -815,8 +815,8 @@ public class EncryptedFileTokenStorage : ITokenStorage
 
 **Environment Variable**:
 ```bash
-CALENDAR_MCP_AUTH_MODE=device-code  # For containers
-CALENDAR_MCP_AUTH_MODE=interactive  # For local usage (default)
+ADJUTANT_AUTH_MODE=device-code  # For containers
+ADJUTANT_AUTH_MODE=interactive  # For local usage (default)
 ```
 
 ### Challenge 3: MCP Protocol Over HTTP
@@ -973,7 +973,7 @@ Implement comprehensive health checks:
   - Confirm all MCP tools work over HTTP
 
 ### Step 2: Minimal Working Prototype
-- ✅ Create CalendarMcp.HttpServer project
+- ✅ Create Adjutant.HttpServer project
 - ✅ Get MCP protocol working over HTTP/SSE
 - ✅ Deploy to local Docker container
 - ✅ Manually configure accounts in container
@@ -1122,7 +1122,7 @@ The HTTP head implementation will be considered successful when:
 
 ## Conclusion
 
-Adding HTTP head support to Calendar-MCP is technically feasible and addresses a legitimate use case (private cloud deployment). The key innovation is using **OAuth device code flow** to enable headless authentication, combined with **custom token encryption** for secure storage in containers.
+Adding HTTP head support to Adjutant is technically feasible and addresses a legitimate use case (private cloud deployment). The key innovation is using **OAuth device code flow** to enable headless authentication, combined with **custom token encryption** for secure storage in containers.
 
 The implementation can be done in phases, with a minimal viable product achievable in 8-10 days. The approach maintains the same security and privacy guarantees as the current stdio implementation, while enabling deployment in containerized environments.
 

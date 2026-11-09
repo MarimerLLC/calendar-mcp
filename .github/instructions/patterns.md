@@ -1,6 +1,6 @@
 # Common Code Patterns
 
-This document describes common patterns used in the Calendar-MCP codebase with concrete examples.
+This document describes common patterns used in the Adjutant codebase with concrete examples.
 
 ## MCP Tool Implementation Pattern
 
@@ -8,16 +8,16 @@ All MCP tools follow a consistent pattern for implementation and registration.
 
 ### Step 1: Create Tool Class
 
-Create a sealed class in `src/CalendarMcp.Core/Tools/` with the `[McpServerToolType]` attribute:
+Create a sealed class in `src/Adjutant.Core/Tools/` with the `[McpServerToolType]` attribute:
 
 ```csharp
 using System.ComponentModel;
 using System.Text.Json;
-using CalendarMcp.Core.Services;
+using Adjutant.Core.Services;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
-namespace CalendarMcp.Core.Tools;
+namespace Adjutant.Core.Tools;
 
 /// <summary>
 /// MCP tool for [describe the tool's purpose]
@@ -62,10 +62,10 @@ public sealed class YourToolName(
 
 ### Step 2: Register in Dependency Injection
 
-Add to `src/CalendarMcp.Core/Configuration/ServiceCollectionExtensions.cs`:
+Add to `src/Adjutant.Core/Configuration/ServiceCollectionExtensions.cs`:
 
 ```csharp
-public static IServiceCollection AddCalendarMcpCore(this IServiceCollection services)
+public static IServiceCollection AddAdjutantCore(this IServiceCollection services)
 {
     // ... existing registrations ...
     
@@ -80,7 +80,7 @@ public static IServiceCollection AddCalendarMcpCore(this IServiceCollection serv
 
 Add to **both** server Program.cs files:
 
-**`src/CalendarMcp.StdioServer/Program.cs`:**
+**`src/Adjutant.StdioServer/Program.cs`:**
 ```csharp
 services.AddMcpServer()
     .WithTools<ListAccountsTool>()
@@ -89,7 +89,7 @@ services.AddMcpServer()
     .WithStdioServerTransport();
 ```
 
-**`src/CalendarMcp.HttpServer/Program.cs`:**
+**`src/Adjutant.HttpServer/Program.cs`:**
 ```csharp
 services.AddMcpServer()
     .WithTools<ListAccountsTool>()
@@ -139,7 +139,7 @@ All provider services implement `IProviderService` and are resolved via `Provide
 
 ### Creating a New Provider
 
-1. **Define the interface** in `src/CalendarMcp.Core/Services/`:
+1. **Define the interface** in `src/Adjutant.Core/Services/`:
    ```csharp
    public interface IYourProviderService : IProviderService
    {
@@ -147,7 +147,7 @@ All provider services implement `IProviderService` and are resolved via `Provide
    }
    ```
 
-2. **Implement the provider** in `src/CalendarMcp.Core/Providers/`:
+2. **Implement the provider** in `src/Adjutant.Core/Providers/`:
    ```csharp
    public class YourProviderService : IYourProviderService
    {
@@ -187,20 +187,20 @@ All provider services implement `IProviderService` and are resolved via `Provide
 
 Configuration is loaded from:
 1. `appsettings.json` (file location from `ConfigurationPaths.GetConfigFilePath()`)
-2. Environment variables with prefix `CALENDAR_MCP_`
+2. Environment variables with prefix `ADJUTANT_`
 3. Command-line arguments
 
 ```csharp
 var config = builder.Configuration
-    .GetSection("CalendarMcp")
-    .Get<CalendarMcpConfiguration>();
+    .GetSection("Adjutant")
+    .Get<AdjutantConfiguration>();
 ```
 
 ### Configuration Structure
 
 ```json
 {
-  "CalendarMcp": {
+  "Adjutant": {
     "Accounts": [
       {
         "id": "unique-account-id",
@@ -357,7 +357,7 @@ public class YourToolTests
 ## File Organization
 
 ```
-src/CalendarMcp.Core/
+src/Adjutant.Core/
 ├── Configuration/     # DI setup and config classes
 ├── Models/           # Data models (AccountInfo, EmailMessage, etc.)
 ├── Providers/        # Provider implementations (M365, Google, etc.)

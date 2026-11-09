@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- The 16-32 px version of ../favicon.svg: the three account tiles become plain amber squares on a pixel
+       grid (the glyphs inside them blur at this size), pushed to the edges so the links to the cyan core show. -->
+  <rect width="16" height="16" rx="3" fill="#04162e"/>
+  <path d="M8 7L3 3M8 7L13 3M8 7V13" stroke="#7d90a6" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+  <rect x="1" y="1" width="4" height="4" rx="1" fill="#f5a94b"/>
+  <rect x="11" y="1" width="4" height="4" rx="1" fill="#f5a94b"/>
+  <rect x="6" y="11" width="4" height="4" rx="1" fill="#f5a94b"/>
+  <circle cx="8" cy="7" r="2.6" fill="#04162e"/>
+  <circle cx="8" cy="7" r="2" fill="#4bcfe1"/>
+</svg>

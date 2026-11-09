@@ -1,7 +1,7 @@
 # HTTP Head Research - Quick Reference
 
 ## 🎯 Problem
-Current Calendar-MCP only supports stdio transport → Can't run in containers/k8s
+Current Adjutant only supports stdio transport → Can't run in containers/k8s
 
 ## ✅ Solution Overview
 
@@ -78,7 +78,7 @@ Container                     User's Phone
 **Simple bearer token authentication**
 ```bash
 # Required for admin API/UI access
-CALENDAR_MCP_ADMIN_TOKEN=<secret-token>
+ADJUTANT_ADMIN_TOKEN=<secret-token>
 
 # Usage
 curl -H "X-Admin-Token: secret-token" \
@@ -93,7 +93,7 @@ curl -H "X-Admin-Token: secret-token" \
 ## 📊 Implementation Phases
 
 ### Phase 1: HTTP Transport (2-3 days) 🎯 P1
-- Create `CalendarMcp.HttpServer` project
+- Create `Adjutant.HttpServer` project
 - HTTP/SSE endpoint for MCP protocol
 - Basic Dockerfile
 - Configuration externalization
@@ -129,9 +129,9 @@ curl -H "X-Admin-Token: secret-token" \
 ```bash
 docker run -p 8080:8080 \
   -v /path/to/data:/app/data \
-  -e CALENDAR_MCP_ADMIN_TOKEN=secret123 \
-  -e CALENDAR_MCP_AUTH_MODE=device-code \
-  calendar-mcp:latest
+  -e ADJUTANT_ADMIN_TOKEN=secret123 \
+  -e ADJUTANT_AUTH_MODE=device-code \
+  adjutant:latest
 ```
 
 ### Kubernetes
@@ -139,23 +139,23 @@ docker run -p 8080:8080 \
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: calendar-mcp
+  name: adjutant
 spec:
   replicas: 1
   template:
     spec:
       containers:
-      - name: calendar-mcp
-        image: calendar-mcp:latest
+      - name: adjutant
+        image: adjutant:latest
         ports:
         - containerPort: 8080
         env:
-        - name: CALENDAR_MCP_ADMIN_TOKEN
+        - name: ADJUTANT_ADMIN_TOKEN
           valueFrom:
             secretKeyRef:
-              name: calendar-mcp-secrets
+              name: adjutant-secrets
               key: admin-token
-        - name: CALENDAR_MCP_AUTH_MODE
+        - name: ADJUTANT_AUTH_MODE
           value: "device-code"
         volumeMounts:
         - name: data
@@ -163,13 +163,13 @@ spec:
       volumes:
       - name: data
         persistentVolumeClaim:
-          claimName: calendar-mcp-pvc
+          claimName: adjutant-pvc
 ```
 
 ### Access
 ```bash
 # Port forward to localhost
-kubectl port-forward svc/calendar-mcp 8080:8080
+kubectl port-forward svc/adjutant 8080:8080
 
 # Access admin UI
 open http://localhost:8080/admin/ui
@@ -240,7 +240,7 @@ Need to verify before implementation:
 
 ## ✅ Conclusion
 
-**HTTP head for Calendar-MCP is FEASIBLE and WELL-DESIGNED**
+**HTTP head for Adjutant is FEASIBLE and WELL-DESIGNED**
 
 Key innovations:
 - ⭐ OAuth device code flow (solves headless auth)

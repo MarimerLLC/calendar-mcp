@@ -42,10 +42,10 @@ Detailed documentation is organized by topic in the [`/docs`](docs/) folder:
 ## Quick Start
 
 1. **Prerequisites**: Create app registrations - see [Onboarding Prerequisites](docs/onboarding.md#prerequisites-app-registration-setup)
-2. **Install CLI**: `dotnet tool install -g calendar-mcp-setup`
-3. **Add Accounts**: `calendar-mcp-setup add-account` - see [Onboarding Guide](docs/onboarding.md)
+2. **Install CLI**: `dotnet tool install -g adjutant-setup`
+3. **Add Accounts**: `adjutant-setup add-account` - see [Onboarding Guide](docs/onboarding.md)
 4. **Configure Router**: Edit `appsettings.json` - see [Configuration Examples](docs/configuration.md)
-5. **Test**: `calendar-mcp-setup test-account <account-id>`
+5. **Test**: `adjutant-setup test-account <account-id>`
 
 ## High-Level Architecture
 
@@ -187,11 +187,11 @@ graph TD
 ### Per-Account Token Storage
 
 **Microsoft Accounts (M365 + Outlook.com)**:
-- Encrypted token cache: `%LOCALAPPDATA%/CalendarMcp/msal_cache_{accountId}.bin`
+- Encrypted token cache: `%LOCALAPPDATA%/Adjutant/msal_cache_{accountId}.bin`
 - DPAPI encryption (Windows), Keychain (macOS)
 
 **Google Accounts**:
-- FileDataStore: `~/.credentials/calendar-mcp/{accountId}/`
+- FileDataStore: `~/.credentials/adjutant/{accountId}/`
 - Per-account directory isolation
 
 **Key Security Features**:

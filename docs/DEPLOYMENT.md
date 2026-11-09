@@ -26,9 +26,9 @@ Exchange accounts.
 
 | Shape | Use when | Entry point |
 |---|---|---|
-| Self-contained stdio | Desktop clients on the same machine (Claude Desktop, OpenCode, VS Code) | `CalendarMcp.StdioServer` |
-| HTTP server | Several clients or machines over one endpoint | `CalendarMcp.HttpServer` |
-| CLI | Administrative tasks: listing and testing accounts | `CalendarMcp.Cli` |
+| Self-contained stdio | Desktop clients on the same machine (Claude Desktop, OpenCode, VS Code) | `Adjutant.StdioServer` |
+| HTTP server | Several clients or machines over one endpoint | `Adjutant.HttpServer` |
+| CLI | Administrative tasks: listing and testing accounts | `Adjutant.Cli` |
 
 The self-contained stdio shape is the one described below, because it is the simplest to reason
 about and requires no runtime on the target machine.
@@ -45,38 +45,38 @@ For framework-dependent builds, the target machine needs the .NET 10 runtime ins
 ## Build
 
 ```bash
-git clone https://github.com/MarimerLLC/calendar-mcp.git
-cd calendar-mcp
+git clone https://github.com/MarimerLLC/adjutant.git
+cd adjutant
 
-dotnet restore calendar-mcp.slnx
-dotnet build calendar-mcp.slnx --configuration Release
+dotnet restore adjutant.slnx
+dotnet build adjutant.slnx --configuration Release
 ```
 
 Run the tests before publishing anything:
 
 ```bash
-dotnet test calendar-mcp.slnx --configuration Release
+dotnet test adjutant.slnx --configuration Release
 ```
 
 ## Publish self-contained
 
 ```bash
 # Windows x64 stdio server, for desktop MCP clients
-dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
   --configuration Release \
   --runtime win-x64 \
   --self-contained true \
   --output ./publish/win-x64
 
 # HTTP server, same machine
-dotnet publish src/CalendarMcp.HttpServer/CalendarMcp.HttpServer.csproj \
+dotnet publish src/Adjutant.HttpServer/Adjutant.HttpServer.csproj \
   --configuration Release \
   --runtime win-x64 \
   --self-contained true \
   --output ./publish/win-x64/http
 
 # CLI
-dotnet publish src/CalendarMcp.Cli/CalendarMcp.Cli.csproj \
+dotnet publish src/Adjutant.Cli/Adjutant.Cli.csproj \
   --configuration Release \
   --runtime win-x64 \
   --self-contained true \
@@ -94,13 +94,13 @@ leftover files from an older build can otherwise linger.
 A predictable layout keeps upgrades and rollbacks simple:
 
 ```
-C:\CalendarMcp\
+C:\Adjutant\
   bin\          published output (replaced wholesale on upgrade)
   config\       appsettings.json — credentials, stays in place across upgrades
   logs\         runtime logs
 ```
 
-Point `CALENDAR_MCP_CONFIG` at the `config` directory. Keeping `config` outside `bin` means an
+Point `ADJUTANT_CONFIG` at the `config` directory. Keeping `config` outside `bin` means an
 upgrade never touches credentials.
 
 ## Configuration and secrets
@@ -112,7 +112,7 @@ upgrade never touches credentials.
 - On shared machines, restrict ACLs on the config directory to the account running the server:
 
 ```powershell
-icacls "C:\CalendarMcp\config" /inheritance:r /grant "DOMAIN\user:(OI)(CI)F"
+icacls "C:\Adjutant\config" /inheritance:r /grant "DOMAIN\user:(OI)(CI)F"
 ```
 
 ## Register with an MCP client
@@ -122,10 +122,10 @@ Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
-      "command": "C:\\CalendarMcp\\bin\\CalendarMcp.StdioServer.exe",
+    "adjutant": {
+      "command": "C:\\Adjutant\\bin\\Adjutant.StdioServer.exe",
       "args": [],
-      "env": { "CALENDAR_MCP_CONFIG": "C:\\CalendarMcp\\config" }
+      "env": { "ADJUTANT_CONFIG": "C:\\Adjutant\\config" }
     }
   }
 }
@@ -140,54 +140,54 @@ OpenCode (`~/.config/opencode/opencode.jsonc`, Windows
   "mcp": {
     "calendar": {
       "type": "local",
-      "command": ["C:\\CalendarMcp\\bin\\CalendarMcp.StdioServer.exe"],
+      "command": ["C:\\Adjutant\\bin\\Adjutant.StdioServer.exe"],
       "enabled": true,
       "environment": {
-        "CALENDAR_MCP_CONFIG": "C:\\CalendarMcp\\config"
+        "ADJUTANT_CONFIG": "C:\\Adjutant\\config"
       }
     }
   }
 }
 ```
 
-Other clients take the same two values: the path to `CalendarMcp.StdioServer.exe` and a
-`CALENDAR_MCP_CONFIG` environment variable. Restart the client after editing its configuration.
+Other clients take the same two values: the path to `Adjutant.StdioServer.exe` and a
+`ADJUTANT_CONFIG` environment variable. Restart the client after editing its configuration.
 
 ## Upgrade procedure
 
 1. Read-only smoke test first — confirm the current build still works:
 
    ```bash
-   CalendarMcp.Cli list-accounts --config C:\CalendarMcp\config\appsettings.json
+   Adjutant.Cli list-accounts --config C:\Adjutant\config\appsettings.json
    ```
 
-   `CalendarMcp.Cli test-account <account-id>` checks a single account's connection, including
+   `Adjutant.Cli test-account <account-id>` checks a single account's connection, including
    Exchange.
 
-2. Stop every running server process. A running `CalendarMcp.StdioServer.exe` locks its own files,
+2. Stop every running server process. A running `Adjutant.StdioServer.exe` locks its own files,
    and publishing over a locked binary fails partway through:
 
    ```powershell
-   Get-Process -Name "CalendarMcp.StdioServer" -ErrorAction SilentlyContinue | Stop-Process -Force
-   Get-Process -Name "CalendarMcp.HttpServer"  -ErrorAction SilentlyContinue | Stop-Process -Force
+   Get-Process -Name "Adjutant.StdioServer" -ErrorAction SilentlyContinue | Stop-Process -Force
+   Get-Process -Name "Adjutant.HttpServer"  -ErrorAction SilentlyContinue | Stop-Process -Force
    ```
 
 3. Keep the previous output for rollback:
 
    ```powershell
-   Rename-Item "C:\CalendarMcp\bin" "C:\CalendarMcp\bin.previous"
+   Rename-Item "C:\Adjutant\bin" "C:\Adjutant\bin.previous"
    ```
 
 4. Publish into a clean directory and swap it in:
 
    ```bash
-   dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
+   dotnet publish src/Adjutant.StdioServer/Adjutant.StdioServer.csproj \
      --configuration Release --runtime win-x64 --self-contained true \
      --output ./publish/win-x64
    ```
 
    ```powershell
-   Move-Item ".\publish\win-x64" "C:\CalendarMcp\bin"
+   Move-Item ".\publish\win-x64" "C:\Adjutant\bin"
    ```
 
 5. Restart the MCP client and re-run [Verification](#verification).
@@ -206,7 +206,7 @@ untouched by both directions, so no credential changes are needed.
 1. Accounts are visible:
 
    ```bash
-   CalendarMcp.Cli list-accounts --config C:\CalendarMcp\config\appsettings.json
+   Adjutant.Cli list-accounts --config C:\Adjutant\config\appsettings.json
    ```
 
    Then run `test-account <account-id>` for each account. For Exchange it checks that EWS accepts
@@ -234,7 +234,7 @@ Use the HTTP server for anything that must run unattended.
 A server process is still running. Stop it as shown in [Upgrade procedure](#upgrade-procedure).
 
 **Server starts but reports no accounts**
-`CALENDAR_MCP_CONFIG` points at the wrong place. It must be the directory containing
+`ADJUTANT_CONFIG` points at the wrong place. It must be the directory containing
 `appsettings.json`, not the file itself.
 
 **HTTP 500 with `ErrorInvalidRequest`**

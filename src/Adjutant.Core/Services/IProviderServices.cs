@@ -1,0 +1,65 @@
+using Adjutant.Core.Models;
+
+namespace Adjutant.Core.Services;
+
+/// <summary>
+/// Microsoft 365 provider service for organizational accounts
+/// </summary>
+public interface IM365ProviderService : IProviderService
+{
+}
+
+/// <summary>
+/// Google Workspace provider service
+/// </summary>
+public interface IGoogleProviderService : IProviderService
+{
+}
+
+/// <summary>
+/// Outlook.com provider service for personal Microsoft accounts
+/// </summary>
+public interface IOutlookComProviderService : IProviderService
+{
+}
+
+/// <summary>
+/// ICS feed provider service for read-only calendar access via HTTP ICS URLs
+/// </summary>
+public interface IIcsProviderService : IProviderService
+{
+}
+
+/// <summary>
+/// JSON calendar file provider service for read-only calendar access via exported JSON files
+/// </summary>
+public interface IJsonCalendarProviderService : IProviderService
+{
+}
+
+/// <summary>
+/// IMAP/SMTP provider service for any mailbox supporting standard IMAP and SMTP.
+/// Email-only — calendar and contact methods throw NotSupportedException.
+/// </summary>
+public interface IImapProviderService : IProviderService
+{
+}
+
+/// <summary>On-premises Exchange EWS provider, including attendee free/busy lookup.</summary>
+public interface IExchangeProviderService : IProviderService
+{
+    Task<IReadOnlyList<FreeBusyInterval>> GetFreeBusyAsync(
+        string accountId,
+        IReadOnlyList<string> emails,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// CalDAV/CardDAV provider service for generic DAV servers and iCloud.
+/// Calendar and contacts read/write; email methods throw NotSupportedException.
+/// </summary>
+public interface IDavProviderService : IProviderService
+{
+}

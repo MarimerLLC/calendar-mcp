@@ -8,7 +8,7 @@
 
 ## Quick Summary
 
-This research investigated how to add an HTTP-based interface to Calendar-MCP for containerized/headless deployments (e.g., private Kubernetes clusters). The current stdio-only interface doesn't work in these scenarios.
+This research investigated how to add an HTTP-based interface to Adjutant for containerized/headless deployments (e.g., private Kubernetes clusters). The current stdio-only interface doesn't work in these scenarios.
 
 **Key Finding**: HTTP head is **fully feasible** using OAuth device code flow for authentication.
 

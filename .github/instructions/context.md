@@ -1,8 +1,8 @@
-# Calendar-MCP Project Context
+# Adjutant Project Context
 
 ## Project Overview
 
-Calendar-MCP is a Model Context Protocol (MCP) server written in C# / .NET that provides AI assistants (Claude, ChatGPT, GitHub Copilot) with unified access to multiple email, calendar, and contact accounts simultaneously across Microsoft 365 (multiple tenants), Outlook.com, and Google Workspace.
+Adjutant is a Model Context Protocol (MCP) server written in C# / .NET that provides AI assistants (Claude, ChatGPT, GitHub Copilot) with unified access to multiple email, calendar, and contact accounts simultaneously across Microsoft 365 (multiple tenants), Outlook.com, and Google Workspace.
 
 ## Core Problem
 

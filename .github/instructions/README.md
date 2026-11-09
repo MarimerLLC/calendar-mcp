@@ -1,11 +1,11 @@
 # Copilot Instructions
 
-This directory contains instructions and context files to guide AI assistants (GitHub Copilot, Claude, ChatGPT) working on the calendar-mcp project.
+This directory contains instructions and context files to guide AI assistants (GitHub Copilot, Claude, ChatGPT) working on the adjutant project.
 
 ## Files
 
 ### [context.md](context.md)
-High-level project overview and architecture summary for the calendar-mcp project. Read this first to understand:
+High-level project overview and architecture summary for the adjutant project. Read this first to understand:
 - What problem the project solves
 - Core capabilities and development phases
 - Architecture principles and technical stack

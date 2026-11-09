@@ -2,35 +2,35 @@
 
 ## Overview
 
-Calendar-MCP uses JSON configuration files for accounts, routing, and telemetry settings. Configuration supports environment variables and encrypted sections.
+Adjutant uses JSON configuration files for accounts, routing, and telemetry settings. Configuration supports environment variables and encrypted sections.
 
 ## Configuration Location
 
-Calendar-MCP stores all user-specific data in a consistent location:
+Adjutant stores all user-specific data in a consistent location:
 
 ### Windows
 ```
-%LOCALAPPDATA%\CalendarMcp\
+%LOCALAPPDATA%\Adjutant\
 ├── appsettings.json          # Main configuration file
 ├── msal_cache_*.bin          # M365/Outlook.com token caches (encrypted)
 └── logs\                     # Server logs
-    └── calendar-mcp-*.log
+    └── adjutant-*.log
 ```
 
 ### Linux/macOS
 ```
-~/.local/share/CalendarMcp/
+~/.local/share/Adjutant/
 ├── appsettings.json          # Main configuration file
 └── logs/                     # Server logs
-    └── calendar-mcp-*.log
-~/.credentials/calendar-mcp/  # Google token storage
+    └── adjutant-*.log
+~/.credentials/adjutant/  # Google token storage
 └── {accountId}/
 ```
 
 ### Configuration Loading Priority
 
-1. **Environment Variable Override**: Set `CALENDAR_MCP_CONFIG` to specify a custom config directory or file path
-2. **User Data Directory**: `%LOCALAPPDATA%\CalendarMcp\appsettings.json` (Windows) or `~/.local/share/CalendarMcp/appsettings.json` (Linux/macOS)
+1. **Environment Variable Override**: Set `ADJUTANT_CONFIG` to specify a custom config directory or file path
+2. **User Data Directory**: `%LOCALAPPDATA%\Adjutant\appsettings.json` (Windows) or `~/.local/share/Adjutant/appsettings.json` (Linux/macOS)
 3. **Application Directory** (fallback for development): `appsettings.json` in the same directory as the executable
 
 ### Environment Variable Override
@@ -38,46 +38,46 @@ Calendar-MCP stores all user-specific data in a consistent location:
 To use a custom configuration location:
 ```bash
 # Point to a directory containing appsettings.json
-set CALENDAR_MCP_CONFIG=C:\MyConfig\CalendarMcp
+set ADJUTANT_CONFIG=C:\MyConfig\Adjutant
 
 # Or point directly to a config file
-set CALENDAR_MCP_CONFIG=C:\MyConfig\my-calendar-config.json
+set ADJUTANT_CONFIG=C:\MyConfig\my-calendar-config.json
 ```
 
 ### Additional Environment Variable Overrides
 
-Configuration is loaded with `AddEnvironmentVariables("CALENDAR_MCP_")`, so any setting can be
+Configuration is loaded with `AddEnvironmentVariables("ADJUTANT_")`, so any setting can be
 overridden by an environment variable built from its full configuration path:
 
-- Prefix with `CALENDAR_MCP_`.
+- Prefix with `ADJUTANT_`.
 - Separate each level of nesting with a double underscore (`__`).
 - **Include the top-level section name.** The prefix replaces nothing but itself, so a setting
-  inside the `CalendarMcp` section still needs `CalendarMcp` in the variable name.
+  inside the `Adjutant` section still needs `Adjutant` in the variable name.
 
 ```bash
-# CalendarMcp:ExternalBaseUrl
-export CALENDAR_MCP_CalendarMcp__ExternalBaseUrl="https://example.ts.net"
+# Adjutant:ExternalBaseUrl
+export ADJUTANT_Adjutant__ExternalBaseUrl="https://example.ts.net"
 
-# CalendarMcp:Mcp:RequireApiKey
-export CALENDAR_MCP_CalendarMcp__Mcp__RequireApiKey=false
+# Adjutant:Mcp:RequireApiKey
+export ADJUTANT_Adjutant__Mcp__RequireApiKey=false
 
 # AdminAuth:Providers:google:ClientId  (AdminAuth is its own top-level section)
-export CALENDAR_MCP_AdminAuth__Providers__google__ClientId="...apps.googleusercontent.com"
+export ADJUTANT_AdminAuth__Providers__google__ClientId="...apps.googleusercontent.com"
 ```
 
 Note that `Program.cs` calls `Configuration.Sources.Clear()` before registering its sources, so
 the ASP.NET Core default providers are not present. Unprefixed variables such as
-`CalendarMcp__ExternalBaseUrl` are never read.
+`Adjutant__ExternalBaseUrl` are never read.
 
 A few settings are read directly with `Environment.GetEnvironmentVariable` rather than through
-the configuration system, and so are named exactly as written: `CALENDAR_MCP_CONFIG`,
-`CALENDAR_MCP_MCP_KEY`, and `CALENDAR_MCP_ADMIN_TOKEN`.
+the configuration system, and so are named exactly as written: `ADJUTANT_CONFIG`,
+`ADJUTANT_MCP_KEY`, and `ADJUTANT_ADMIN_TOKEN`.
 
 ## Complete Configuration Example
 
 ```json
 {
-  "CalendarMcp": {
+  "Adjutant": {
     "Accounts": [
       {
         "Id": "work-account",
@@ -148,7 +148,7 @@ the configuration system, and so are named exactly as written: `CALENDAR_MCP_CON
     },
     "Telemetry": {
       "Enabled": true,
-      "ServiceName": "calendar-mcp"
+      "ServiceName": "adjutant"
     }
   }
 }
@@ -250,7 +250,7 @@ To grant an account read-only access to email and nothing else:
 ```
 
 Set them interactively with the `add-*-account` CLI commands, or in the admin web UI under
-**Permissions** on the add/edit account form. `calendar-mcp-cli list-accounts` shows each
+**Permissions** on the add/edit account form. `adjutant-cli list-accounts` shows each
 account's effective permissions.
 
 ### Google Workspace / Gmail Accounts
@@ -430,7 +430,7 @@ For Apple app-specific passwords and host allowlisting, see `docs/ICLOUD-DAV-SET
 }
 ```
 
-**Environment Variable**: `CALENDAR_MCP_Router__ApiKey=sk-...`
+**Environment Variable**: `ADJUTANT_Router__ApiKey=sk-...`
 
 ### Anthropic
 
@@ -486,7 +486,7 @@ For Apple app-specific passwords and host allowlisting, see `docs/ICLOUD-DAV-SET
 {
   "telemetry": {
     "enabled": true,
-    "serviceName": "calendar-mcp",
+    "serviceName": "adjutant",
     "console": {
       "enabled": true,
       "logLevel": "Debug"
@@ -501,7 +501,7 @@ For Apple app-specific passwords and host allowlisting, see `docs/ICLOUD-DAV-SET
 {
   "telemetry": {
     "enabled": true,
-    "serviceName": "calendar-mcp",
+    "serviceName": "adjutant",
     "serviceVersion": "1.0.0",
     "otlp": {
       "enabled": true,
@@ -593,7 +593,7 @@ Copy it now - it is hashed at rest and will never be shown again.
 should come from the deployment rather than the data volume:
 
 ```bash
-export CALENDAR_MCP_MCP_KEY="your-key-here"
+export ADJUTANT_MCP_KEY="your-key-here"
 ```
 
 An environment key is always accepted and is never written to `mcp-keys.json`. Rotate it by
@@ -611,7 +611,7 @@ the server logs a warning naming it (at most every five minutes per key), so an 
 suddenly gets `401` can be traced. The **Expires** column shows the date, a warning badge in the
 last 14 days, and "expired" afterwards. Choose **No expiry** for a headless agent where losing
 access unnoticed would be worse than a long-lived key. Keys created before expiry existed, the
-first-start key and the `CALENDAR_MCP_MCP_KEY` environment key never expire. If every key in the
+first-start key and the `ADJUTANT_MCP_KEY` environment key never expire. If every key in the
 file has expired and no environment key is set, the next start generates and logs a fresh key, as
 on first start.
 
@@ -645,11 +645,11 @@ expire. Removing every entry makes the server generate a fresh key on the next s
 
 | Setting | Default | Effect |
 |---|---|---|
-| `CalendarMcp:Mcp:RequireApiKey` | `true` | When `false`, the MCP and attachment endpoints accept any caller that can reach them. |
+| `Adjutant:Mcp:RequireApiKey` | `true` | When `false`, the MCP and attachment endpoints accept any caller that can reach them. |
 
 ```json
 {
-  "CalendarMcp": {
+  "Adjutant": {
     "Mcp": { "RequireApiKey": false }
   }
 }
@@ -659,12 +659,12 @@ Only disable enforcement when the server is confined to a private network. Never
 server publicly — including via a Tailscale Funnel endpoint — with enforcement off.
 
 **Transport**: a key is only as private as the channel carrying it. If
-`CalendarMcp:ExternalBaseUrl` is set to a non-loopback `http://` URL while key enforcement is
+`Adjutant:ExternalBaseUrl` is set to a non-loopback `http://` URL while key enforcement is
 on, the server refuses to start rather than leak keys in clear text. Terminate TLS in front of
 the server (a Tailscale Funnel endpoint already does).
 
 The `/health` and `/health/ready` probes stay anonymous, and the `/admin` API continues to use
-`CALENDAR_MCP_ADMIN_TOKEN` — see [Security](security.md).
+`ADJUTANT_ADMIN_TOKEN` — see [Security](security.md).
 
 #### Connecting a client
 
@@ -673,7 +673,7 @@ The MCP endpoint is the server root (`/`), so the URL is just the server's base 
 **Claude Code**:
 
 ```bash
-claude mcp add --transport http calendar-mcp https://your-server.example.com/ \
+claude mcp add --transport http adjutant https://your-server.example.com/ \
   --header "Authorization: Bearer cmcp_..."
 ```
 
@@ -682,7 +682,7 @@ claude mcp add --transport http calendar-mcp https://your-server.example.com/ \
 ```json
 {
   "servers": {
-    "calendar-mcp": {
+    "adjutant": {
       "type": "http",
       "url": "https://your-server.example.com/",
       "headers": { "Authorization": "Bearer cmcp_..." }
@@ -696,7 +696,7 @@ claude mcp add --transport http calendar-mcp https://your-server.example.com/ \
 ```json
 {
   "mcpServers": {
-    "calendar-mcp": {
+    "adjutant": {
       "command": "npx",
       "args": [
         "-y", "mcp-remote", "https://your-server.example.com/",
@@ -757,11 +757,11 @@ refreshing drops off the list once its 14-day refresh token runs out.
 
 | Setting | Default | Effect |
 |---|---|---|
-| `CalendarMcp:Mcp:EnableOAuth` | `true` | When `false`, OAuth is never offered and existing OAuth tokens stop working. Keys are unaffected. |
-| `CalendarMcp:Mcp:SigningCertificate` | (generated) | Base64 PKCS#12 certificate, with private key and no password, that signs OAuth tokens. |
-| `CalendarMcp:Mcp:EncryptionCertificate` | (generated) | Base64 PKCS#12 certificate, with private key and no password, that encrypts OAuth tokens. Set both or neither. |
+| `Adjutant:Mcp:EnableOAuth` | `true` | When `false`, OAuth is never offered and existing OAuth tokens stop working. Keys are unaffected. |
+| `Adjutant:Mcp:SigningCertificate` | (generated) | Base64 PKCS#12 certificate, with private key and no password, that signs OAuth tokens. |
+| `Adjutant:Mcp:EncryptionCertificate` | (generated) | Base64 PKCS#12 certificate, with private key and no password, that encrypts OAuth tokens. Set both or neither. |
 
-`CalendarMcp:ExternalBaseUrl`, when set, is the OAuth issuer and the MCP resource URI; otherwise
+`Adjutant:ExternalBaseUrl`, when set, is the OAuth issuer and the MCP resource URI; otherwise
 both come from the request (after forwarded headers). Restart after changing it.
 
 **Storage**: registered clients, approvals and refresh tokens live in `identity.db` (SQLite) in
@@ -781,7 +781,7 @@ clients never used are deleted after a day).
 
 The Blazor admin console at `/admin/ui` can be protected by OIDC sign-in with Google or
 Microsoft, restricted to an allow-list of verified email addresses. Configuration lives in a
-top-level `AdminAuth` section — a sibling of `CalendarMcp`, not a child of it.
+top-level `AdminAuth` section — a sibling of `Adjutant`, not a child of it.
 
 ```json
 {
@@ -829,7 +829,7 @@ URI to register with the provider is:
 <ExternalBaseUrl>/admin/auth/signin/microsoft
 ```
 
-Set `CalendarMcp:ExternalBaseUrl` to the server's public origin (for a Tailscale Funnel
+Set `Adjutant:ExternalBaseUrl` to the server's public origin (for a Tailscale Funnel
 endpoint, `https://<machine>.<tailnet>.ts.net`). When it is set, it is used verbatim as the
 redirect URI for both the authorization request and the token exchange, which is what keeps the
 value stable behind a TLS-terminating proxy. When it is not set, the URI is derived from the
@@ -867,7 +867,7 @@ There is a chicken-and-egg problem: configuring a provider through the console r
 in. The admin token is the way through it, and it is available as a login precisely while no
 provider is configured:
 
-1. Start the server with `CALENDAR_MCP_ADMIN_TOKEN` set and sign in with it.
+1. Start the server with `ADJUTANT_ADMIN_TOKEN` set and sign in with it.
 2. Go to **Settings → Sign-in providers**. The page shows the exact redirect URI to register
    with the provider, built from `ExternalBaseUrl`.
 3. Paste in the Authority, Client ID, and Client secret, and save. It takes effect immediately —
@@ -876,7 +876,7 @@ provider is configured:
    configured, unless you override it on the same page.
 
 `AdminAuth:Providers` can equally be set by editing `appsettings.json` or via environment
-variables (`CALENDAR_MCP_AdminAuth__Providers__google__ClientId=...`); the console writes the
+variables (`ADJUTANT_AdminAuth__Providers__google__ClientId=...`); the console writes the
 same settings.
 
 A client secret entered through the console is encrypted with DataProtection before being
@@ -905,7 +905,7 @@ so a future sign-in for that address starts fresh.
 
 #### Session cookie and rate limits
 
-`CalendarMcp:ExternalBaseUrl` also drives session cookie hardening: an HTTPS origin gets a
+`Adjutant:ExternalBaseUrl` also drives session cookie hardening: an HTTPS origin gets a
 `Secure`, `__Host-`-prefixed cookie, while plain HTTP keeps a normal one so local development
 works. Switching that setting between HTTP and HTTPS renames the cookie and signs everyone out
 once.
@@ -924,8 +924,8 @@ minute per key. Neither is configurable today. See
 
 **Use environment variables instead**:
 ```bash
-export CALENDAR_MCP_Router__ApiKey="sk-..."
-export CALENDAR_MCP_CalendarMcp__Accounts__0__ProviderConfig__clientSecret="GOCSPX-..."
+export ADJUTANT_Router__ApiKey="sk-..."
+export ADJUTANT_Adjutant__Accounts__0__ProviderConfig__clientSecret="GOCSPX-..."
 ```
 
 **Or use encrypted configuration sections** (future enhancement):
@@ -942,14 +942,14 @@ export CALENDAR_MCP_CalendarMcp__Accounts__0__ProviderConfig__clientSecret="GOCS
 **Never store tokens in configuration files!**
 
 Tokens are stored separately:
-- **Microsoft**: `%LOCALAPPDATA%/CalendarMcp/msal_cache_{accountId}.bin` (encrypted)
-- **Google**: `~/.credentials/calendar-mcp/{accountId}/` (JSON files)
+- **Microsoft**: `%LOCALAPPDATA%/Adjutant/msal_cache_{accountId}.bin` (encrypted)
+- **Google**: `~/.credentials/adjutant/{accountId}/` (JSON files)
 
 See [Authentication](authentication.md#per-account-token-storage) for details.
 
 ## Configuration Validation
 
-On startup, Calendar-MCP validates:
+On startup, Adjutant validates:
 
 1. **Required fields**: All required account fields present
 2. **Unique IDs**: No duplicate account IDs

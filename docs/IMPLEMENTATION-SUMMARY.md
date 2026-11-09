@@ -10,7 +10,7 @@ Successfully implemented the complete authentication process for Microsoft 365 a
 
 ## What Was Delivered
 
-### 1. CLI Tool (CalendarMcp.Cli)
+### 1. CLI Tool (Adjutant.Cli)
 
 A command-line application for managing accounts:
 
@@ -52,7 +52,7 @@ COMMANDS:
 ### 4. Documentation
 
 **Created:**
-- `src/CalendarMcp.Cli/README.md` - CLI command reference
+- `src/Adjutant.Cli/README.md` - CLI command reference
 - `docs/M365-SETUP.md` - Complete setup guide with Azure AD instructions
 - `changelogs/2026-01-04-m365-authentication.md` - Detailed change log
 
@@ -73,7 +73,7 @@ COMMANDS:
 
 Each account has its own token cache file:
 ```
-%LOCALAPPDATA%/CalendarMcp/
+%LOCALAPPDATA%/Adjutant/
   ├── msal_cache_work-account.bin
   ├── msal_cache_tenant2-account.bin
   └── msal_cache_personal-outlook.bin
@@ -89,7 +89,7 @@ This ensures:
 
 **Phase 1: CLI Setup (Interactive)**
 ```bash
-calendar-mcp-cli add-m365-account
+adjutant-cli add-m365-account
   → Browser opens for OAuth
   → User authenticates
   → Token cached locally
@@ -98,7 +98,7 @@ calendar-mcp-cli add-m365-account
 
 **Phase 2: MCP Server Runtime (Silent)**
 ```bash
-calendar-mcp-server start
+adjutant-server start
   → Loads account configs
   → Retrieves tokens silently from cache
   → No user interaction required
@@ -116,9 +116,9 @@ Follow `docs/M365-SETUP.md` to create app registration and note:
 ### 2. Authenticate Using CLI
 
 ```bash
-dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
+dotnet run --project src/Adjutant.Cli/Adjutant.Cli.csproj -- \
   add-m365-account \
-  --config src/CalendarMcp.StdioServer/appsettings.json
+  --config src/Adjutant.StdioServer/appsettings.json
 ```
 
 Interactive prompts:
@@ -132,15 +132,15 @@ Interactive prompts:
 ### 3. Verify Authentication
 
 ```bash
-dotnet run --project src/CalendarMcp.Cli/CalendarMcp.Cli.csproj -- \
+dotnet run --project src/Adjutant.Cli/Adjutant.Cli.csproj -- \
   list-accounts \
-  --config src/CalendarMcp.StdioServer/appsettings.json
+  --config src/Adjutant.StdioServer/appsettings.json
 ```
 
 ### 4. Start MCP Server
 
 ```bash
-dotnet run --project src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj
+dotnet run --project src/Adjutant.StdioServer/Adjutant.StdioServer.csproj
 ```
 
 Server will automatically use cached tokens.
@@ -225,38 +225,38 @@ Future enhancements:
 ## Files Modified/Created
 
 ### New Files (14)
-- `src/CalendarMcp.Cli/CalendarMcp.Cli.csproj`
-- `src/CalendarMcp.Cli/Program.cs`
-- `src/CalendarMcp.Cli/Commands/AddM365AccountCommand.cs`
-- `src/CalendarMcp.Cli/Commands/ListAccountsCommand.cs`
-- `src/CalendarMcp.Cli/Commands/TestAccountCommand.cs`
-- `src/CalendarMcp.Cli/README.md`
-- `src/CalendarMcp.Core/Services/IM365AuthenticationService.cs`
-- `src/CalendarMcp.Core/Providers/M365AuthenticationService.cs`
+- `src/Adjutant.Cli/Adjutant.Cli.csproj`
+- `src/Adjutant.Cli/Program.cs`
+- `src/Adjutant.Cli/Commands/AddM365AccountCommand.cs`
+- `src/Adjutant.Cli/Commands/ListAccountsCommand.cs`
+- `src/Adjutant.Cli/Commands/TestAccountCommand.cs`
+- `src/Adjutant.Cli/README.md`
+- `src/Adjutant.Core/Services/IM365AuthenticationService.cs`
+- `src/Adjutant.Core/Providers/M365AuthenticationService.cs`
 - `docs/M365-SETUP.md`
 - `changelogs/2026-01-04-m365-authentication.md`
 - `test-m365-auth.sh`
 - `docs/IMPLEMENTATION-SUMMARY.md` (this file)
 
 ### Modified Files (3)
-- `src/CalendarMcp.Core/Providers/M365ProviderService.cs`
-- `src/CalendarMcp.Core/Configuration/ServiceCollectionExtensions.cs`
+- `src/Adjutant.Core/Providers/M365ProviderService.cs`
+- `src/Adjutant.Core/Configuration/ServiceCollectionExtensions.cs`
 - `README.md`
 
 ## Build Status
 
 All projects build successfully:
 ```
-✓ CalendarMcp.Core
-✓ CalendarMcp.Cli
-✓ CalendarMcp.StdioServer
+✓ Adjutant.Core
+✓ Adjutant.Cli
+✓ Adjutant.StdioServer
 ```
 
 ## Next Steps for Users
 
 1. **Read the setup guide:** `docs/M365-SETUP.md`
 2. **Create Azure AD app registration**
-3. **Run CLI to authenticate:** `calendar-mcp-cli add-m365-account`
+3. **Run CLI to authenticate:** `adjutant-cli add-m365-account`
 4. **Start MCP server:** The server will use cached tokens automatically
 
 ## Next Steps for Development
@@ -271,6 +271,6 @@ All projects build successfully:
 
 - **Design Document:** `docs/authentication.md`
 - **Configuration Guide:** `docs/configuration.md`
-- **CLI Documentation:** `src/CalendarMcp.Cli/README.md`
+- **CLI Documentation:** `src/Adjutant.Cli/README.md`
 - **Setup Guide:** `docs/M365-SETUP.md`
 - **Spike Code:** `spikes/M365DirectAccess/`

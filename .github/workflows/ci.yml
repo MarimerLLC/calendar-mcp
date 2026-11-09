@@ -23,10 +23,10 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore dependencies
-        run: dotnet restore calendar-mcp.slnx
+        run: dotnet restore adjutant.slnx
 
       - name: Build solution
-        run: dotnet build calendar-mcp.slnx --configuration Release --no-restore
+        run: dotnet build adjutant.slnx --configuration Release --no-restore
 
       - name: Run tests
-        run: dotnet test calendar-mcp.slnx --configuration Release --no-build --verbosity normal
+        run: dotnet test adjutant.slnx --configuration Release --no-build --verbosity normal

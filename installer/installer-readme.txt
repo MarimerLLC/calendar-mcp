@@ -14,30 +14,30 @@ No .NET runtime is required - this is a self-contained installation.
 
 WHAT'S INCLUDED
 ---------------
-- CalendarMcp.Cli.exe - Command-line tool for account management
-- CalendarMcp.StdioServer.exe - MCP server for AI assistants
+- Adjutant.Cli.exe - Command-line tool for account management
+- Adjutant.StdioServer.exe - MCP server for AI assistants
 - All required dependencies and runtime files
 
 AFTER INSTALLATION
 ------------------
 1. Configure your email and calendar accounts:
-   - Run: CalendarMcp.Cli add-m365-account (for Microsoft 365/Outlook.com)
-   - Run: CalendarMcp.Cli add-google-account (for Google/Gmail)
+   - Run: Adjutant.Cli add-m365-account (for Microsoft 365/Outlook.com)
+   - Run: Adjutant.Cli add-google-account (for Google/Gmail)
 
 2. Configure your AI assistant (e.g., Claude Desktop):
    - See the installation documentation for details
    - Default installation path: C:\Program Files\Adjutant\
 
 3. Documentation:
-   - Installation Guide: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/INSTALLATION.md
-   - M365 Setup: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/M365-SETUP.md
-   - Google Setup: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/GOOGLE-SETUP.md
-   - Claude Desktop: https://github.com/MarimerLLC/calendar-mcp/blob/main/docs/CLAUDE-DESKTOP-SETUP.md
+   - Installation Guide: https://github.com/MarimerLLC/adjutant/blob/main/docs/INSTALLATION.md
+   - M365 Setup: https://github.com/MarimerLLC/adjutant/blob/main/docs/M365-SETUP.md
+   - Google Setup: https://github.com/MarimerLLC/adjutant/blob/main/docs/GOOGLE-SETUP.md
+   - Claude Desktop: https://github.com/MarimerLLC/adjutant/blob/main/docs/CLAUDE-DESKTOP-SETUP.md
 
 SUPPORT
 -------
-Issues: https://github.com/MarimerLLC/calendar-mcp/issues
-Documentation: https://github.com/MarimerLLC/calendar-mcp/tree/main/docs
+Issues: https://github.com/MarimerLLC/adjutant/issues
+Documentation: https://github.com/MarimerLLC/adjutant/tree/main/docs
 
 LICENSE
 -------

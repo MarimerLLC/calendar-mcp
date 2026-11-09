@@ -110,7 +110,7 @@ Direct Google Workspace API integration for Gmail, Calendar, and Contacts.
 
 **Critical**: Each account has separate `UserCredential` instance
 - Built with that account's OAuth credentials (shared or per-org)
-- Each account has separate FileDataStore directory: `~/.credentials/calendar-mcp/{accountId}/`
+- Each account has separate FileDataStore directory: `~/.credentials/adjutant/{accountId}/`
 - Token isolation prevents cross-account contamination
 
 ### Pattern
