@@ -380,7 +380,7 @@ public class IcsProviderService : IIcsProviderService
     /// Returns the floating start date and exclusive end date of an all-day event (or one of its
     /// occurrences). A missing DTEND means a one-day event (RFC 5545 §3.6.1).
     /// </summary>
-    private static (DateOnly Start, DateOnly End) GetAllDayDates(IcsCalendarEvent icsEvent, Occurrence? occurrence)
+    internal static (DateOnly Start, DateOnly End) GetAllDayDates(IcsCalendarEvent icsEvent, Occurrence? occurrence)
     {
         var baseStart = icsEvent.DtStart != null ? DateOnly.FromDateTime(icsEvent.DtStart.Value) : DateOnly.MinValue;
         var lengthDays = icsEvent.DtEnd != null

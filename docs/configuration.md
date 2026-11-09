@@ -370,6 +370,32 @@ account's effective permissions.
 
 For setup walkthrough including Gmail app passwords, see `docs/IMAP-SETUP.md`.
 
+### CalDAV / CardDAV Accounts
+
+```json
+{
+  "Id": "personal-icloud",
+  "DisplayName": "iCloud",
+  "Provider": "dav",
+  "Domains": ["icloud.com", "me.com", "mac.com"],
+  "ProviderConfig": {
+    "preset": "icloud",
+    "username": "you@icloud.com",
+    "password": "ENC:CfDJ8...",
+    "enableCalendar": "true",
+    "enableContacts": "true"
+  }
+}
+```
+
+**Required ProviderConfig keys**: `username`, `password`, and at least one of `caldavUrl` / `carddavUrl` (or a preset that supplies them, e.g. `icloud`).
+
+**Presets**: `icloud`, `icloud-cn`, `fastmail`, `nextcloud`, `generic`.
+
+**Capabilities**: Calendar and/or contacts (read/write). Email is unsupported — pair with an IMAP account for iCloud Mail.
+
+For Apple app-specific passwords and host allowlisting, see `docs/ICLOUD-DAV-SETUP.md`.
+
 ## Router Configuration
 
 ### Ollama (Local)
@@ -573,15 +599,26 @@ export CALENDAR_MCP_MCP_KEY="your-key-here"
 An environment key is always accepted and is never written to `mcp-keys.json`. Rotate it by
 changing the environment variable. Setting it also suppresses first-start key generation.
 
-**Managing keys**: use **MCP Keys** in the admin console. Create one key per client so any of
+**Managing keys**: use **MCP Access** in the admin console (earlier versions called it
+**MCP Keys**; the old `/admin/ui/keys` address still opens it). Create one key per client so any of
 them can be revoked without disturbing the others; the console shows the key once at creation,
 along with a ready-to-paste snippet for Claude Code, VS Code, `mcp-remote`, or curl. Revoking
 takes effect immediately, and revoked keys are kept in the list for the record.
 
+**Key lifetime**: each new key gets a lifetime of 30, 90, 180 or 365 days, or **No expiry**; the
+console defaults to 90 days. An expired key is refused from the moment in its `expiresUtc`, and
+the server logs a warning naming it (at most every five minutes per key), so an agent that
+suddenly gets `401` can be traced. The **Expires** column shows the date, a warning badge in the
+last 14 days, and "expired" afterwards. Choose **No expiry** for a headless agent where losing
+access unnoticed would be worse than a long-lived key. Keys created before expiry existed, the
+first-start key and the `CALENDAR_MCP_MCP_KEY` environment key never expire. If every key in the
+file has expired and no environment key is set, the next start generates and logs a fresh key, as
+on first start.
+
 Keys can also be edited directly in `mcp-keys.json`, though that file is read once at startup so
 a hand edit needs a restart. Adding a `"revokedUtc"` timestamp disables a key while keeping it
-for audit; deleting the entry removes it outright. Removing every entry makes the server
-generate a fresh key on the next start and log it.
+for audit; deleting the entry removes it outright. Removing `"expiresUtc"` makes a key never
+expire. Removing every entry makes the server generate a fresh key on the next start and log it.
 
 ```json
 {
@@ -592,6 +629,13 @@ generate a fresh key on the next start and log it.
       "hash": "PL1PNhJdllsgh4Rb0CnMFJCMQhNYpo/IoaO0nuExcAk=",
       "createdUtc": "2026-08-28T04:43:13.1580083+00:00",
       "revokedUtc": "2026-09-01T12:00:00.0000000+00:00"
+    },
+    {
+      "id": "k_Xq3mN8vLpT0",
+      "label": "Claude Desktop - laptop",
+      "hash": "3n0dVJ0Hn8PqQ1m0JxV1oE8mHq9Wk7Z2cX4yT6bR5aE=",
+      "createdUtc": "2026-11-07T18:00:00.0000000+00:00",
+      "expiresUtc": "2027-02-05T18:00:00.0000000+00:00"
     }
   ]
 }
@@ -670,6 +714,68 @@ your client's own documentation if these shapes don't match what it expects.
 `Rejected MCP request with an invalid API key` at `Warning` level with the request path and
 remote IP. A missing header produces the same 401 but no log entry, since an unauthenticated
 probe is not treated as a failure.
+
+### MCP OAuth (HTTP server)
+
+MCP clients can also connect with OAuth, the MCP authorization spec, instead of a key. You add
+the server's URL to the client, a browser opens, you sign in to the admin console with Google or
+Microsoft, approve the client on a consent page, and the client is connected. Claude Code,
+Claude Desktop / claude.ai custom connectors and VS Code all work this way. API keys keep working
+alongside it, and remain the way to connect headless agents.
+
+**When it's offered**: OAuth is on by default but only offered while at least one admin
+sign-in provider is configured (see [Admin Console Sign-In](#admin-console-sign-in-http-server)),
+because the browser sign-in is the console's. Configuring the first provider in the console turns
+it on without a restart. Until then the server behaves exactly as with keys only: the OAuth
+endpoints answer `404` and the `401` from the MCP endpoint carries no OAuth pointer.
+
+**Who can approve a client**: anyone on `AdminAuth:AllowedEmails`, signed in with Google or
+Microsoft. A break-glass admin-token login can't approve clients (except in Development). Every
+MCP request with an OAuth token re-checks that its owner is still on the allow-list (with the same
+bound provider account), so removing someone from the allow-list cuts their connected apps off
+immediately.
+
+**Connecting a client**, e.g. Claude Code:
+
+```bash
+claude mcp add --transport http adjutant https://your-server.example.com/
+```
+
+Then follow the sign-in prompt. For a claude.ai or Claude Desktop custom connector, add the
+same URL as a connector. **Those connectors call from Anthropic's cloud, so the server must be
+reachable from the internet** (for example through a Tailscale Funnel endpoint); clients running on
+your own machine only need to reach it from there.
+
+**Connected apps**: **MCP Access** in the admin console lists every app that can still reach the
+server through OAuth: its name (marked verified when it comes from a client ID metadata document,
+with the publishing host), where it redirects, who approved it, when, and when it last renewed its
+access (about hourly while in use). **Disconnect** revokes the app's approvals and tokens; its
+next request fails, and using it again means connecting and approving it again. An app that stops
+refreshing drops off the list once its 14-day refresh token runs out.
+
+**Settings**:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `CalendarMcp:Mcp:EnableOAuth` | `true` | When `false`, OAuth is never offered and existing OAuth tokens stop working. Keys are unaffected. |
+| `CalendarMcp:Mcp:SigningCertificate` | (generated) | Base64 PKCS#12 certificate, with private key and no password, that signs OAuth tokens. |
+| `CalendarMcp:Mcp:EncryptionCertificate` | (generated) | Base64 PKCS#12 certificate, with private key and no password, that encrypts OAuth tokens. Set both or neither. |
+
+`CalendarMcp:ExternalBaseUrl`, when set, is the OAuth issuer and the MCP resource URI; otherwise
+both come from the request (after forwarded headers). Restart after changing it.
+
+**Storage**: registered clients, approvals and refresh tokens live in `identity.db` (SQLite) in
+the data directory, and the generated signing keys in `oauth-keys/`, encrypted with the server's
+DataProtection keyring. **Keep the data directory on a local disk or a block volume** (a Docker
+volume, or a Kubernetes `ReadWriteOnce` volume such as Longhorn, local-path or a cloud disk). Do
+not put it on a network file share (NFS, SMB, Azure Files, or a `ReadWriteMany` volume):
+SQLite's file locking is unreliable there. Deleting `identity.db` or `oauth-keys/` is safe; it only
+means connected apps have to sign in again.
+
+**Tokens**: access tokens last 1 hour; refresh tokens 14 days and rotate on each use. Clients
+register themselves, either with a client ID metadata document (an HTTPS URL as `client_id`) or
+with dynamic client registration at `/connect/register` (rate limited to 10 per address per hour;
+clients never used are deleted after a day).
 
 ### Admin Console Sign-In (HTTP server)
 

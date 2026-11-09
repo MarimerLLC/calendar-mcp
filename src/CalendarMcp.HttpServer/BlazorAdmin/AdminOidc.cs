@@ -288,7 +288,7 @@ public sealed class AdminSignInProcessor
                 return Deny(context, "unclaimable");
             }
 
-            var token = _pending.Add(normalizedEmail, scheme, subject);
+            var token = _pending.Add(normalizedEmail, scheme, subject, LocalReturnUrl.Sanitize(context.ReturnUri));
             _logger.LogInformation(
                 "{Email} verified by {Scheme} and awaiting the claim code.", normalizedEmail, scheme);
 

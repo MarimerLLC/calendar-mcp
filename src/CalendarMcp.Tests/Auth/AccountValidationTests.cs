@@ -54,6 +54,8 @@ public class AccountValidationTests
     [DataRow("json")]
     [DataRow("exchange")]
     [DataRow("ews")]
+    [DataRow("imap")]
+    [DataRow("dav")]
     public void ValidateProvider_KnownProviders_ReturnsTrue(string provider)
     {
         var (isValid, _) = AccountValidation.ValidateProvider(provider);
@@ -270,6 +272,33 @@ public class AccountValidationTests
         var (isValid, error) = AccountValidation.ValidateProviderConfig("exchange", config);
         Assert.IsFalse(isValid);
         Assert.IsTrue(error?.Contains("HTTPS", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [TestMethod]
+    public void ValidateProviderConfig_Dav_IcloudPreset_Succeeds()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["preset"] = "icloud",
+            ["username"] = "you@icloud.com",
+            ["password"] = "app-specific"
+        };
+        var (isValid, _) = AccountValidation.ValidateProviderConfig("dav", config);
+        Assert.IsTrue(isValid);
+    }
+
+    [TestMethod]
+    public void ValidateProviderConfig_Dav_MissingUrls_Fails()
+    {
+        var config = new Dictionary<string, string>
+        {
+            ["username"] = "u",
+            ["password"] = "p",
+            ["preset"] = "generic"
+        };
+        var (isValid, error) = AccountValidation.ValidateProviderConfig("dav", config);
+        Assert.IsFalse(isValid);
+        Assert.IsTrue(error?.Contains("caldavUrl", StringComparison.OrdinalIgnoreCase) == true);
     }
 
     [TestMethod]

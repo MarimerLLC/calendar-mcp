@@ -27,7 +27,7 @@ Detailed documentation is organized by topic in the [`/docs`](docs/) folder:
 
 ### Authentication & Security
 - **[Authentication](docs/authentication.md)** - Complete auth flows, token management, and per-account isolation
-- **[Providers](docs/providers.md)** - Provider service implementations (M365, Google, Outlook.com)
+- **[Providers](docs/providers.md)** - Provider service implementations (M365, Google, Outlook.com, IMAP, CalDAV/CardDAV, ICS, JSON)
 - **[Security](docs/security.md)** - Security considerations, credential storage, and best practices
 
 ### Configuration & Setup
@@ -286,7 +286,7 @@ MIT or Apache 2.0 - permissive to encourage adoption
 This project will be open sourced under MIT or Apache 2.0 license. Contributions welcome!
 
 **Areas for Contribution**:
-- Additional provider implementations (iCloud, Exchange)
+- Additional provider implementations as needed
 - Router accuracy improvements
 - Performance optimizations
 - Documentation and examples

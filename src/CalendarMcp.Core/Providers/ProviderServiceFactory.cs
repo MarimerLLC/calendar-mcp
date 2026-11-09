@@ -15,6 +15,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
     private readonly IJsonCalendarProviderService _jsonProvider;
     private readonly IImapProviderService _imapProvider;
     private readonly IExchangeProviderService _exchangeProvider;
+    private readonly IDavProviderService _davProvider;
     private readonly ILogger<ProviderServiceFactory> _logger;
 
     public ProviderServiceFactory(
@@ -25,6 +26,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
         IJsonCalendarProviderService jsonProvider,
         IImapProviderService imapProvider,
         IExchangeProviderService exchangeProvider,
+        IDavProviderService davProvider,
         ILogger<ProviderServiceFactory> logger)
     {
         _m365Provider = m365Provider;
@@ -34,6 +36,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
         _jsonProvider = jsonProvider;
         _imapProvider = imapProvider;
         _exchangeProvider = exchangeProvider;
+        _davProvider = davProvider;
         _logger = logger;
     }
 
@@ -48,6 +51,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
             "json" or "json-calendar" => _jsonProvider,
             "imap" or "imap-smtp" => _imapProvider,
             "exchange" or "ews" or "exchange-ews" or "on-prem-exchange" => _exchangeProvider,
+            "dav" or "caldav" or "carddav" => _davProvider,
             _ => throw new ArgumentException($"Unknown account type: {accountType}", nameof(accountType))
         };
 

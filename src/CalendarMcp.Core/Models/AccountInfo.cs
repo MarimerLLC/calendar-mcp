@@ -16,7 +16,7 @@ public class AccountInfo
     public required string DisplayName { get; init; }
     
     /// <summary>
-    /// Provider type: "microsoft365", "google", "outlook.com"
+    /// Provider type: "microsoft365", "google", "outlook.com", "imap", "dav", "ics", "json" (and aliases)
     /// </summary>
     public required string Provider { get; init; }
     

@@ -87,6 +87,8 @@ See [Routing](routing.md) for detailed routing logic.
 - **IM365ProviderService**: Microsoft Graph API integration
 - **IGoogleProviderService**: Google Workspace API integration
 - **IOutlookComProviderService**: Microsoft Graph API for personal accounts
+- **IIcsProviderService** / **IJsonCalendarProviderService** / **IImapProviderService**: ICS, JSON, and IMAP providers
+- **IDavProviderService**: CalDAV/CardDAV calendar + contacts (iCloud, Nextcloud, Fastmail, …)
 - **Provider Service Factory**: Resolves correct provider based on account type
 
 See [Providers](providers.md) for implementation details.

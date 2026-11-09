@@ -10,7 +10,8 @@ The HTTP server exposes three surfaces with independent protection:
 
 | Surface | Protection |
 |---|---|
-| `/` (MCP protocol), `/attachments/*` | MCP API key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` |
+| `/` (MCP protocol), `/attachments/*` | MCP API key — `Authorization: Bearer <key>` or `X-Api-Key: <key>` — or an MCP OAuth access token issued by this server |
+| `/connect/*`, `/.well-known/oauth-*` | MCP OAuth authorization server; only offered while an admin sign-in provider is configured |
 | `/admin/*` (REST API) | Admin token — `CALENDAR_MCP_ADMIN_TOKEN` |
 | `/admin/ui/*` (Blazor console) | Session cookie, issued after OIDC sign-in or admin-token login |
 | `/health`, `/health/ready` | Anonymous (Kubernetes probes) |
@@ -24,7 +25,11 @@ The HTTP server exposes three surfaces with independent protection:
   was nor which key matched.
 - **Individually revocable.** Each key carries a label and id. Revoking one leaves the others
   working, and revoked keys are retained for audit rather than deleted. Create and revoke keys
-  from **MCP Keys** in the admin console; revocation takes effect immediately.
+  from **MCP Access** in the admin console; revocation takes effect immediately.
+- **Optional expiry.** A new key can be given a lifetime (30, 90, 180 or 365 days; the console
+  defaults to 90) or none. From its `expiresUtc` on, an expired key is refused like a revoked
+  one, and a warning naming it is logged at most every five minutes. Keys created before
+  expiry existed, the first-start key and the `CALENDAR_MCP_MCP_KEY` environment key never expire.
 - **Enforced by default.** `CalendarMcp:Mcp:RequireApiKey` defaults to `true`. If no key exists
   at startup, one is generated and logged rather than leaving the endpoint open.
 - **Refuses plaintext transport.** With enforcement on, a non-loopback `http://`
@@ -35,6 +40,42 @@ An API key authorizes access to *every* account the server is configured with. P
 limits are a separate layer — see [Per-Account Permissions](#per-account-permissions) below.
 
 See [Configuration](configuration.md#mcp-endpoint-api-keys-http-server) for setup.
+
+### MCP OAuth
+
+The server is its own OAuth authorization server for MCP clients (OpenIddict), following the MCP
+authorization spec. Google and Entra don't let MCP clients register themselves, so the server does
+the registration and federates only the *sign-in* to the admin console's providers.
+
+- **Discovery.** A `401` from the MCP endpoint carries
+  `WWW-Authenticate: Bearer resource_metadata=".../.well-known/oauth-protected-resource"` (RFC 9728),
+  which names this server as both the resource and the authorization server.
+- **Approval is the owner's.** `/connect/authorize` requires an admin console session that still
+  passes the console's own checks (allow-list, bound provider subject). A break-glass admin-token
+  session can't approve a client outside Development, since there is no verified identity behind it.
+- **Consent on every authorization.** The consent page names the client, says whether its name is
+  verified (client ID metadata document) or self-asserted (dynamic registration), shows the host it
+  redirects to, and warns about loopback redirects, which any program on the machine can claim. It
+  refuses to be framed. Without it, anyone could register a client with their own redirect URI and
+  send the owner a link that hands them a code.
+- **Public clients, PKCE (S256) required.** Redirect URIs must be HTTPS, or HTTP on a loopback host.
+  Client ID metadata documents are fetched without following redirects and only from public IP
+  addresses (checked on the resolved address at connect time), so a crafted `client_id` can't probe
+  the server's own network.
+- **Audience-bound tokens** (RFC 8707). Tokens are issued only for this server's MCP endpoint and
+  only accepted there. Access tokens last 1 hour; refresh tokens 14 days and rotate on use.
+- **Revalidated on every request.** An OAuth token's owner must still be on the allow-list, with the
+  same bound provider subject, and OAuth must still be offered; otherwise the request gets `401`.
+  The token's own entry and the approval it came from must also still be valid in `identity.db`.
+- **Disconnect.** **MCP Access** in the admin console lists the connected apps. **Disconnect**
+  revokes an app's approvals and tokens: its access token fails on the next request and its refresh
+  token is refused, so it has to be approved on the consent page again.
+- **Keys at rest.** Token signing and encryption keys are generated on first start and stored in
+  `oauth-keys/`, encrypted with the DataProtection keyring, unless supplied through configuration.
+  Clients, approvals and refresh tokens are in `identity.db`; token values are stored hashed by
+  OpenIddict.
+
+Like an API key, an OAuth token reaches every account the server is configured with.
 
 ### Admin Console Sign-In
 
@@ -88,12 +129,14 @@ once. That is expected.
 
 ### Rate Limiting
 
-Sign-in and the MCP endpoint are rate limited; everything else is unlimited.
+Sign-in, the MCP endpoint and the MCP OAuth endpoints are rate limited; everything else is unlimited.
 
 | Surface | Limit | Partitioned by |
 |---|---|---|
 | `/admin/ui/login`, `/admin/ui/claim`, `/admin/auth/*` | 10/minute | client address |
-| `/`, `/sse`, `/message`, `/attachments/*` | 240/minute | API key (hashed), or address when absent |
+| `/`, `/sse`, `/message`, `/attachments/*` | 240/minute | API key or OAuth token (hashed), or address when absent |
+| `/connect/register` | 10/hour | client address |
+| other `/connect/*`, `/.well-known/*` | 60/minute | client address |
 
 Rejections return `429` with `Retry-After`. The limiter runs before authentication, so
 credential guessing is throttled before it reaches any validation work.
@@ -210,7 +253,7 @@ Properties worth knowing for a threat model:
   `AccountCapabilities.IsAllowed` before any provider call is made. A denied operation never
   reaches the provider.
 - **Grants are intersected with provider capability.** `IsAllowed` returns false when the provider
-  has no such capability (calendar on IMAP) or is read-only for it (writes on an ICS feed), no
+  has no such capability (calendar on IMAP, email on DAV) or is read-only for it (writes on an ICS feed), no
   matter what the config says. `list_accounts` advertises this effective result, so an assistant
   is never told about access it doesn't have.
 - **Defaults are permissive.** An omitted block grants everything, preserving behaviour for configs
@@ -267,9 +310,9 @@ export CALENDAR_MCP_Accounts__0__Configuration__ClientSecret="GOCSPX-..."
 # - HashiCorp Vault
 ```
 
-### Password Encryption At Rest (IMAP Accounts)
+### Password Encryption At Rest (IMAP and DAV Accounts)
 
-The IMAP/SMTP provider stores its `password` field encrypted via ASP.NET DataProtection. Values written by the admin UI or any future CLI command land in `appsettings.json` as a string starting with the `ENC:` prefix followed by the protected blob.
+The IMAP/SMTP and CalDAV/CardDAV (`dav`) providers store their `password` field encrypted via ASP.NET DataProtection. Values written by the admin UI or any future CLI command land in `appsettings.json` as a string starting with the `ENC:` prefix followed by the protected blob.
 
 **Key persistence**:
 - Keys are persisted to `<data-dir>/keys/` (e.g. `/app/data/keys/` in k8s, `%LOCALAPPDATA%\CalendarMcp\keys\` locally).
@@ -289,7 +332,7 @@ The IMAP/SMTP provider stores its `password` field encrypted via ASP.NET DataPro
 
 **appsettings.json**:
 - Contains account metadata (IDs, domains, priorities)
-- IMAP passwords stored encrypted (with `ENC:` prefix) — see above
+- IMAP and DAV passwords stored encrypted (with `ENC:` prefix) — see above
 - Other secrets and tokens are not stored here
 - Can be committed to source control (with secrets externalized)
 

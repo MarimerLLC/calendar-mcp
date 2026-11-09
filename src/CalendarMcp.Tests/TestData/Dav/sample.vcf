@@ -1,0 +1,11 @@
+BEGIN:VCARD
+VERSION:3.0
+UID:contact-1
+FN:Ada Lovelace
+N:Lovelace;Ada;;;
+EMAIL;TYPE=INTERNET:ada@example.com
+TEL;TYPE=CELL:+15551212
+ORG:Analytical Engines
+TITLE:Mathematician
+NOTE:First programmer
+END:VCARD

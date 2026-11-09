@@ -69,6 +69,7 @@ src/
 - **IcsProviderService**: Read-only ICS feed calendar provider
 - **JsonCalendarProviderService**: Local or OneDrive JSON file calendar provider
 - **ImapProviderService**: IMAP/SMTP mailbox provider (email-only). Password encrypted at rest via ASP.NET DataProtection.
+- **DavProviderService**: CalDAV/CardDAV provider (calendar + contacts) for iCloud, Fastmail, Nextcloud and generic DAV servers. Password encrypted at rest via ASP.NET DataProtection.
 - **ProviderServiceFactory**: Routes requests to correct provider
 - **AccountRegistry**: Loads and manages account configuration
 

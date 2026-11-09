@@ -111,6 +111,18 @@ public class LogoutAccountCommand : AsyncCommand<LogoutAccountCommand.Settings>
             {
                 cleared = ClearMicrosoftCredentials(settings.AccountId);
             }
+            else if (provider is "dav" or "caldav" or "carddav" or "imap" or "imap-smtp")
+            {
+                AnsiConsole.MarkupLine("[yellow]This provider stores a password in appsettings (ENC:…), not an OAuth token cache.[/]");
+                AnsiConsole.MarkupLine("[dim]To revoke access: remove or rotate the password via Admin UI / edit config, " +
+                                      "and revoke the app-specific password at the provider (e.g. account.apple.com).[/]");
+                return 0;
+            }
+            else if (provider is "ics" or "icalendar" or "json" or "json-calendar")
+            {
+                AnsiConsole.MarkupLine("[dim]No OAuth token cache for this provider.[/]");
+                return 0;
+            }
             else
             {
                 AnsiConsole.MarkupLine($"[yellow]Unknown provider '{provider}'. Attempting to clear all credential types...[/]");

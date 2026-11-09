@@ -23,6 +23,7 @@ every configured account; capabilities vary per provider.
 | Outlook.com (`outlook.com`) | RW | RW | RW | Same Graph cap as M365 |
 | Google Workspace / Gmail (`google`) | RW | RW | RW | People API for contacts; uses labels rather than folders |
 | IMAP + SMTP (`imap`) | RW | — | — | For unattended mailboxes lacking OAuth |
+| CalDAV / CardDAV (`dav`) | — | RW | RW | iCloud, Nextcloud, Fastmail, custom DAV |
 | iCalendar URL (`ics`) | — | R | — | Subscribed `.ics` feeds; read-only |
 | JSON file (`json`) | R* | R | R* | Local/OneDrive JSON; email + contacts optional |
 

@@ -12,3 +12,4 @@ using Rocks;
 [assembly: Rock(typeof(IImapProviderService), BuildType.Create)]
 [assembly: Rock(typeof(IExchangeProviderService), BuildType.Create)]
 [assembly: Rock(typeof(IM365AuthenticationService), BuildType.Create)]
+[assembly: Rock(typeof(IDavProviderService), BuildType.Create)]

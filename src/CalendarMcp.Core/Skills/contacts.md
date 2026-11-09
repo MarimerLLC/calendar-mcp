@@ -1,8 +1,8 @@
 # Contacts
 
 Contact tools are available on Microsoft 365, Google (People API),
-Outlook.com, and optionally JSON-file accounts. IMAP and ICS accounts
-do not expose contacts.
+Outlook.com, CalDAV/CardDAV (`dav`, including iCloud), and optionally
+JSON-file accounts. IMAP and ICS accounts do not expose contacts.
 
 Always confirm capability via `list_accounts` before calling a contact
 tool against an account.

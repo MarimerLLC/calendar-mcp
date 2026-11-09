@@ -2,6 +2,8 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using CalendarMcp.Core.Services;
 using CalendarMcp.Core.Configuration;
+using CalendarMcp.Core.Providers.Dav;
+using CalendarMcp.Core.Security;
 using System.Text.Json;
 using System.ComponentModel;
 
@@ -14,6 +16,7 @@ public class TestAccountCommand : AsyncCommand<TestAccountCommand.Settings>
 {
     private readonly IM365AuthenticationService _m365AuthService;
     private readonly IGoogleAuthenticationService _googleAuthService;
+    private readonly PasswordProtector _passwordProtector;
 
     public class Settings : CommandSettings
     {
@@ -26,10 +29,14 @@ public class TestAccountCommand : AsyncCommand<TestAccountCommand.Settings>
         public required string AccountId { get; init; }
     }
 
-    public TestAccountCommand(IM365AuthenticationService m365AuthService, IGoogleAuthenticationService googleAuthService)
+    public TestAccountCommand(
+        IM365AuthenticationService m365AuthService,
+        IGoogleAuthenticationService googleAuthService,
+        PasswordProtector passwordProtector)
     {
         _m365AuthService = m365AuthService;
         _googleAuthService = googleAuthService;
+        _passwordProtector = passwordProtector;
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings)
@@ -83,13 +90,10 @@ public class TestAccountCommand : AsyncCommand<TestAccountCommand.Settings>
             string? provider = null;
             if (account.TryGetValue("Provider", out var provElem) || account.TryGetValue("provider", out provElem))
                 provider = provElem.GetString();
-            
-            // Support M365, Outlook.com, and Google accounts
-            if (string.IsNullOrEmpty(provider) ||
-                (provider != "microsoft365" && provider != "outlook.com" && provider != "google"))
+
+            if (string.IsNullOrEmpty(provider))
             {
-                AnsiConsole.MarkupLine($"[red]Error: Unsupported provider '{provider}'.[/]");
-                AnsiConsole.MarkupLine($"[dim]Supported providers: microsoft365, outlook.com, google[/]");
+                AnsiConsole.MarkupLine("[red]Error: Account missing provider.[/]");
                 return 1;
             }
 
@@ -101,23 +105,163 @@ public class TestAccountCommand : AsyncCommand<TestAccountCommand.Settings>
                 return 1;
             }
 
-            var providerConfig = providerConfigElem.Deserialize<Dictionary<string, string>>() 
-                ?? new Dictionary<string, string>();
+            var providerConfig = new Dictionary<string, string>(
+                providerConfigElem.Deserialize<Dictionary<string, string>>() ?? new(),
+                StringComparer.OrdinalIgnoreCase);
 
-            if (provider == "google")
+            return provider.ToLowerInvariant() switch
             {
-                return await TestGoogleAccountAsync(settings.AccountId, providerConfig);
-            }
-            else
-            {
-                return await TestMicrosoftAccountAsync(settings.AccountId, providerConfig, provider);
-            }
+                "google" or "gmail" or "google workspace" =>
+                    await TestGoogleAccountAsync(settings.AccountId, providerConfig),
+                "microsoft365" or "m365" or "outlook.com" or "outlook" or "hotmail" =>
+                    await TestMicrosoftAccountAsync(settings.AccountId, providerConfig, provider),
+                "dav" or "caldav" or "carddav" =>
+                    await TestDavAccountAsync(settings.AccountId, providerConfig),
+                "ics" or "icalendar" =>
+                    await TestIcsAccountAsync(providerConfig),
+                "imap" or "imap-smtp" =>
+                    await TestPasswordConfiguredAsync("IMAP", providerConfig),
+                "json" or "json-calendar" =>
+                    await TestJsonAccountAsync(providerConfig),
+                _ => UnsupportedProvider(provider)
+            };
         }
         catch (Exception ex)
         {
             AnsiConsole.MarkupLine($"[red]Error: {ex.Message}[/]");
             return 1;
         }
+    }
+
+    private static int UnsupportedProvider(string? provider)
+    {
+        AnsiConsole.MarkupLine($"[red]Error: Unsupported provider '{provider}'.[/]");
+        AnsiConsole.MarkupLine("[dim]Supported: microsoft365, outlook.com, google, dav, ics, imap, json[/]");
+        return 1;
+    }
+
+    private async Task<int> TestDavAccountAsync(string accountId, Dictionary<string, string> providerConfig)
+    {
+        DavHostPolicy.ApplyPreset(providerConfig.GetValueOrDefault("preset"), providerConfig);
+
+        if (!providerConfig.TryGetValue("username", out var username) ||
+            !providerConfig.TryGetValue("password", out var storedPassword) ||
+            string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(storedPassword))
+        {
+            AnsiConsole.MarkupLine("[red]Missing username or password in ProviderConfig.[/]");
+            return 1;
+        }
+
+        var password = _passwordProtector.Unprotect(storedPassword);
+        var preset = providerConfig.GetValueOrDefault("preset") ?? DavHostPolicy.PresetGeneric;
+        var enableCalendar = !string.Equals(providerConfig.GetValueOrDefault("enableCalendar"), "false", StringComparison.OrdinalIgnoreCase)
+            && providerConfig.ContainsKey("caldavUrl");
+        var enableContacts = !string.Equals(providerConfig.GetValueOrDefault("enableContacts"), "false", StringComparison.OrdinalIgnoreCase)
+            && providerConfig.ContainsKey("carddavUrl");
+
+        // If enable flags absent, infer from URLs (ApplyPreset may have filled them)
+        if (!providerConfig.ContainsKey("enableCalendar") && providerConfig.ContainsKey("caldavUrl"))
+            enableCalendar = true;
+        if (!providerConfig.ContainsKey("enableContacts") && providerConfig.ContainsKey("carddavUrl"))
+            enableContacts = true;
+
+        if (!enableCalendar && !enableContacts)
+        {
+            AnsiConsole.MarkupLine("[red]Account has neither CalDAV nor CardDAV configured.[/]");
+            return 1;
+        }
+
+        try
+        {
+            await AnsiConsole.Status().StartAsync($"Testing DAV account {accountId}...", async _ =>
+            {
+                if (enableCalendar)
+                {
+                    await AddDavAccountCommand.PropfindPrincipalAsync(
+                        providerConfig["caldavUrl"], username, password, DavServiceKind.CalDav, preset);
+                    AnsiConsole.MarkupLine("[green]  CalDAV: OK[/]");
+                }
+                if (enableContacts)
+                {
+                    await AddDavAccountCommand.PropfindPrincipalAsync(
+                        providerConfig["carddavUrl"], username, password, DavServiceKind.CardDav, preset);
+                    AnsiConsole.MarkupLine("[green]  CardDAV: OK[/]");
+                }
+            });
+            AnsiConsole.MarkupLine("[green]DAV connectivity verified.[/]");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]DAV test failed: {ex.Message}[/]");
+            return 1;
+        }
+    }
+
+    private static async Task<int> TestIcsAccountAsync(Dictionary<string, string> providerConfig)
+    {
+        var icsUrl = providerConfig.GetValueOrDefault("IcsUrl")
+            ?? providerConfig.GetValueOrDefault("icsUrl");
+        if (string.IsNullOrWhiteSpace(icsUrl))
+        {
+            AnsiConsole.MarkupLine("[red]Missing IcsUrl in ProviderConfig.[/]");
+            return 1;
+        }
+
+        try
+        {
+            await AnsiConsole.Status().StartAsync("Fetching ICS feed...", async _ =>
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                var content = await http.GetStringAsync(icsUrl);
+                var calendar = Ical.Net.Calendar.Load(content);
+                AnsiConsole.MarkupLine($"[green]  Parsed {calendar.Events.Count} events[/]");
+            });
+            AnsiConsole.MarkupLine("[green]ICS feed reachable.[/]");
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[red]ICS test failed: {ex.Message}[/]");
+            return 1;
+        }
+    }
+
+    private static Task<int> TestPasswordConfiguredAsync(string label, Dictionary<string, string> providerConfig)
+    {
+        var hasUser = providerConfig.Any(kv =>
+            kv.Key.Equals("username", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value));
+        var hasPass = providerConfig.Any(kv =>
+            kv.Key.Equals("password", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(kv.Value));
+        if (!hasUser || !hasPass)
+        {
+            AnsiConsole.MarkupLine($"[red]{label} account missing username or password.[/]");
+            return Task.FromResult(1);
+        }
+
+        AnsiConsole.MarkupLine($"[green]{label} credentials are present in config.[/]");
+        AnsiConsole.MarkupLine("[dim]Live IMAP login is not probed by test-account; use the MCP server or admin UI for a full mailbox check.[/]");
+        return Task.FromResult(0);
+    }
+
+    private static Task<int> TestJsonAccountAsync(Dictionary<string, string> providerConfig)
+    {
+        var source = providerConfig.GetValueOrDefault("source") ?? "local";
+        if (source.Equals("local", StringComparison.OrdinalIgnoreCase))
+        {
+            var path = providerConfig.GetValueOrDefault("filePath") ?? providerConfig.GetValueOrDefault("FilePath");
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                AnsiConsole.MarkupLine($"[red]JSON file not found: {path}[/]");
+                return Task.FromResult(1);
+            }
+            AnsiConsole.MarkupLine($"[green]JSON file exists: {path}[/]");
+            return Task.FromResult(0);
+        }
+
+        AnsiConsole.MarkupLine("[green]OneDrive JSON account configured.[/]");
+        AnsiConsole.MarkupLine("[dim]Delegated/OneDrive auth is verified via the referenced Microsoft account (reauth / test-account on that account).[/]");
+        return Task.FromResult(0);
     }
 
     private async Task<int> TestMicrosoftAccountAsync(string accountId, Dictionary<string, string> providerConfig, string provider)

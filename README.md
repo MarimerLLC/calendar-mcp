@@ -1,6 +1,6 @@
 # Calendar & Email MCP Server
 
-A Model Context Protocol (MCP) server that gives AI assistants access to email, calendar, and contact data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, IMAP/SMTP mailboxes, ICS feeds, and JSON calendar files.
+A Model Context Protocol (MCP) server that gives AI assistants access to email, calendar, and contact data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, IMAP/SMTP mailboxes, CalDAV/CardDAV (including iCloud), ICS feeds, and JSON calendar files.
 
 ## Overview
 
@@ -15,6 +15,7 @@ Calendar-MCP aggregates email, calendar, and contact information from multiple p
 | Google Workspace / Gmail | Yes | Yes | Yes | OAuth 2.0 |
 | IMAP/SMTP | Yes | -- | -- | Username + app password (encrypted at rest) |
 | On-premises Exchange (fork) | Yes | Yes | -- | EWS over HTTPS + Basic auth |
+| CalDAV / CardDAV | -- | Yes | Yes | Username + app password (iCloud, Nextcloud, Fastmail, …) |
 | ICS Calendar Feeds | -- | Read-only | -- | None (public URLs) |
 | JSON Calendar Files | -- | Read-only | -- | None (local files) |
 
@@ -114,6 +115,9 @@ CalendarMcp.Cli add-m365-account
 # Google Workspace or Gmail
 CalendarMcp.Cli add-google-account
 
+# CalDAV / CardDAV (iCloud, Fastmail, Nextcloud, custom)
+CalendarMcp.Cli add-dav-account
+
 # Verify
 CalendarMcp.Cli list-accounts
 CalendarMcp.Cli test-account <account-id>
@@ -122,7 +126,8 @@ CalendarMcp.Cli test-account <account-id>
 Account setup guides:
 - [Microsoft 365 / Outlook.com Setup](docs/M365-SETUP.md)
 - [Google / Gmail Setup](docs/GOOGLE-SETUP.md)
-
+- [iCloud CalDAV / CardDAV Setup](docs/ICLOUD-DAV-SETUP.md)
+- [IMAP/SMTP Setup](docs/IMAP-SETUP.md)
 ### Connect Your AI Assistant
 
 **Claude Desktop** — add to your config (`%APPDATA%\Claude\claude_desktop_config.json` on Windows):
@@ -142,7 +147,8 @@ Account setup guides:
 See the [Claude Desktop Setup Guide](docs/CLAUDE-DESKTOP-SETUP.md) for all platforms and troubleshooting.
 
 Connecting to the **HTTP server** instead of a local subprocess requires an API key header — see
-[Connecting a client](docs/configuration.md#connecting-a-client).
+[Connecting a client](docs/configuration.md#connecting-a-client) — or, as a custom connector, an
+OAuth sign-in (see [MCP OAuth](docs/configuration.md#mcp-oauth-http-server)).
 
 ## Deployment Options
 
@@ -172,8 +178,12 @@ the log — copy it from there, as it is hashed at rest and never shown again. C
 `Authorization: Bearer <key>` or `X-Api-Key: <key>`; to supply your own key instead, set
 `CALENDAR_MCP_MCP_KEY`.
 
+MCP clients that support OAuth (Claude Code, claude.ai / Claude Desktop connectors, VS Code) can
+connect without a key once an admin sign-in provider is configured: add the server URL and sign in.
+
 - [MCP endpoint API keys](docs/configuration.md#mcp-endpoint-api-keys-http-server) — settings, key rotation, and disabling enforcement
 - [Connecting a client](docs/configuration.md#connecting-a-client) — Claude Code, VS Code, and `mcp-remote` examples
+- [MCP OAuth](docs/configuration.md#mcp-oauth-http-server) — connecting with a browser sign-in instead of a key
 - [Transport security](docs/security.md#transport-security-http-server) — what protects each endpoint
 
 Manifests for Kubernetes are in [`k8s/`](k8s/), and a Compose file is at

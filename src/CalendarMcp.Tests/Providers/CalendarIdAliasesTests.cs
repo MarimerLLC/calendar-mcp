@@ -45,7 +45,10 @@ public class CalendarIdAliasesTests
     [DataRow("outlook.com")]
     [DataRow("outlook")]
     [DataRow("hotmail")]
-    public void ProviderResolvesAliases_GraphProviders(string accountType)
+    [DataRow("dav")]
+    [DataRow("CalDAV")]
+    [DataRow("carddav")]
+    public void ProviderResolvesAliases_GraphAndDavProviders(string accountType)
     {
         Assert.IsTrue(CalendarIdAliases.ProviderResolvesAliases(accountType));
     }
