@@ -168,7 +168,7 @@ public class AddDavAccountCommand : AsyncCommand<AddDavAccountCommand.Settings>
 
         try
         {
-            await WriteAccountAsync(configPath, accountId, displayName, domains, priority, providerConfig, permissions);
+            await WriteAccountAsync(configPath, accountId, displayName, "dav", domains, priority, providerConfig, permissions);
 
             var table = new Table();
             table.AddColumn("Property");
@@ -298,10 +298,15 @@ public class AddDavAccountCommand : AsyncCommand<AddDavAccountCommand.Settings>
             throw new InvalidOperationException($"HTTP {(int)root.StatusCode} from {entry}");
     }
 
-    private static async Task WriteAccountAsync(
+    /// <summary>
+    /// Adds or replaces a password-provider account in appsettings.json. Shared with
+    /// <see cref="AddExchangeAccountCommand"/>.
+    /// </summary>
+    internal static async Task WriteAccountAsync(
         string configPath,
         string accountId,
         string displayName,
+        string provider,
         List<string> domains,
         int priority,
         Dictionary<string, string> providerConfig,
@@ -336,7 +341,7 @@ public class AddDavAccountCommand : AsyncCommand<AddDavAccountCommand.Settings>
         {
             ["Id"] = accountId,
             ["DisplayName"] = displayName,
-            ["Provider"] = "dav",
+            ["Provider"] = provider,
             ["Enabled"] = true,
             ["Priority"] = priority,
             ["Domains"] = domains,

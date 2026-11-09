@@ -200,28 +200,17 @@ endpoint and allows Basic authentication over HTTPS. See the detailed
 **Quick Start:**
 
 ```bash
-# 1. Create a local config from the safe template
-cp config/appsettings.example.json config/appsettings.json
+# Prompts for the EWS URL, username and password, checks the connection, and saves the account
+CalendarMcp.Cli add-exchange-account
 
-# 2. Fill in the account
-#    "ProviderConfig": {
-#      "ewsUrl": "https://mail.example.com/EWS/Exchange.asmx",
-#      "username": "user@example.com",
-#      "password": "your-password"
-#    }
-
-# 3. Verify the account is configured
-CalendarMcp.Cli list-accounts --config config/appsettings.json
+# Check the endpoint and credentials again later
+CalendarMcp.Cli test-account <account-id>
 ```
 
-Then set `CALENDAR_MCP_CONFIG` to the `config` directory in your MCP client's server entry, so the
-server reads the same file. Without it, the server reads `appsettings.json` from its default data
-directory (`%LOCALAPPDATA%\CalendarMcp` on Windows, `~/.local/share/CalendarMcp` elsewhere).
-
-`test-account` doesn't support Exchange accounts. To check connectivity, start the server and make a
-read-only call such as `get_calendar_events` for a known day.
-
-`config/appsettings.json` can hold the password in plaintext and is ignored by Git. Don't commit it.
+On the HTTP server, use **Add Account** → **Exchange (on-premises)** in the admin UI instead.
+Either way the password is stored encrypted. `test-account` only checks that EWS accepts the
+credentials; make a read-only call such as `get_calendar_events` for a known day to check
+calendar access.
 
 ### Setting up Google Workspace / Gmail Accounts
 

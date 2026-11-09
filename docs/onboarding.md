@@ -113,9 +113,8 @@ calendar-mcp-setup add-account
 # Interactive prompts:
 # 1. Account type via dedicated commands:
 #      add-m365-account / add-outlook-account / add-google-account /
-#      add-dav-account / add-ics-account / add-json-account
-#    On-premises Exchange (EWS) has no add command: configure it in
-#    appsettings.json (see EWS-ONPREM-SETUP.md)
+#      add-dav-account / add-exchange-account / add-ics-account /
+#      add-json-account
 # 2. Account ID (unique identifier, e.g., "work-account")
 # 3. Display name (e.g., "Work Account")
 # …

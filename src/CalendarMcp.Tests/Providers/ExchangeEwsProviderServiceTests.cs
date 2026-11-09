@@ -252,6 +252,90 @@ public class ExchangeEwsProviderServiceTests
             ews.Tool().FindAvailableTimes("UTC", new DateTime(2026, 10, 16), new DateTime(2026, 10, 16)));
     }
 
+    [TestMethod]
+    public async Task Probe_SendsAnAuthenticatedGetFolderForTheInbox()
+    {
+        using var ews = new Ews();
+        var captured = new List<HttpRequestMessage>();
+        using var client = new HttpClient(new Recording(ews, captured));
+
+        await ExchangeEwsProviderService.ProbeAsync(client, " https://mail.example.com/EWS/Exchange.asmx ", "me@example.com", "pw");
+
+        CollectionAssert.AreEqual(new[] { "GetFolder" }, ews.Operations.ToArray());
+        Assert.AreEqual("inbox", (string?)ews.Requests[0].Descendants(T + "DistinguishedFolderId").Single().Attribute("Id"));
+        Assert.AreEqual("Basic", captured[0].Headers.Authorization?.Scheme);
+        Assert.AreEqual("https://mail.example.com/EWS/Exchange.asmx", captured[0].RequestUri?.ToString());
+    }
+
+    [TestMethod]
+    [DataRow(HttpStatusCode.Unauthorized, "authentication failed (401)")]
+    [DataRow(HttpStatusCode.InternalServerError, "request failed (500)")]
+    public async Task Probe_ReportsHttpFailures(HttpStatusCode status, string expected)
+    {
+        using var client = new HttpClient(new Fixed(status, ""));
+
+        var ex = await Assert.ThrowsExactlyAsync<ProviderOperationException>(() =>
+            ExchangeEwsProviderService.ProbeAsync(client, "https://mail.example.com/EWS/Exchange.asmx", "me", "pw"));
+
+        StringAssert.Contains(ex.Message, expected);
+        StringAssert.Contains(ex.Message, "mail.example.com");
+    }
+
+    [TestMethod]
+    public async Task Probe_ReportsAnEwsErrorResponse()
+    {
+        var body = $"""
+            <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" xmlns:m="{M}"><s:Body>
+            <m:GetFolderResponse><m:ResponseMessages><m:GetFolderResponseMessage ResponseClass="Error">
+            <m:MessageText>The specified folder could not be found.</m:MessageText><m:ResponseCode>ErrorFolderNotFound</m:ResponseCode>
+            </m:GetFolderResponseMessage></m:ResponseMessages></m:GetFolderResponse></s:Body></s:Envelope>
+            """;
+        using var client = new HttpClient(new Fixed(HttpStatusCode.OK, body));
+
+        var ex = await Assert.ThrowsExactlyAsync<ProviderOperationException>(() =>
+            ExchangeEwsProviderService.ProbeAsync(client, "https://mail.example.com/EWS/Exchange.asmx", "me", "pw"));
+
+        StringAssert.Contains(ex.Message, "ErrorFolderNotFound");
+    }
+
+    [TestMethod]
+    [DataRow("http://mail.example.com/EWS/Exchange.asmx", "me", "pw")]
+    [DataRow("not a url", "me", "pw")]
+    [DataRow("https://mail.example.com/EWS/Exchange.asmx", "", "pw")]
+    [DataRow("https://mail.example.com/EWS/Exchange.asmx", "me", " ")]
+    public async Task Probe_RefusesBadInputWithoutSendingARequest(string url, string username, string password)
+    {
+        var handler = new Fixed(HttpStatusCode.OK, "");
+        using var client = new HttpClient(handler);
+
+        await Assert.ThrowsExactlyAsync<ProviderOperationException>(() =>
+            ExchangeEwsProviderService.ProbeAsync(client, url, username, password));
+
+        Assert.AreEqual(0, handler.Calls);
+    }
+
+    /// <summary>Passes requests to the fake EWS endpoint and keeps them for header checks.</summary>
+    private sealed class Recording(HttpMessageHandler inner, List<HttpRequestMessage> captured) : DelegatingHandler(inner)
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            captured.Add(request);
+            return base.SendAsync(request, cancellationToken);
+        }
+    }
+
+    /// <summary>Answers every request with one status and body.</summary>
+    private sealed class Fixed(HttpStatusCode status, string body) : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "text/xml") });
+        }
+    }
+
     private static string B64(string value) =>
         Convert.ToBase64String(Encoding.UTF8.GetBytes(value)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 

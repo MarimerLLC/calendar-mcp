@@ -22,6 +22,8 @@ current request shapes have not been run against a real Exchange server:
   read).
 - Write tools (`create_event`, `update_event`, `delete_event`, `respond_to_event`, `send_email`,
   `move_email`) have not been verified live on any revision.
+- The CLI connection check (an EWS `GetFolder` for the inbox, used by `add-exchange-account` and
+  `test-account`) has not been run against a real server either.
 
 If you run it against a real Exchange server, please report what works and what doesn't in
 [#110](https://github.com/MarimerLLC/calendar-mcp/issues/110).
@@ -44,6 +46,12 @@ Microsoft isn't available. Exchange Online mailboxes should keep using `microsof
 - **Shared fixes**: `calendarId` aliases (`primary`, `default`) resolve to the default calendar;
   `responseStatus` and attendee details are filled on both the list and details paths.
 - **Config validation**: `ewsUrl` (HTTPS only), `username` and `password` are required.
+- **Admin UI**: an **Exchange (on-premises)** provider card, add and edit forms for the EWS URL,
+  username and password (stored encrypted, `ENC:…`), and dashboard status. Accounts added by
+  hand under any alias load and save correctly in the edit form.
+- **CLI**: `add-exchange-account` prompts for the account, offers a connection check, and
+  stores the password encrypted. `test-account` sends one authenticated EWS `GetFolder` for the
+  inbox; `list-accounts`, `logout` and `reauth` treat Exchange as a password provider.
 - **Packages**: `Microsoft.Extensions.*` and ASP.NET Core packages move to 10.0.13, and
   `System.Security.Cryptography.Pkcs` is pinned to 10.0.13 over a vulnerable transitive version.
 - **Docs**: `docs/EWS-ONPREM-SETUP.md`, `docs/DEPLOYMENT.md`, and Exchange sections in the
@@ -62,5 +70,4 @@ only returns an error.
 - Only the mailbox's default calendar; any other `calendarId` is refused.
 - Search date filters are sent day-first (`dd/MM/yyyy`). On servers with a month-first locale,
   date-range searches may match the wrong days.
-- No CLI add command and no admin UI form: add the account to `appsettings.json` by hand.
 - Zoom meetings are not created; put an existing Zoom URL in the event's location or body.

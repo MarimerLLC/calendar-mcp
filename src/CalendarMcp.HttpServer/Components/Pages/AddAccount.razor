@@ -167,6 +167,10 @@ else
                 </details>
                 break;
 
+            case "exchange":
+                <ExchangeAccountFields Model="_model" />
+                break;
+
             case "dav":
                 <div class="row">
                     <div class="col-md-4 mb-3">
@@ -473,7 +477,7 @@ else
         provider is "microsoft365" or "outlook.com" or "google";
 
     private static bool HasEmailSupport(string provider) =>
-        provider is "microsoft365" or "outlook.com" or "google" or "imap";
+        provider is "microsoft365" or "outlook.com" or "google" or "imap" or "exchange";
 
     private static string GetProviderDisplayName(string provider) => provider switch
     {
@@ -484,6 +488,7 @@ else
         "json" => "JSON File",
         "imap" => "IMAP/SMTP",
         "dav" => "CalDAV / CardDAV",
+        "exchange" => "Exchange (on-premises)",
         _ => provider
     };
 
@@ -545,6 +550,7 @@ else
         "outlook.com" => "outlook.com, hotmail.com, live.com",
         "google" => "gmail.com",
         "imap" => "gmail.com",
+        "exchange" => "company.com",
         "dav" => "optional",
         _ => "optional"
     };

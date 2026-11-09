@@ -1,3 +1,4 @@
+using CalendarMcp.Core.Providers;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using CalendarMcp.Core.Services;
@@ -123,6 +124,8 @@ public class TestAccountCommand : AsyncCommand<TestAccountCommand.Settings>
                     await TestPasswordConfiguredAsync("IMAP", providerConfig),
                 "json" or "json-calendar" =>
                     await TestJsonAccountAsync(providerConfig),
+                var p when ExchangeEwsProviderService.IsExchangeAccountType(p) =>
+                    await TestExchangeAccountAsync(providerConfig),
                 _ => UnsupportedProvider(provider)
             };
         }
@@ -136,8 +139,27 @@ public class TestAccountCommand : AsyncCommand<TestAccountCommand.Settings>
     private static int UnsupportedProvider(string? provider)
     {
         AnsiConsole.MarkupLine($"[red]Error: Unsupported provider '{provider}'.[/]");
-        AnsiConsole.MarkupLine("[dim]Supported: microsoft365, outlook.com, google, dav, ics, imap, json[/]");
+        AnsiConsole.MarkupLine("[dim]Supported: microsoft365, outlook.com, google, dav, exchange, ics, imap, json[/]");
         return 1;
+    }
+
+    private async Task<int> TestExchangeAccountAsync(Dictionary<string, string> providerConfig)
+    {
+        var ewsUrl = providerConfig.GetValueOrDefault("ewsUrl") ?? "";
+        var username = providerConfig.GetValueOrDefault("username") ?? "";
+        var storedPassword = providerConfig.GetValueOrDefault("password") ?? "";
+        if (string.IsNullOrWhiteSpace(ewsUrl) || string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(storedPassword))
+        {
+            AnsiConsole.MarkupLine("[red]Missing ewsUrl, username or password in ProviderConfig.[/]");
+            return 1;
+        }
+
+        var ok = await AddExchangeAccountCommand.ValidateAsync(ewsUrl, username, _passwordProtector.Unprotect(storedPassword));
+        if (!ok)
+            return 1;
+        AnsiConsole.MarkupLine("[green]Exchange connectivity verified.[/]");
+        AnsiConsole.MarkupLine("[dim]The Exchange provider is unverified; run read-only MCP tools next to check calendar and email access.[/]");
+        return 0;
     }
 
     private async Task<int> TestDavAccountAsync(string accountId, Dictionary<string, string> providerConfig)

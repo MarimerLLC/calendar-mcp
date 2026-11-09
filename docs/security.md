@@ -310,9 +310,9 @@ export CALENDAR_MCP_Accounts__0__Configuration__ClientSecret="GOCSPX-..."
 # - HashiCorp Vault
 ```
 
-### Password Encryption At Rest (IMAP and DAV Accounts)
+### Password Encryption At Rest (IMAP, DAV and Exchange Accounts)
 
-The IMAP/SMTP and CalDAV/CardDAV (`dav`) providers store their `password` field encrypted via ASP.NET DataProtection. Values written by the admin UI or any future CLI command land in `appsettings.json` as a string starting with the `ENC:` prefix followed by the protected blob.
+The IMAP/SMTP, CalDAV/CardDAV (`dav`) and on-premises Exchange (`exchange`) providers store their `password` field encrypted via ASP.NET DataProtection. Values written by the admin UI or any future CLI command land in `appsettings.json` as a string starting with the `ENC:` prefix followed by the protected blob.
 
 **Key persistence**:
 - Keys are persisted to `<data-dir>/keys/` (e.g. `/app/data/keys/` in k8s, `%LOCALAPPDATA%\CalendarMcp\keys\` locally).
@@ -332,7 +332,7 @@ The IMAP/SMTP and CalDAV/CardDAV (`dav`) providers store their `password` field 
 
 **appsettings.json**:
 - Contains account metadata (IDs, domains, priorities)
-- IMAP and DAV passwords stored encrypted (with `ENC:` prefix) — see above
+- IMAP, DAV and Exchange passwords stored encrypted (with `ENC:` prefix) — see above
 - Other secrets and tokens are not stored here
 - Can be committed to source control (with secrets externalized)
 

@@ -161,8 +161,8 @@ Other clients take the same two values: the path to `CalendarMcp.StdioServer.exe
    CalendarMcp.Cli list-accounts --config C:\CalendarMcp\config\appsettings.json
    ```
 
-   `test-account` only supports Microsoft 365, Outlook.com and Google accounts, so check an
-   Exchange account with the read-only MCP calls under [Verification](#verification).
+   `CalendarMcp.Cli test-account <account-id>` checks a single account's connection, including
+   Exchange.
 
 2. Stop every running server process. A running `CalendarMcp.StdioServer.exe` locks its own files,
    and publishing over a locked binary fails partway through:
@@ -209,8 +209,8 @@ untouched by both directions, so no credential changes are needed.
    CalendarMcp.Cli list-accounts --config C:\CalendarMcp\config\appsettings.json
    ```
 
-   Use `test-account` for Microsoft 365, Outlook.com and Google accounts. It doesn't support
-   Exchange accounts; the read-only calls in step 3 cover those.
+   Then run `test-account <account-id>` for each account. For Exchange it checks that EWS accepts
+   the credentials; the read-only calls in step 3 check calendar and email access.
 
 2. The MCP client shows the server as connected (for example `opencode mcp list`, or the
    connector list in Claude Desktop).

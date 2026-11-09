@@ -43,7 +43,7 @@ public static class ServiceCollectionExtensions
 
         // EWS uses the platform TLS stack (Schannel on Windows), which supports the
         // cipher suites required by some on-premises Exchange/IIS installations.
-        services.AddHttpClient("ExchangeEws", client => client.Timeout = TimeSpan.FromSeconds(60));
+        services.AddHttpClient(ExchangeEwsProviderService.ClientName, client => client.Timeout = TimeSpan.FromSeconds(60));
 
         // DAV client follows redirects manually inside DavHttpClient. The handler is pooled
         // across accounts, so cookies are off: a session cookie set for one account must not

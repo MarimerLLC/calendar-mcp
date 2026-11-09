@@ -1,3 +1,4 @@
+using CalendarMcp.Core.Providers;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using CalendarMcp.Core.Services;
@@ -168,13 +169,16 @@ public class ReauthenticateAccountCommand : AsyncCommand<ReauthenticateAccountCo
             }
 
             // Password providers have no OAuth token cache — update the password instead.
-            if (provider is "dav" or "caldav" or "carddav" or "imap" or "imap-smtp")
+            if (provider is "dav" or "caldav" or "carddav" or "imap" or "imap-smtp"
+                || ExchangeEwsProviderService.IsExchangeAccountType(provider))
             {
                 AnsiConsole.MarkupLine($"[yellow]Provider '{provider}' uses a stored username/password, not OAuth.[/]");
                 AnsiConsole.MarkupLine("[dim]Update the password via Admin UI (Edit Account) or re-run " +
                                       (provider is "dav" or "caldav" or "carddav"
                                           ? "add-dav-account"
-                                          : "the IMAP account form") +
+                                          : ExchangeEwsProviderService.IsExchangeAccountType(provider)
+                                              ? "add-exchange-account"
+                                              : "the IMAP account form") +
                                       " with the same account ID.[/]");
                 AnsiConsole.MarkupLine("[dim]To verify connectivity: test-account " + settings.AccountId + "[/]");
                 return 0;

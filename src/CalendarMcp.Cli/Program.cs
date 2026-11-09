@@ -63,6 +63,11 @@ app.Configure(config =>
         .WithExample(new[] { "add-dav-account" })
         .WithExample(new[] { "add-dav-account", "--config", "/path/to/appsettings.json" });
 
+    config.AddCommand<AddExchangeAccountCommand>("add-exchange-account")
+        .WithDescription("Add an on-premises Exchange account (EWS with Basic auth; unverified)")
+        .WithExample(new[] { "add-exchange-account" })
+        .WithExample(new[] { "add-exchange-account", "--config", "/path/to/appsettings.json" });
+
     config.AddCommand<ListAccountsCommand>("list-accounts")
         .WithDescription("List all configured accounts")
         .WithExample(new[] { "list-accounts" })

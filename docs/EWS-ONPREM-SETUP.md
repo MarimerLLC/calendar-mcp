@@ -14,12 +14,22 @@ Online mailboxes should use the `microsoft365` provider instead.
 
 The provider also accepts the aliases `ews`, `exchange-ews` and `on-prem-exchange`.
 
-## Configure the account
+## Add the account
 
-The CLI has no add command for Exchange, so add the account to `appsettings.json` by hand. The
-server reads `appsettings.json` from its data directory: the directory named by
-`CALENDAR_MCP_CONFIG`, or by default `%LOCALAPPDATA%\CalendarMcp` on Windows and
-`~/.local/share/CalendarMcp` on Linux and macOS.
+You need three values: the EWS URL, a username and a password.
+
+- **Admin UI** (HTTP server): **Add Account** → **Exchange (on-premises)**, then fill in the EWS
+  URL, username and password. Edit the account later from its card on the dashboard.
+- **CLI**: `CalendarMcp.Cli add-exchange-account` prompts for the same values, offers to check the
+  connection before saving, and writes the account to `appsettings.json`.
+
+Both store the password encrypted with ASP.NET DataProtection (`ENC:…`).
+
+### Configuring by hand
+
+You can also add the account to `appsettings.json` yourself. The server reads it from its data
+directory: the directory named by `CALENDAR_MCP_CONFIG`, or by default `%LOCALAPPDATA%\CalendarMcp`
+on Windows and `~/.local/share/CalendarMcp` on Linux and macOS.
 
 [`config/appsettings.example.json`](../config/appsettings.example.json) is a complete account
 template. The provider-specific part is `ProviderConfig`:
@@ -67,9 +77,9 @@ The provider does not create Zoom meetings. Put an existing Zoom URL in the even
 
 ## Verify
 
-`test-account` does not support Exchange accounts. Check the account with read-only calls instead:
-
-1. `CalendarMcp.Cli list-accounts` shows the account.
+1. `CalendarMcp.Cli test-account <account-id>` sends one authenticated EWS request (a `GetFolder`
+   for the inbox) and reports whether the server accepted the credentials. This checks the
+   endpoint and the password, not calendar or email access.
 2. Restart your MCP client, then call `list_accounts`, `list_calendars`, `get_calendar_events`
    for a known day, `search_emails` with a narrow query, and `find_available_times`.
 3. Exercise write paths (`create_event`, `respond_to_event`, `send_email`) only on a throwaway

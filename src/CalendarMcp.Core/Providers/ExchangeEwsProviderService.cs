@@ -18,7 +18,8 @@ namespace CalendarMcp.Core.Providers;
 /// </summary>
 public sealed class ExchangeEwsProviderService : IExchangeProviderService
 {
-    private const string ClientName = "ExchangeEws";
+    /// <summary>Name of the <see cref="IHttpClientFactory"/> client used for EWS requests.</summary>
+    public const string ClientName = "ExchangeEws";
     private const string DefaultCalendarId = "calendar";
     private const int GetItemBatchSize = 100;
     private const int MergedFreeBusyIntervalMinutes = 15;
@@ -47,7 +48,7 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
     private sealed record EwsConfig(string Url, string Username, string Password);
 
     /// <summary>The account types served by this provider (mirrors ProviderServiceFactory).</summary>
-    internal static bool IsExchangeAccountType(string? provider) =>
+    public static bool IsExchangeAccountType(string? provider) =>
         provider?.ToLowerInvariant() is "exchange" or "ews" or "exchange-ews" or "on-prem-exchange";
 
     private async Task<EwsConfig> ResolveConfigAsync(string accountId)
@@ -70,6 +71,32 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
     private async Task<XDocument> SendAsync(string accountId, XElement operation, CancellationToken ct)
     {
         var cfg = await ResolveConfigAsync(accountId);
+        return await SendEnvelopeAsync(_clients.CreateClient(ClientName), cfg, operation, $"account '{accountId}'", ct);
+    }
+
+    /// <summary>
+    /// Checks that an EWS endpoint accepts the credentials, without an account in the registry:
+    /// a <c>GetFolder</c> for the inbox, the smallest authenticated EWS request. Used by the CLI
+    /// to validate an account before saving it. Throws <see cref="ProviderOperationException"/>
+    /// with the reason when the endpoint, the credentials or the response are not usable.
+    /// </summary>
+    public static async Task ProbeAsync(
+        HttpClient client, string ewsUrl, string username, string password, CancellationToken ct = default)
+    {
+        if (!Uri.TryCreate(ewsUrl?.Trim(), UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps)
+            throw new ProviderOperationException("ewsUrl must be an HTTPS URL, e.g. https://mail.example.com/EWS/Exchange.asmx.");
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            throw new ProviderOperationException("username and password are required.");
+
+        var operation = new XElement(M + "GetFolder",
+            new XElement(M + "FolderShape", new XElement(T + "BaseShape", "IdOnly")),
+            new XElement(M + "FolderIds", new XElement(T + "DistinguishedFolderId", new XAttribute("Id", "inbox"))));
+        await SendEnvelopeAsync(client, new EwsConfig(uri.ToString(), username.Trim(), password), operation, uri.Host, ct);
+    }
+
+    private static async Task<XDocument> SendEnvelopeAsync(
+        HttpClient client, EwsConfig cfg, XElement operation, string label, CancellationToken ct)
+    {
         var envelope = new XDocument(
             new XElement(Soap + "Envelope",
                 new XAttribute(XNamespace.Xmlns + "soap", Soap),
@@ -91,20 +118,21 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
         HttpResponseMessage response;
         try
         {
-            response = await _clients.CreateClient(ClientName).SendAsync(request, ct);
+            response = await client.SendAsync(request, ct);
         }
         catch (Exception ex)
         {
-            throw new ProviderOperationException($"EWS request failed for account '{accountId}': {ex.Message}");
+            throw new ProviderOperationException($"EWS request failed for {label}: {ex.Message}");
         }
 
+        using var _ = response;
         var payload = await response.Content.ReadAsStringAsync(ct);
         if (!response.IsSuccessStatusCode)
         {
             var status = (int)response.StatusCode;
             if (status is 401 or 403)
-                throw new ProviderOperationException($"EWS authentication failed ({status}) for account '{accountId}'.");
-            throw new ProviderOperationException($"EWS request failed ({status}) for account '{accountId}'.");
+                throw new ProviderOperationException($"EWS authentication failed ({status}) for {label}.");
+            throw new ProviderOperationException($"EWS request failed ({status}) for {label}.");
         }
 
         XDocument doc;
@@ -116,7 +144,7 @@ public sealed class ExchangeEwsProviderService : IExchangeProviderService
         {
             var code = DescendantValue(error, "ResponseCode") ?? "unknown";
             var message = DescendantValue(error, "MessageText") ?? "EWS returned an error";
-            throw new ProviderOperationException($"EWS error for '{accountId}' ({code}): {message}");
+            throw new ProviderOperationException($"EWS error for {label} ({code}): {message}");
         }
         return doc;
     }
