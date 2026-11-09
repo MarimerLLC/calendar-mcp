@@ -166,6 +166,7 @@
         "json" => "bi-filetype-json",
         "imap" or "imap-smtp" => "bi-envelope-at",
         "dav" or "caldav" or "carddav" => "bi-cloud",
+        var p when CalendarMcp.Core.Providers.ExchangeEwsProviderService.IsExchangeAccountType(p) => "bi-building",
         _ => "bi-envelope"
     };
 }

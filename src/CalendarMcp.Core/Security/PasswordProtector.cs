@@ -34,7 +34,8 @@ public sealed class PasswordProtector
     /// </summary>
     public string Protect(string plaintext)
     {
-        if (string.IsNullOrEmpty(plaintext))
+        // Whitespace stays as-is too, so required-password validation still sees a blank value.
+        if (string.IsNullOrWhiteSpace(plaintext))
             return plaintext;
 
         return EncryptedPrefix + _protector.Protect(plaintext);

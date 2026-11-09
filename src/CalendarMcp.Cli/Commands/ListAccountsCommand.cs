@@ -1,3 +1,4 @@
+using CalendarMcp.Core.Providers;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using CalendarMcp.Auth;
@@ -304,7 +305,8 @@ public class ListAccountsCommand : AsyncCommand<ListAccountsCommand.Settings>
         || provider.Equals("caldav", StringComparison.OrdinalIgnoreCase)
         || provider.Equals("carddav", StringComparison.OrdinalIgnoreCase)
         || provider.Equals("imap", StringComparison.OrdinalIgnoreCase)
-        || provider.Equals("imap-smtp", StringComparison.OrdinalIgnoreCase);
+        || provider.Equals("imap-smtp", StringComparison.OrdinalIgnoreCase)
+        || ExchangeEwsProviderService.IsExchangeAccountType(provider);
 
     private static bool HasPasswordConfigured(Dictionary<string, string> providerConfig) =>
         providerConfig.Any(kv =>

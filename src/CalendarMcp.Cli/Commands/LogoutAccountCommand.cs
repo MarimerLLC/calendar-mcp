@@ -1,3 +1,4 @@
+using CalendarMcp.Core.Providers;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using CalendarMcp.Core.Configuration;
@@ -111,7 +112,8 @@ public class LogoutAccountCommand : AsyncCommand<LogoutAccountCommand.Settings>
             {
                 cleared = ClearMicrosoftCredentials(settings.AccountId);
             }
-            else if (provider is "dav" or "caldav" or "carddav" or "imap" or "imap-smtp")
+            else if (provider is "dav" or "caldav" or "carddav" or "imap" or "imap-smtp"
+                     || ExchangeEwsProviderService.IsExchangeAccountType(provider))
             {
                 AnsiConsole.MarkupLine("[yellow]This provider stores a password in appsettings (ENC:…), not an OAuth token cache.[/]");
                 AnsiConsole.MarkupLine("[dim]To revoke access: remove or rotate the password via Admin UI / edit config, " +

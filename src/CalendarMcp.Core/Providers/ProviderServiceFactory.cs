@@ -14,6 +14,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
     private readonly IIcsProviderService _icsProvider;
     private readonly IJsonCalendarProviderService _jsonProvider;
     private readonly IImapProviderService _imapProvider;
+    private readonly IExchangeProviderService _exchangeProvider;
     private readonly IDavProviderService _davProvider;
     private readonly ILogger<ProviderServiceFactory> _logger;
 
@@ -24,6 +25,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
         IIcsProviderService icsProvider,
         IJsonCalendarProviderService jsonProvider,
         IImapProviderService imapProvider,
+        IExchangeProviderService exchangeProvider,
         IDavProviderService davProvider,
         ILogger<ProviderServiceFactory> logger)
     {
@@ -33,6 +35,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
         _icsProvider = icsProvider;
         _jsonProvider = jsonProvider;
         _imapProvider = imapProvider;
+        _exchangeProvider = exchangeProvider;
         _davProvider = davProvider;
         _logger = logger;
     }
@@ -47,6 +50,7 @@ public class ProviderServiceFactory : IProviderServiceFactory
             "ics" or "icalendar" => _icsProvider,
             "json" or "json-calendar" => _jsonProvider,
             "imap" or "imap-smtp" => _imapProvider,
+            "exchange" or "ews" or "exchange-ews" or "on-prem-exchange" => _exchangeProvider,
             "dav" or "caldav" or "carddav" => _davProvider,
             _ => throw new ArgumentException($"Unknown account type: {accountType}", nameof(accountType))
         };

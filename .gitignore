@@ -12,6 +12,8 @@ NUL
 
 # Configuration files with sensitive data
 **/appsettings.Development.json
+config/appsettings.json
+config/keys/
 
 # User-specific files
 *.rsuser

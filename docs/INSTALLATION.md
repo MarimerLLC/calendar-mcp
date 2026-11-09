@@ -10,11 +10,14 @@ This guide provides step-by-step instructions for installing and configuring the
   - [Option 2: Build from Source](#option-2-build-from-source)
 - [Configuration](#configuration)
   - [Setting up Microsoft 365 / Outlook.com Accounts](#setting-up-microsoft-365--outlookcom-accounts)
+  - [Setting up On-premises Exchange (EWS)](#setting-up-on-premises-exchange-ews)
   - [Setting up Google Workspace / Gmail Accounts](#setting-up-google-workspace--gmail-accounts)
 - [MCP Client Configuration](#mcp-client-configuration)
   - [Claude Desktop](#claude-desktop)
+  - [OpenCode](#opencode)
   - [VS Code with GitHub Copilot](#vs-code-with-github-copilot)
   - [Other MCP Clients](#other-mcp-clients)
+- [Deployment](#deployment)
 - [Verification](#verification)
 - [Troubleshooting](#troubleshooting)
 
@@ -28,8 +31,10 @@ This guide provides step-by-step instructions for installing and configuring the
   - **macOS**: macOS 10.15 or later (x64 or ARM64/Apple Silicon)
 
 ### For Building from Source
-- [.NET 9.0 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) or later
+- [.NET 10.0 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) or later
 - Git (for cloning the repository)
+
+> The projects target `net10.0`. Building with an older SDK fails with an unsupported-framework error.
 
 ## Installation Methods
 
@@ -130,14 +135,6 @@ source ~/.bashrc  # or source ~/.zshrc
 ```
 
 ### Option 2: Build from Source
-```
-
-Then reload your shell configuration:
-```bash
-source ~/.bashrc  # or source ~/.zshrc
-```
-
-### Option 2: Build from Source
 
 If you prefer to build from source or need the latest development version:
 
@@ -152,7 +149,7 @@ cd calendar-mcp
 
 ```bash
 # Build in release mode
-dotnet build src/calendar-mcp.slnx --configuration Release
+dotnet build calendar-mcp.slnx --configuration Release
 
 # Or publish as self-contained for your platform
 # Windows
@@ -190,6 +187,30 @@ CalendarMcp.Cli add-m365-account
 ./CalendarMcp.Cli add-m365-account    # Linux/macOS
 .\CalendarMcp.Cli.exe add-m365-account  # Windows
 ```
+
+### Setting up On-premises Exchange (EWS)
+
+Use the `exchange` provider when the mailbox lives on an Exchange server that exposes an EWS
+endpoint and allows Basic authentication over HTTPS. See the detailed
+[On-premises Exchange Setup Guide](EWS-ONPREM-SETUP.md) for the full walkthrough.
+
+> **Unverified:** this provider has not yet been verified against a real Exchange server. Start
+> with read-only calls and see the setup guide for details.
+
+**Quick Start:**
+
+```bash
+# Prompts for the EWS URL, username and password, checks the connection, and saves the account
+CalendarMcp.Cli add-exchange-account
+
+# Check the endpoint and credentials again later
+CalendarMcp.Cli test-account <account-id>
+```
+
+On the HTTP server, use **Add Account** → **Exchange (on-premises)** in the admin UI instead.
+Either way the password is stored encrypted. `test-account` only checks that EWS accepts the
+credentials; make a read-only call such as `get_calendar_events` for a known day to check
+calendar access.
 
 ### Setting up Google Workspace / Gmail Accounts
 
@@ -269,6 +290,31 @@ See the detailed [Claude Desktop Setup Guide](CLAUDE-DESKTOP-SETUP.md) for:
 
 3. Restart Claude Desktop
 
+### OpenCode
+
+Add the server to `~/.config/opencode/opencode.jsonc` (Windows:
+`C:\Users\<user>\.config\opencode\opencode.jsonc`):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "calendar": {
+      "type": "local",
+      "command": ["C:\\CalendarMcp\\bin\\CalendarMcp.StdioServer.exe"],
+      "enabled": true,
+      "environment": {
+        "CALENDAR_MCP_CONFIG": "C:\\CalendarMcp\\config"
+      }
+    }
+  }
+}
+```
+
+`CALENDAR_MCP_CONFIG` must point at the directory holding `appsettings.json`, not at the file
+itself. Restart OpenCode after editing the config, then run `opencode mcp list` to confirm the
+server reports `connected`.
+
 ### VS Code with GitHub Copilot
 
 VS Code support for MCP servers is still emerging. As of now:
@@ -288,6 +334,11 @@ Any MCP-compatible client can use this server. The key configuration elements ar
 - **Environment**: Optional environment variables
 
 Refer to your MCP client's documentation for specific configuration instructions.
+
+## Deployment
+
+For repeatable installs, self-contained publishing, upgrades, and rollbacks, see the
+[Deployment Guide](DEPLOYMENT.md).
 
 ## Verification
 

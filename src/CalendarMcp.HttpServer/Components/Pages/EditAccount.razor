@@ -301,6 +301,10 @@ else if (_model is not null)
                     </div>
                 </div>
                 break;
+
+            case var p when CalendarMcp.Core.Providers.ExchangeEwsProviderService.IsExchangeAccountType(p):
+                <ExchangeAccountFields Model="_model" />
+                break;
         }
 
         <PermissionsEditor Model="_model" />
@@ -443,7 +447,8 @@ else if (_model is not null)
     private void OnDavPresetChanged() => _model?.ApplyDavPresetDefaults();
 
     private static bool HasEmailSupport(string provider) =>
-        provider is "microsoft365" or "outlook.com" or "google";
+        provider is "microsoft365" or "outlook.com" or "google" or "imap"
+        || CalendarMcp.Core.Providers.ExchangeEwsProviderService.IsExchangeAccountType(provider);
 
     private static string GetDavUsernamePlaceholder(string? preset) => preset switch
     {

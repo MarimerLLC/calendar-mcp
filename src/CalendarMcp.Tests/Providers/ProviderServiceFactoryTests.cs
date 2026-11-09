@@ -15,6 +15,7 @@ public class ProviderServiceFactoryTests
         IIcsProviderService? ics = null,
         IJsonCalendarProviderService? json = null,
         IImapProviderService? imap = null,
+        IExchangeProviderService? exchange = null,
         IDavProviderService? dav = null)
     {
         return new ProviderServiceFactory(
@@ -24,6 +25,7 @@ public class ProviderServiceFactoryTests
             ics ?? new IIcsProviderServiceCreateExpectations().Instance(),
             json ?? new IJsonCalendarProviderServiceCreateExpectations().Instance(),
             imap ?? new IImapProviderServiceCreateExpectations().Instance(),
+            exchange ?? new IExchangeProviderServiceCreateExpectations().Instance(),
             dav ?? new IDavProviderServiceCreateExpectations().Instance(),
             NullLogger<ProviderServiceFactory>.Instance);
     }
@@ -112,6 +114,18 @@ public class ProviderServiceFactoryTests
         var provider = factory.GetProvider(alias);
 
         Assert.AreSame(imap, provider);
+    }
+
+    [TestMethod]
+    [DataRow("exchange")]
+    [DataRow("ews")]
+    [DataRow("exchange-ews")]
+    public void GetProvider_ExchangeAliases_ReturnsExchangeProvider(string alias)
+    {
+        var exchange = new IExchangeProviderServiceCreateExpectations().Instance();
+        var factory = CreateFactory(exchange: exchange);
+
+        Assert.AreSame(exchange, factory.GetProvider(alias));
     }
 
     [TestMethod]

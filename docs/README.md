@@ -30,9 +30,15 @@ This documentation is organized into focused topics:
 - **[iCloud CalDAV/CardDAV Setup](ICLOUD-DAV-SETUP.md)** - App-specific passwords and DAV presets for iCloud / Nextcloud / Fastmail
 
 ### Configuration & Setup
+- **[Installation](INSTALLATION.md)** - Install binaries or build from source, configure accounts, connect a client
+- **[Deployment](DEPLOYMENT.md)** - Self-contained publishing, install layout, upgrades, and rollbacks
 - **[Configuration](configuration.md)** - All configuration examples (accounts, router, telemetry)
 - **[Onboarding](onboarding.md)** - CLI tool usage and account setup workflow
 - **[Local Models](local-models.md)** - Recommended models for local routing with Ollama
+
+### Provider Setup
+- **[On-premises Exchange (EWS)](EWS-ONPREM-SETUP.md)** - Exchange 2019 on-premises over EWS/Basic
+- **[Microsoft 365](M365-SETUP.md)**, **[Google Workspace](GOOGLE-SETUP.md)**, **[IMAP](IMAP-SETUP.md)**
 
 ### Observability & Implementation
 - **[Telemetry](telemetry.md)** - OpenTelemetry setup, logging, tracing, and metrics

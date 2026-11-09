@@ -171,6 +171,8 @@ else
                 => account.ProviderConfig.TryGetValue("password", out var pw) && !string.IsNullOrWhiteSpace(pw),
             "dav" or "caldav" or "carddav"
                 => account.ProviderConfig.TryGetValue("password", out var davPw) && !string.IsNullOrWhiteSpace(davPw),
+            var p when CalendarMcp.Core.Providers.ExchangeEwsProviderService.IsExchangeAccountType(p)
+                => account.ProviderConfig.TryGetValue("password", out var ewsPw) && !string.IsNullOrWhiteSpace(ewsPw),
             _ => false
         };
     }

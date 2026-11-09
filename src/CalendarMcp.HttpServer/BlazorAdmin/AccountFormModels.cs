@@ -76,7 +76,7 @@ public abstract class AccountFormBase
 /// <summary>
 /// Form model for creating a new account (includes Id and Provider selection).
 /// </summary>
-public class CreateAccountFormModel : AccountFormBase
+public class CreateAccountFormModel : AccountFormBase, IExchangeAccountForm
 {
     [Required(ErrorMessage = "Account ID is required.")]
     [RegularExpression(@"^[a-z0-9][a-z0-9\-_]*$",
@@ -118,6 +118,9 @@ public class CreateAccountFormModel : AccountFormBase
     public string SentFolder { get; set; } = ImapProviderService.DefaultSent;
     public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
     public string JunkFolder { get; set; } = ImapProviderService.DefaultJunk;
+
+    // On-premises Exchange (EWS). Username and Password are shared with IMAP/DAV.
+    public string EwsUrl { get; set; } = "";
 
     // CalDAV / CardDAV
     public void ApplyDavPresetDefaults()
@@ -175,6 +178,8 @@ public class CreateAccountFormModel : AccountFormBase
         "json" => BuildJsonProviderConfig(),
         "imap" => BuildImapProviderConfig(passwordProtector),
         "dav" or "caldav" or "carddav" => BuildDavProviderConfig(passwordProtector),
+        var p when ExchangeEwsProviderService.IsExchangeAccountType(p) =>
+            ExchangeProviderConfig.Build(EwsUrl, Username, Password, passwordProtector),
         _ => []
     };
 
@@ -261,10 +266,32 @@ public class CreateAccountFormModel : AccountFormBase
     }
 }
 
+/// <summary>The fields the Exchange (EWS) form section binds to, on both the add and edit models.</summary>
+public interface IExchangeAccountForm
+{
+    string EwsUrl { get; set; }
+    string Username { get; set; }
+    string Password { get; set; }
+}
+
+/// <summary>
+/// ProviderConfig for an on-premises Exchange (EWS) account, shared by the add and edit forms.
+/// </summary>
+internal static class ExchangeProviderConfig
+{
+    public static Dictionary<string, string> Build(
+        string ewsUrl, string username, string password, PasswordProtector? passwordProtector) => new()
+    {
+        ["ewsUrl"] = ewsUrl.Trim(),
+        ["username"] = username.Trim(),
+        ["password"] = passwordProtector is not null ? passwordProtector.Protect(password) : password
+    };
+}
+
 /// <summary>
 /// Form model for editing an existing account (Id and Provider are read-only).
 /// </summary>
-public class EditAccountFormModel : AccountFormBase
+public class EditAccountFormModel : AccountFormBase, IExchangeAccountForm
 {
     public string Id { get; set; } = "";
     public string Provider { get; set; } = "";
@@ -306,6 +333,9 @@ public class EditAccountFormModel : AccountFormBase
     public string SentFolder { get; set; } = ImapProviderService.DefaultSent;
     public string TrashFolder { get; set; } = ImapProviderService.DefaultTrash;
     public string JunkFolder { get; set; } = ImapProviderService.DefaultJunk;
+
+    // On-premises Exchange (EWS). Username and Password are shared with IMAP/DAV.
+    public string EwsUrl { get; set; } = "";
 
     // CalDAV / CardDAV
     public string DavPreset { get; set; } = DavHostPolicy.PresetIcloud;
@@ -426,6 +456,14 @@ public class EditAccountFormModel : AccountFormBase
                 model._loadedCalDavUrl = model.CalDavUrl;
                 model._loadedCardDavUrl = model.CardDavUrl;
                 break;
+            case var p when ExchangeEwsProviderService.IsExchangeAccountType(p):
+                model.EwsUrl = GetConfigValue(config, "ewsUrl");
+                model.Username = GetConfigValue(config, "username");
+                var ewsPassword = GetConfigValue(config, "password");
+                model.Password = passwordProtector is not null
+                    ? passwordProtector.Unprotect(ewsPassword)
+                    : ewsPassword;
+                break;
         }
 
         return model;
@@ -471,6 +509,8 @@ public class EditAccountFormModel : AccountFormBase
         "json" => BuildJsonProviderConfig(),
         "imap" => BuildImapProviderConfig(passwordProtector),
         "dav" or "caldav" or "carddav" => BuildDavProviderConfig(passwordProtector),
+        var p when ExchangeEwsProviderService.IsExchangeAccountType(p) =>
+            ExchangeProviderConfig.Build(EwsUrl, Username, Password, passwordProtector),
         _ => []
     };
 

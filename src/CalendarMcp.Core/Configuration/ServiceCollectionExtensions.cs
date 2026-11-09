@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
         // Register authentication services
         services.AddSingleton<IM365AuthenticationService, M365AuthenticationService>();
         services.AddSingleton<IGoogleAuthenticationService, GoogleAuthenticationService>();
-        
+
         // Register provider services
         services.AddSingleton<IM365ProviderService, M365ProviderService>();
         services.AddSingleton<IGoogleProviderService, GoogleProviderService>();
@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IIcsProviderService, IcsProviderService>();
         services.AddSingleton<IJsonCalendarProviderService, JsonCalendarProviderService>();
         services.AddSingleton<IImapProviderService, ImapProviderService>();
+        services.AddSingleton<IExchangeProviderService, ExchangeEwsProviderService>();
         services.AddSingleton<DavHttpClient>();
         services.AddSingleton<DavDiscovery>();
         services.AddSingleton<IDavProviderService, DavProviderService>();
@@ -39,6 +40,13 @@ public static class ServiceCollectionExtensions
 
         // Register HttpClient for ICS provider
         services.AddHttpClient("IcsProvider");
+
+        // EWS uses the platform TLS stack (Schannel on Windows), which supports the
+        // cipher suites required by some on-premises Exchange/IIS installations. The handler is
+        // pooled across accounts, so cookies are off: a session cookie from one mailbox must not
+        // ride along with another account's Basic credentials to the same server.
+        services.AddHttpClient(ExchangeEwsProviderService.ClientName, client => client.Timeout = TimeSpan.FromSeconds(60))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { UseCookies = false });
 
         // DAV client follows redirects manually inside DavHttpClient. The handler is pooled
         // across accounts, so cookies are off: a session cookie set for one account must not
@@ -58,7 +66,7 @@ public static class ServiceCollectionExtensions
 
         // Register unsubscribe executor
         services.AddSingleton<UnsubscribeExecutor>();
-        
+
         // Register account registry
         services.AddSingleton<IAccountRegistry, AccountRegistry>();
 
@@ -67,7 +75,7 @@ public static class ServiceCollectionExtensions
         // consume is sufficient there).
         services.AddOptions<AttachmentStoreOptions>();
         services.AddSingleton<IAttachmentStore, InMemoryAttachmentStore>();
-        
+
         // Register MCP tools (method-based pattern - just register the classes)
         services.AddSingleton<ListAccountsTool>();
         services.AddSingleton<GetGuideTool>();
@@ -86,6 +94,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<GetCalendarEventsTool>();
         services.AddSingleton<GetCalendarEventDetailsTool>();
         services.AddSingleton<CreateEventTool>();
+        services.AddSingleton<UpdateEventTool>();
+        services.AddSingleton<FindAvailableTimesTool>();
         services.AddSingleton<DeleteEventTool>();
         services.AddSingleton<RespondToEventTool>();
         services.AddSingleton<GetUnsubscribeInfoTool>();

@@ -10,5 +10,6 @@ using Rocks;
 [assembly: Rock(typeof(IIcsProviderService), BuildType.Create)]
 [assembly: Rock(typeof(IJsonCalendarProviderService), BuildType.Create)]
 [assembly: Rock(typeof(IImapProviderService), BuildType.Create)]
+[assembly: Rock(typeof(IExchangeProviderService), BuildType.Create)]
 [assembly: Rock(typeof(IM365AuthenticationService), BuildType.Create)]
 [assembly: Rock(typeof(IDavProviderService), BuildType.Create)]
