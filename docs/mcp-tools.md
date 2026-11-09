@@ -477,8 +477,9 @@ Get events (past/present/future) for specific account or all accounts.
 ```
 
 #### `find_available_times`
-Find free time slots across calendars. The on-prem Exchange provider checks the account owner's
-calendar and optionally calls EWS free/busy for the listed attendee mailboxes.
+Find free meeting slots for an on-premises Exchange (`exchange`) account. The tool checks the
+account owner's own events and, when `attendees` is supplied, EWS free/busy for those mailboxes.
+Other providers don't support this tool yet.
 
 **Parameters**:
 - `timeZone` (required): IANA timezone, e.g. `Europe/Moscow`

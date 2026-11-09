@@ -1,10 +1,12 @@
 # Deployment Guide
 
-This guide covers how to build, deploy, upgrade, and roll back the Calendar & Email MCP server,
-with emphasis on the on-premises Exchange (EWS) deployment used in this fork.
+This guide covers how to build, deploy, upgrade, and roll back a self-contained desktop install
+of the server, for example one that reaches an on-premises Exchange server from a Windows machine.
+For the containerized HTTP server, see the manifests in `k8s/`.
 
 For first-time installation see [INSTALLATION.md](INSTALLATION.md). For account configuration see
-[EWS-ONPREM-SETUP.md](EWS-ONPREM-SETUP.md).
+[configuration.md](configuration.md), and [EWS-ONPREM-SETUP.md](EWS-ONPREM-SETUP.md) for
+Exchange accounts.
 
 ## Table of Contents
 
@@ -18,7 +20,6 @@ For first-time installation see [INSTALLATION.md](INSTALLATION.md). For account 
 - [Upgrade procedure](#upgrade-procedure)
 - [Rollback](#rollback)
 - [Verification](#verification)
-- [Automating a Windows install](#automating-a-windows-install)
 - [Troubleshooting](#troubleshooting)
 
 ## Deployment shapes
@@ -60,7 +61,7 @@ dotnet test calendar-mcp.slnx --configuration Release
 ## Publish self-contained
 
 ```bash
-# Windows x64 — the layout used for OpenCode/Claude Desktop
+# Windows x64 stdio server, for desktop MCP clients
 dotnet publish src/CalendarMcp.StdioServer/CalendarMcp.StdioServer.csproj \
   --configuration Release \
   --runtime win-x64 \
@@ -104,26 +105,31 @@ upgrade never touches credentials.
 
 ## Configuration and secrets
 
-- `config/appsettings.json` holds the EWS password in plaintext and is ignored by Git.
-- `config/appsettings.example.json` is the committed template — never put a real password in it.
-- `config/keys/` and `config/logs/` are ignored as well.
+- `appsettings.json` can hold account passwords, such as an Exchange password, in plaintext.
+  Keep it out of source control. In a clone of this repository, `config/appsettings.json`,
+  `config/keys/` and `config/logs/` are already ignored by Git.
+- `config/appsettings.example.json` is the committed template. Never put a real password in it.
 - On shared machines, restrict ACLs on the config directory to the account running the server:
 
 ```powershell
 icacls "C:\CalendarMcp\config" /inheritance:r /grant "DOMAIN\user:(OI)(CI)F"
 ```
 
-Before every commit, confirm nothing sensitive is staged:
-
-```bash
-git status --porcelain -uall
-git check-ignore -v config/appsettings.json
-```
-
-`git check-ignore` must print a matching rule for `config/appsettings.json`; if it prints nothing,
-the file is not ignored and must not be added.
-
 ## Register with an MCP client
+
+Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "calendar-mcp": {
+      "command": "C:\\CalendarMcp\\bin\\CalendarMcp.StdioServer.exe",
+      "args": [],
+      "env": { "CALENDAR_MCP_CONFIG": "C:\\CalendarMcp\\config" }
+    }
+  }
+}
+```
 
 OpenCode (`~/.config/opencode/opencode.jsonc`, Windows
 `C:\Users\<user>\.config\opencode\opencode.jsonc`):
@@ -144,21 +150,8 @@ OpenCode (`~/.config/opencode/opencode.jsonc`, Windows
 }
 ```
 
-Claude Desktop (`%APPDATA%\Claude\claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "calendar-mcp": {
-      "command": "C:\\CalendarMcp\\bin\\CalendarMcp.StdioServer.exe",
-      "args": [],
-      "env": { "CALENDAR_MCP_CONFIG": "C:\\CalendarMcp\\config" }
-    }
-  }
-}
-```
-
-Restart the client after editing the configuration.
+Other clients take the same two values: the path to `CalendarMcp.StdioServer.exe` and a
+`CALENDAR_MCP_CONFIG` environment variable. Restart the client after editing its configuration.
 
 ## Upgrade procedure
 
@@ -216,14 +209,11 @@ untouched by both directions, so no credential changes are needed.
    CalendarMcp.Cli list-accounts --config C:\CalendarMcp\config\appsettings.json
    ```
 
-   `test-account` only supports Microsoft 365, Outlook.com and Google accounts, so check an
-   Exchange account with the read-only MCP calls under [Verification](#verification).
+   Use `test-account` for Microsoft 365, Outlook.com and Google accounts. It doesn't support
+   Exchange accounts; the read-only calls in step 3 cover those.
 
-2. The MCP server handshakes:
-
-   ```bash
-   opencode mcp list   # other clients expose an equivalent status command
-   ```
+2. The MCP client shows the server as connected (for example `opencode mcp list`, or the
+   connector list in Claude Desktop).
 
 3. Read-only calls succeed against the real server. Nothing is created or modified by these:
 
@@ -235,18 +225,8 @@ untouched by both directions, so no credential changes are needed.
 4. Only then exercise write paths — `respond_to_event`, `create_event`, `update_event`,
    `delete_event`, `send_email` — on a throwaway item, and delete it afterwards.
 
-## Automating a Windows install
-
-A scheduled task that runs at logon keeps the process available without a window:
-
-```powershell
-$action = New-ScheduledTaskAction -Execute "C:\CalendarMcp\bin\CalendarMcp.StdioServer.exe"
-$trigger = New-ScheduledTaskTrigger -AtLogOn
-Register-ScheduledTask -TaskName "CalendarMcp" -Action $action -Trigger $trigger
-```
-
-Note that the stdio server is designed to be launched by its MCP client, not as a standalone
-service. Use the HTTP server instead for anything that needs to run unattended.
+The stdio server is launched by its MCP client and doesn't need a scheduled task or service.
+Use the HTTP server for anything that must run unattended.
 
 ## Troubleshooting
 

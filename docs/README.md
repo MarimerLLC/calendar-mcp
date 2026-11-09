@@ -40,9 +40,6 @@ This documentation is organized into focused topics:
 - **[On-premises Exchange (EWS)](EWS-ONPREM-SETUP.md)** - Exchange 2019 on-premises over EWS/Basic
 - **[Microsoft 365](M365-SETUP.md)**, **[Google Workspace](GOOGLE-SETUP.md)**, **[IMAP](IMAP-SETUP.md)**
 
-### Contributing
-- **[Preparing Changes for Push](PUSHING.md)** - Branch workflow, secret audit, commits, and pull requests
-
 ### Observability & Implementation
 - **[Telemetry](telemetry.md)** - OpenTelemetry setup, logging, tracing, and metrics
 - **[Implementation Plan](implementation-plan.md)** - Development phases, next steps, and success metrics

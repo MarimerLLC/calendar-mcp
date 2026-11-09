@@ -953,8 +953,8 @@ On startup, Calendar-MCP validates:
 
 1. **Required fields**: All required account fields present
 2. **Unique IDs**: No duplicate account IDs
-3. **Valid providers**: Provider must be a supported value such as "microsoft365", "google",
-   "outlook.com", "imap", or the on-premises Exchange fork provider "exchange"
+3. **Valid providers**: Provider must be "microsoft365", "outlook.com", "google", "imap",
+   "dav", "exchange" (on-premises EWS), "ics" or "json"
 4. **Router backend**: Supported backend type
 5. **Telemetry settings**: Valid exporter configurations
 

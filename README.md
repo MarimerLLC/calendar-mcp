@@ -14,7 +14,7 @@ Calendar-MCP aggregates email, calendar, and contact information from multiple p
 | Outlook.com | Yes | Yes | Yes | OAuth 2.0 (MSAL) |
 | Google Workspace / Gmail | Yes | Yes | Yes | OAuth 2.0 |
 | IMAP/SMTP | Yes | -- | -- | Username + app password (encrypted at rest) |
-| On-premises Exchange (fork) | Yes | Yes | -- | EWS over HTTPS + Basic auth |
+| On-premises Exchange (EWS) | Yes | Yes | -- | Username + password over HTTPS (Basic auth) |
 | CalDAV / CardDAV | -- | Yes | Yes | Username + app password (iCloud, Nextcloud, Fastmail, …) |
 | ICS Calendar Feeds | -- | Read-only | -- | None (public URLs) |
 | JSON Calendar Files | -- | Read-only | -- | None (local files) |
@@ -58,11 +58,10 @@ The server exposes these tools to AI assistants:
 - **get_contact_details** — Get full contact information
 - **create_contact** / **update_contact** / **delete_contact** — Manage contacts
 
-The on-premises Exchange provider is a local fork addition. It supports calendar and email
-through EWS/Basic; setup details are in [docs/EWS-ONPREM-SETUP.md](docs/EWS-ONPREM-SETUP.md).
-Inbound attachment metadata is available, but EWS attachment byte download and outbound EWS
-attachments are not implemented yet. Zoom links can be supplied in the event location/body; the
-server does not create Zoom meetings.
+On-premises Exchange accounts also get **find_available_times**, which finds common free slots
+using Exchange free/busy for the attendees. The Exchange provider has a few limits: attachments
+are metadata only (no download, no outbound attachments), it has no contacts, and it doesn't
+create Zoom meetings. See [docs/EWS-ONPREM-SETUP.md](docs/EWS-ONPREM-SETUP.md).
 
 See [docs/mcp-tools.md](docs/mcp-tools.md) for full tool specifications.
 
@@ -239,7 +238,6 @@ See [docs/configuration.md](docs/configuration.md) for the full configuration re
 |-------|------|
 | Installation | [docs/INSTALLATION.md](docs/INSTALLATION.md) |
 | Deployment | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
-| Pushing changes | [docs/PUSHING.md](docs/PUSHING.md) |
 | Architecture | [docs/architecture.md](docs/architecture.md) |
 | MCP Tools | [docs/mcp-tools.md](docs/mcp-tools.md) |
 | Providers | [docs/providers.md](docs/providers.md) |

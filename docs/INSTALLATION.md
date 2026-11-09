@@ -211,11 +211,14 @@ cp config/appsettings.example.json config/appsettings.json
 CalendarMcp.Cli list-accounts --config config/appsettings.json
 ```
 
+Then set `CALENDAR_MCP_CONFIG` to the `config` directory in your MCP client's server entry, so the
+server reads the same file. Without it, the server reads `appsettings.json` from its default data
+directory (`%LOCALAPPDATA%\CalendarMcp` on Windows, `~/.local/share/CalendarMcp` elsewhere).
+
 `test-account` doesn't support Exchange accounts. To check connectivity, start the server and make a
 read-only call such as `get_calendar_events` for a known day.
 
-`config/appsettings.json` holds the password in plaintext and is ignored by Git. Do not commit it,
-and do not reuse that password outside this server.
+`config/appsettings.json` can hold the password in plaintext and is ignored by Git. Don't commit it.
 
 ### Setting up Google Workspace / Gmail Accounts
 
@@ -306,10 +309,10 @@ Add the server to `~/.config/opencode/opencode.jsonc` (Windows:
   "mcp": {
     "calendar": {
       "type": "local",
-      "command": ["E:\\project\\calendar-mcp\\publish\\win-x64\\CalendarMcp.StdioServer.exe"],
+      "command": ["C:\\CalendarMcp\\bin\\CalendarMcp.StdioServer.exe"],
       "enabled": true,
       "environment": {
-        "CALENDAR_MCP_CONFIG": "E:\\project\\calendar-mcp\\config"
+        "CALENDAR_MCP_CONFIG": "C:\\CalendarMcp\\config"
       }
     }
   }

@@ -4,8 +4,8 @@
 
 Provider services implement account-specific operations for each platform (M365, Google, Outlook.com). Each provider service manages **multiple accounts** of that provider type with strict per-account token isolation.
 
-This fork also includes `ExchangeEwsProviderService` for on-premises Exchange. It uses the
-configured EWS HTTPS endpoint and HTTP Basic credentials. The provider supports calendar and
+`ExchangeEwsProviderService` serves on-premises Exchange (provider `exchange`). It calls the
+account's EWS endpoint over HTTPS with HTTP Basic credentials. The provider supports calendar and
 email operations plus EWS free/busy lookup; contacts are not implemented. See
 [EWS on-premises setup](EWS-ONPREM-SETUP.md).
 
