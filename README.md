@@ -1,6 +1,8 @@
-# Calendar & Email MCP Server
+# Adjutant
 
 A Model Context Protocol (MCP) server that gives AI assistants access to email, calendar, and contact data across multiple accounts — Microsoft 365, Outlook.com, Google Workspace, IMAP/SMTP mailboxes, CalDAV/CardDAV (including iCloud), ICS feeds, and JSON calendar files.
+
+<img width="200" height="200" alt="Adjutant logo: mail, calendar and contact tiles wired into one glowing core" src="docs/assets/images/adjutant.png" />
 
 ## Overview
 

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Adjutant: mail, calendar and contacts tiles wired into one glowing core, for many accounts behind
+       one server. RockBot's colours, as in Scheduler's icon: navy #04162e, amber crest #f5a94b, steel
+       plating #506070, cyan eye glow #4bcfe1. favicon.ico holds PNG renders of this (48 to 256 px) and of
+       icons/favicon-small.svg (16 to 32 px); apple-touch-icon.png is this at 180 px on a square navy
+       background. installer/adjutant-icon.ico is a copy of favicon.ico. -->
+  <defs>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="1.6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#04162e"/>
+  <!-- links -->
+  <path d="M32 34L15 20M32 34L49 20M32 34V52" stroke="#506070" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <!-- mail -->
+  <rect x="8.5" y="13.5" width="13" height="13" rx="3.5" fill="#33465e" stroke="#506070" stroke-width="1.2"/>
+  <rect x="11.3" y="16.8" width="7.4" height="6.2" rx="1.2" fill="none" stroke="#f5a94b" stroke-width="1.5"/>
+  <path d="M11.6 17.3L15 20.2L18.4 17.3" fill="none" stroke="#f5a94b" stroke-width="1.5" stroke-linejoin="round"/>
+  <!-- calendar -->
+  <rect x="42.5" y="13.5" width="13" height="13" rx="3.5" fill="#33465e" stroke="#506070" stroke-width="1.2"/>
+  <path d="M42.5 17a3.5 3.5 0 0 1 3.5-3.5h6a3.5 3.5 0 0 1 3.5 3.5v2H42.5z" fill="#f5a94b"/>
+  <rect x="45.5" y="21.5" width="2.6" height="2.4" rx="0.6" fill="#8fa2b8"/>
+  <rect x="50" y="21.5" width="2.6" height="2.4" rx="0.6" fill="#8fa2b8"/>
+  <!-- contact -->
+  <rect x="25.5" y="45.5" width="13" height="13" rx="3.5" fill="#33465e" stroke="#506070" stroke-width="1.2"/>
+  <circle cx="32" cy="50" r="2.3" fill="#f5a94b"/>
+  <path d="M28.2 56.2a3.8 3.3 0 0 1 7.6 0z" fill="#f5a94b"/>
+  <!-- core -->
+  <circle cx="32" cy="34" r="7.5" fill="#04162e" stroke="#506070" stroke-width="1.5"/>
+  <circle cx="32" cy="34" r="4.6" fill="#4bcfe1" filter="url(#glow)"/>
+</svg>

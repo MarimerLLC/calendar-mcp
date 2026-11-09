@@ -6,7 +6,7 @@ This directory contains the Windows installer configuration for Adjutant.
 
 - **Adjutant-Setup.iss**: Inno Setup script for creating the Windows installer
 - **installer-readme.txt**: Information displayed to users during installation
-- **adjutant-icon.ico**: Application icon (optional, create if needed)
+- **adjutant-icon.ico**: Application icon, drawn from `src/Adjutant.HttpServer/wwwroot/favicon.svg` (bitmap entries 16-48 px plus a 256 px PNG)
 
 ## Building the Installer
 
@@ -63,11 +63,10 @@ Then rebuild the payload so the new version is stamped into the binaries. Compil
 without a payload in `..\release\adjutant-win-x64\` fails with an explicit message
 rather than silently producing a wrongly-versioned installer.
 
-### Adding Icon
+### Icon
 
-1. Create or obtain a `.ico` file
-2. Save as `adjutant-icon.ico` in this directory
-3. The installer script already references it
+`adjutant-icon.ico` is the same mark as the admin UI favicon (`src/Adjutant.HttpServer/wwwroot/favicon.svg`,
+with `icons/favicon-small.svg` for 16-32 px). If the mark changes, regenerate both icons from those SVGs.
 
 ### Modifying PATH Behavior
 
@@ -90,12 +89,6 @@ Name: "addtopath"; Description: "Add Adjutant to system PATH"; Flags: checkedonc
 
 **Error: "Can't find source files"**
 - Ensure release binaries are built and in `../release/adjutant-win-x64/`
-
-**Error: "Invalid icon file"**
-- Comment out the `SetupIconFile` line if you don't have an icon:
-  ```iss
-  ; SetupIconFile=adjutant-icon.ico
-  ```
 
 **Installer requires admin privileges**
 - This is expected - PATH modification requires admin rights
